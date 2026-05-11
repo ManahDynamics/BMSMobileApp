@@ -29,12 +29,6 @@ class MyApp extends StatelessWidget {
           seedColor: const Color(0xFF1E7D4F),
         ),
         useMaterial3: true,
-        pageTransitionsTheme: const PageTransitionsTheme(
-          builders: {
-            TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
-            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
-          },
-        ),
       ),
       initialRoute: '/splash',
       routes: {
