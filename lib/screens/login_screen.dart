@@ -68,59 +68,58 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF1E7D4F),
       body: SafeArea(
-        child: Column(
-          children: [
-            // ── Top header ──────────────────────────────────────────────────────
-            Expanded(
-              flex: 4,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  Positioned(
-                    top: -30,
-                    right: -40,
-                    child: Container(
-                      width: 220,
-                      height: 220,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.08),
+        child: SingleChildScrollView(
+          child: Column(
+            children: [
+              // ── Top header ──────────────────────────────────────────────────────
+              SizedBox(
+                height: MediaQuery.of(context).size.height * 0.3,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Positioned(
+                      top: -30,
+                      right: -40,
+                      child: Container(
+                        width: 220,
+                        height: 220,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withOpacity(0.08),
+                        ),
                       ),
                     ),
-                  ),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Text(
-                        'Smart BMS',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Text(
+                          'Smart BMS',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
                         ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Smart Battery Management System',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w400,
+                        SizedBox(height: 8),
+                        Text(
+                          'Smart Battery Management System',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w400,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            // ── White card ──────────────────────────────────────────────────────
-            Expanded(
-              flex: 6,
-              child: Container(
+              // ── White card ──────────────────────────────────────────────────────
+              Container(
                 width: double.infinity,
-                margin: const EdgeInsets.symmetric(horizontal: 20 ,vertical: 30),
+                margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 24,
                   vertical: 32,
@@ -307,10 +306,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   ],
                 ),
               ),
-            ),
 
-            const SizedBox(height: 30),
-          ],
+              const SizedBox(height: 30),
+            ],
+          ),
         ),
       ),
     );

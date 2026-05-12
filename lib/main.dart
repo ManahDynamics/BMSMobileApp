@@ -4,7 +4,7 @@ import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/connect_screen.dart';
-import 'screens/bluetooth_device_scan_page.dart';
+import 'screens/bluetooth_device_scan_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
