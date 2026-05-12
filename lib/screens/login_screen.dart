@@ -42,7 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      // ✅ Success — show a snackbar and navigate to your home screen
+      // ✅ Success — show a snackbar and navigate to connect screen
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Welcome back, ${user['name']}!'),
@@ -50,6 +50,9 @@ class _LoginScreenState extends State<LoginScreen> {
           behavior: SnackBarBehavior.floating,
         ),
       );
+      
+      // Navigate to Connect screen
+      Navigator.pushReplacementNamed(context, '/connect');
 
     } on ApiException catch (e) {
       setState(() => _errorMessage = e.message);
