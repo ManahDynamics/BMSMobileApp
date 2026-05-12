@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
+import 'screens/connect_screen.dart';
+import 'screens/bluetooth_device_scan_page.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,6 +37,8 @@ class MyApp extends StatelessWidget {
         '/splash': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
+        '/connect': (context) => const ConnectScreen(),
+        '/bluetooth_scan': (context) => const BluetoothDeviceScanPage(),
       },
     );
   }
