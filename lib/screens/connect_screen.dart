@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'bluetooth_device_scan_page.dart';
+import 'bluetooth_device_scan_screen.dart';
 
 class ConnectScreen extends StatelessWidget {
   const ConnectScreen({super.key});
@@ -42,24 +42,16 @@ class ConnectScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 20),
-            const Text(
-              'Choose Connection Type',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF1E7D4F),
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Select how you want to connect to your BMS',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
-            ),
             const SizedBox(height: 40),
+            const Text(
+              'Choose the Device option',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 60),
             
             // Local Monitoring Card
             _buildConnectionCard(
@@ -70,7 +62,7 @@ class ConnectScreen extends StatelessWidget {
               onTap: () => _handleLocalMonitoring(context),
             ),
             
-            const SizedBox(height: 20),
+            const SizedBox(height: 30),
             
             // Remote Monitoring Card
             _buildConnectionCard(
@@ -97,15 +89,14 @@ class ConnectScreen extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFF1E7D4F),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFE0E0E0)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 8,
               offset: const Offset(0, 4),
             ),
           ],
@@ -113,19 +104,19 @@ class ConnectScreen extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 50,
-              height: 50,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
-                color: const Color(0xFF1E7D4F).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
                 icon,
                 color: const Color(0xFF1E7D4F),
-                size: 24,
+                size: 28,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 20),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -133,26 +124,27 @@ class ConnectScreen extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E7D4F),
+                      color: Colors.white,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey[600],
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ],
               ),
             ),
-            Icon(
+            const Icon(
               Icons.arrow_forward_ios,
-              color: Colors.grey[400],
-              size: 16,
+              color: Colors.white,
+              size: 18,
             ),
           ],
         ),
