@@ -1,8 +1,12 @@
 // ignore_for_file: deprecated_member_use
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:bmsmobileapp/screens/register_screen.dart';
-import 'package:bmsmobileapp/services/mock_api_service.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,13 +16,13 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // ── Controllers ──────────────────────────────────────────────────────────────
-  final _emailController = TextEditingController();
+  // ── Controllers ────────────────────────────────────────────────────────
+  final _emailController    = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // ── State ────────────────────────────────────────────────────────────────────
-  bool _obscurePassword = true;
-  bool _isLoading = false;
+  // ── UI state ───────────────────────────────────────────────────────────
+  bool    _obscurePassword = true;
+  bool    _isLoading       = false;
   String? _errorMessage;
 
   @override
@@ -28,39 +32,102 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // ── Login logic ──────────────────────────────────────────────────────────────
+  // ── Fetch real device info ─────────────────────────────────────────────
+  Future<Map<String, String>> _getDeviceInfo() async {
+    final deviceInfo = DeviceInfoPlugin();
+
+    if (Platform.isAndroid) {
+      final android = await deviceInfo.androidInfo;
+      return {
+        'deviceId'      : android.id,
+        'devicePlatform': 'android',
+        'deviceToken'   : android.id, // replace with FCM token if available
+      };
+    } else if (Platform.isIOS) {
+      final ios = await deviceInfo.iosInfo;
+      return {
+        'deviceId'      : ios.identifierForVendor ?? 'unknown',
+        'devicePlatform': 'ios',
+        'deviceToken'   : ios.identifierForVendor ?? 'unknown', // replace with FCM token if available
+      };
+    }
+
+    return {
+      'deviceId'      : 'unknown',
+      'devicePlatform': 'unknown',
+      'deviceToken'   : 'unknown',
+    };
+  }
+
+  // ── API call ───────────────────────────────────────────────────────────
   Future<void> _handleLogin() async {
     setState(() {
       _errorMessage = null;
-      _isLoading = true;
+      _isLoading    = true;
     });
 
     try {
-      final user = await MockApiService.instance.login(
-        emailOrPhone: _emailController.text,
-        password: _passwordController.text,
+      // Fetch device info before making the request
+      final deviceInfo = await _getDeviceInfo();
+
+      final Map<String, String> body = {
+        'email'         : _emailController.text.trim(),
+        'password'      : _passwordController.text,
+        'deviceId'      : deviceInfo['deviceId']!,
+        'devicePlatform': deviceInfo['devicePlatform']!,
+        'deviceToken'   : deviceInfo['deviceToken']!,
+      };
+
+      final response = await http.post(
+        Uri.parse('http://15.207.26.224:3030/api/auth/login'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept'      : 'application/json',
+        },
+        body: jsonEncode(body),
+      ).timeout(
+        const Duration(seconds: 30),
+        onTimeout: () => throw Exception('Request timed out. Please try again.'),
       );
 
-      if (!mounted) return;
+      final Map<String, dynamic> data =
+          jsonDecode(response.body) as Map<String, dynamic>;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Welcome back, ${user['name']}!'),
-          backgroundColor: const Color(0xFF1B6B3A),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final userData = data['data'] as Map<String, dynamic>?;
 
-      Navigator.pushReplacementNamed(context, '/connect');
-    } on ApiException catch (e) {
-      setState(() => _errorMessage = e.message);
-    } catch (_) {
-      setState(() => _errorMessage = 'Something went wrong. Please try again.');
+        // final accessToken  = userData?['accessToken'];
+        // final refreshToken = userData?['refreshToken'];
+
+        final name = userData?['fullName'] ?? 'User';
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Welcome back, $name!'),
+            backgroundColor: const Color(0xFF1B6B3A),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        Navigator.pushReplacementNamed(context, '/connect');
+      } else {
+        final serverMessage =
+            data['message']?.toString() ??
+            data['error']?.toString() ??
+            'Login failed. Please try again.';
+        setState(() => _errorMessage = serverMessage);
+      }
+    } on FormatException {
+      setState(() => _errorMessage = 'Unexpected server response. Please contact support.');
+    } catch (e) {
+      setState(() => _errorMessage = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  // ── Build ──────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -68,7 +135,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // ── Background decorative circles ──────────────────────────────
+            // ── Background decorative circles ────────────────────────────
             Positioned(
               top: -60,
               right: -60,
@@ -94,13 +161,13 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
 
-            // ── Main content ───────────────────────────────────────────────
+            // ── Main content ─────────────────────────────────────────────
             SingleChildScrollView(
               child: Column(
                 children: [
                   const SizedBox(height: 48),
 
-                  // ── Logo ─────────────────────────────────────────────────
+                  // ── Logo ───────────────────────────────────────────────
                   Container(
                     width: 110,
                     height: 110,
@@ -118,20 +185,20 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(22),
                       child: Padding(
-                        padding: const EdgeInsets.all(20),
-                      child: Image.asset(
-                        'assets/images/logo.png', 
-                        width: 110,
-                        height: 110,
-                        fit: BoxFit.cover,
-                      ),
+                        padding: const EdgeInsets.all(12),
+                        child: Image.asset(
+                          'assets/images/logo.png',
+                          width: 110,
+                          height: 110,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                   ),
 
                   const SizedBox(height: 22),
 
-                  // ── App title ─────────────────────────────────────────────
+                  // ── App title ──────────────────────────────────────────
                   const Text(
                     'BMS Mobile App',
                     style: TextStyle(
@@ -153,7 +220,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 36),
 
-                  // ── White card ────────────────────────────────────────────
+                  // ── White card ─────────────────────────────────────────
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -175,38 +242,59 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Email field
-                        _buildTextField(
-                          controller: _emailController,
-                          hintText: 'Email or Phone Number',
-                          prefixIcon: Icons.email_rounded,
-                          keyboardType: TextInputType.emailAddress,
+
+                        // ── Email field ────────────────────────────────────
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0F0F0),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: TextField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            decoration: InputDecoration(
+                              hintText: 'Email',
+                              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                              prefixIcon: Icon(Icons.email_rounded, color: Colors.grey[600], size: 20),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 16),
 
-                        // Password field
-                        _buildTextField(
-                          controller: _passwordController,
-                          hintText: 'Password',
-                          prefixIcon: Icons.lock_rounded,
-                          obscureText: _obscurePassword,
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              color: Colors.grey,
-                              size: 20,
+                        // ── Password field ─────────────────────────────────
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0F0F0),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: TextField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            decoration: InputDecoration(
+                              hintText: 'Password',
+                              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
+                              prefixIcon: Icon(Icons.lock_rounded, color: Colors.grey[600], size: 20),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  color: Colors.grey,
+                                  size: 20,
+                                ),
+                                onPressed: () =>
+                                    setState(() => _obscurePassword = !_obscurePassword),
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
                             ),
-                            onPressed: () {
-                              setState(
-                                  () => _obscurePassword = !_obscurePassword);
-                            },
                           ),
                         ),
                         const SizedBox(height: 8),
 
-                        // Forgot password
+                        // ── Forgot password ────────────────────────────────
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
@@ -218,21 +306,17 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             child: const Text(
                               'Forgot Password?',
-                              style:
-                                  TextStyle(color: Colors.grey, fontSize: 13),
+                              style: TextStyle(color: Colors.grey, fontSize: 13),
                             ),
                           ),
                         ),
                         const SizedBox(height: 8),
 
-                        // ── Error message ─────────────────────────────────────────
+                        // ── Error banner ───────────────────────────────────
                         if (_errorMessage != null)
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                             margin: const EdgeInsets.only(bottom: 12),
                             decoration: BoxDecoration(
                               color: Colors.red.shade50,
@@ -241,23 +325,19 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.error_outline,
-                                    color: Colors.red.shade400, size: 16),
+                                Icon(Icons.error_outline, color: Colors.red.shade400, size: 16),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     _errorMessage!,
-                                    style: TextStyle(
-                                      color: Colors.red.shade700,
-                                      fontSize: 13,
-                                    ),
+                                    style: TextStyle(color: Colors.red.shade700, fontSize: 13),
                                   ),
                                 ),
                               ],
                             ),
                           ),
 
-                        // ── Login button ──────────────────────────────────────────
+                        // ── Login button ───────────────────────────────────
                         SizedBox(
                           width: double.infinity,
                           height: 50,
@@ -293,58 +373,49 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 20),
 
-                        // Divider
+                        // ── Divider ────────────────────────────────────────
                         Row(
                           children: [
-                            Expanded(
-                                child: Divider(color: Colors.grey.shade300)),
+                            Expanded(child: Divider(color: Colors.grey.shade300)),
                             Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 12),
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
                               child: Text(
                                 'or',
-                                style: TextStyle(
-                                  color: Colors.grey[500],
-                                  fontSize: 13,
-                                ),
+                                style: TextStyle(color: Colors.grey[500], fontSize: 13),
                               ),
                             ),
-                            Expanded(
-                                child: Divider(color: Colors.grey.shade300)),
+                            Expanded(child: Divider(color: Colors.grey.shade300)),
                           ],
                         ),
                         const SizedBox(height: 16),
 
-                        // Register link
+                        // ── Register link ──────────────────────────────────
                         Center(
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                "if you don't an account you can ",
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
-                                ),
+                                "if you don't an account you can  ",
+                                style: TextStyle(color: Colors.grey[600], fontSize: 13),
                               ),
                               MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: GestureDetector(
-                                onTap: () {
-                                  Navigator.push(
-                                    context,
-                                   SlideRoute(page: const RegisterScreen()),
-                                  );
-                                },
-                                child: const Text(
-                                  'Register here!',
-                                  style: TextStyle(
-                                    color: Color(0xFF3A6EAC),
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
+                                cursor: SystemMouseCursors.click,
+                                child: GestureDetector(
+                                  onTap: _isLoading
+                                      ? null
+                                      : () => Navigator.push(
+                                            context,
+                                            SlideRoute(page: const RegisterScreen()),
+                                          ),
+                                  child: const Text(
+                                    'Register here!',
+                                    style: TextStyle(
+                                      color: Color(0xFF3A6EAC),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ),
                               ),
                             ],
                           ),
@@ -358,38 +429,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hintText,
-    required IconData prefixIcon,
-    bool obscureText = false,
-    Widget? suffixIcon,
-    TextInputType? keyboardType,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF0F0F0),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: TextField(
-        controller: controller,
-        obscureText: obscureText,
-        keyboardType: keyboardType,
-        decoration: InputDecoration(
-          hintText: hintText,
-          hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-          prefixIcon: Icon(prefixIcon, color: Colors.grey[600], size: 20),
-          suffixIcon: suffixIcon,
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 16,
-          ),
         ),
       ),
     );

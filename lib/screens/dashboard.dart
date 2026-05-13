@@ -1,4 +1,4 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: use_build_context_synchronously, deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/login_screen.dart';
@@ -104,13 +104,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
         child: _menuItem(Icons.person_outline_rounded, 'Edit Profile', Colors.black87),
       ),
-      const PopupMenuDivider(height: 0.5, color: const Color(0xFFEEEEEE)),
+      const PopupMenuDivider(height: 0.5, color:  Color(0xFFEEEEEE)),
       PopupMenuItem<String>(
         value: 'forgot_password',
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
         child: _menuItem(Icons.lock_reset_rounded, 'Forget Password', Colors.black87),
       ),
-      const PopupMenuDivider(height: 0.5, color: const Color(0xFFEEEEEE)),
+      const PopupMenuDivider(height: 0.5, color:  Color(0xFFEEEEEE)),
       PopupMenuItem<String>(
         value: 'logout',
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
@@ -207,14 +207,14 @@ Widget _menuItem(IconData icon, String label, Color color) {
                     icon: Icons.circle_outlined,
                     iconLabel: 'V',
                     label: 'Voltage',
-                    value: '${voltage} V',
+                    value: '$voltage V',
                 )),
                 const SizedBox(width: 12),
                 Expanded(child: _buildMetricCard(
                     icon: Icons.circle_outlined,
                     iconLabel: 'A',
                     label: 'Current',
-                    value: '${current} A',
+                    value: '$current A',
                     subtitle: 'Discharging',
                 )),
                 ],
@@ -228,7 +228,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
                 Expanded(child: _buildMetricCard(
                     icon: Icons.thermostat_rounded,
                     label: 'Temperature',
-                    value: '${temperature} C',
+                    value: '$temperature C',
                 )),
                 const SizedBox(width: 12),
                 Expanded(child: _buildMetricCard(
@@ -612,7 +612,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
-                color: const Color(0xFF575757),
+                color: Color(0xFF575757),
               ),
             ),
             if (subtitle != null)
@@ -655,7 +655,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
                     style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                 const SizedBox(height: 2),
                 Text(
-                  '${minCell} v',
+                  '$minCell v',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -699,7 +699,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
                     style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                 const SizedBox(height: 2),
                 Text(
-                  '${maxCell} v',
+                  '$maxCell v',
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -738,7 +738,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFF3A3939),
+                      color: Color(0xFF3A3939),
                     ),
                   ),
                 ],
