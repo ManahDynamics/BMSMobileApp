@@ -28,7 +28,6 @@ class ConnectScreen extends StatelessWidget {
           ),
         ),
         actions: [
-          // Logout icon — navigates to Login
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.white),
             tooltip: 'Logout',

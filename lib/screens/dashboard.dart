@@ -37,7 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         title: const Text('Logout', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
         content: const Text(
         'Are you sure you want to logout?',
