@@ -5,6 +5,9 @@ import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/connect_screen.dart';
 import 'screens/bluetooth_device_scan_screen.dart';
+import 'screens/dashboard.dart';
+import 'screens/editprofile_screen.dart';
+import 'screens/forgotpassword_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +42,9 @@ class MyApp extends StatelessWidget {
         '/register': (context) => const RegisterScreen(),
         '/connect': (context) => const ConnectScreen(),
         '/bluetooth_scan': (context) => const BluetoothDeviceScanPage(),
+        '/dashboard': (context) => const DashboardScreen(),
+        '/edit_profile': (context) => const EditProfileScreen(),
+        '/forgot_password': (context) => const ForgotPasswordScreen(),
       },
     );
   }

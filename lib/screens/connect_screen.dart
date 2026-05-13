@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:bmsmobileapp/utils/slide_route.dart';
+import 'package:bmsmobileapp/screens/login_screen.dart';
 import 'bluetooth_device_scan_screen.dart';
 
 class ConnectScreen extends StatelessWidget {
@@ -10,66 +12,103 @@ class ConnectScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E7D4F),
+        backgroundColor: const Color(0xFF1B6B3A),
         elevation: 0,
         centerTitle: true,
+        automaticallyImplyLeading: false,
         title: const Text(
           'CONNECT',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.0,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.3,
           ),
         ),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {
-            Navigator.pop(context);
-          },
-        ),
         actions: [
+          // Logout icon — navigates to Login
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: const Icon(Icons.logout_rounded, color: Colors.white),
+            tooltip: 'Logout',
             onPressed: () {
-              // Refresh functionality
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  title: const Text(
+                    'Logout',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  content: const Text('Are you sure you want to logout?'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          SlideRoute(page: const LoginScreen()),
+                          (route) => false,
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF3A6EAC),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text('Logout'),
+                    ),
+                  ],
+                ),
+              );
             },
           ),
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 40),
+            const SizedBox(height: 36),
             const Text(
               'Choose the Device option',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: Colors.black87,
               ),
             ),
-            const SizedBox(height: 60),
-            
+            const SizedBox(height: 20),
+
             // Local Monitoring Card
             _buildConnectionCard(
               context,
               title: 'Local Monitoring',
               subtitle: 'Bluetooth Device',
-              icon: Icons.bluetooth,
+              icon: Icons.bluetooth_rounded,
               onTap: () => _handleLocalMonitoring(context),
             ),
-            
-            const SizedBox(height: 30),
-            
+
+            const SizedBox(height: 20),
+
             // Remote Monitoring Card
             _buildConnectionCard(
               context,
               title: 'Remote Monitoring',
               subtitle: 'Wifi or 4G/5G Devices',
-              icon: Icons.wifi,
+              icon: Icons.router_rounded,
               onTap: () => _handleRemoteMonitoring(context),
             ),
           ],
@@ -89,60 +128,62 @@ class ConnectScreen extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
         decoration: BoxDecoration(
-          color: const Color(0xFF1E7D4F),
-          borderRadius: BorderRadius.circular(16),
+          color: const Color(0xFF1B6B3A),
+          borderRadius: BorderRadius.circular(15),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 8,
+              color: Colors.black.withOpacity(0.12),
+              blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(
-                icon,
-                color: const Color(0xFF1E7D4F),
-                size: 28,
-              ),
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
+            // Icon block
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Icon in white rounded square
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.white70,
-                      fontWeight: FontWeight.w400,
-                    ),
+                  child: Icon(
+                    icon,
+                    color: const Color(0xFF1B6B3A),
+                    size: 26,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
             ),
+            const Spacer(),
             const Icon(
-              Icons.arrow_forward_ios,
+              Icons.arrow_forward_ios_rounded,
               color: Colors.white,
               size: 18,
             ),
@@ -153,25 +194,33 @@ class ConnectScreen extends StatelessWidget {
   }
 
   void _handleLocalMonitoring(BuildContext context) async {
-    // Check if Bluetooth is enabled
     if (!await FlutterBluePlus.isSupported) {
       _showBluetoothNotSupportedDialog(context);
       return;
     }
 
-    // Check Bluetooth adapter state
     var adapterState = await FlutterBluePlus.adapterState.first;
     if (adapterState == BluetoothAdapterState.off) {
-      // Show simple alert when Bluetooth is off
       showDialog(
         context: context,
         builder: (BuildContext context) {
           return AlertDialog(
-            title: const Text('Alert'),
-            content: const Text('Your Bluetooth is off'),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: const Text('Bluetooth Off'),
+            content: const Text('Please turn on Bluetooth to continue.'),
             actions: [
-              TextButton(
+              ElevatedButton(
                 onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1B6B3A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
                 child: const Text('OK'),
               ),
             ],
@@ -181,39 +230,43 @@ class ConnectScreen extends StatelessWidget {
       return;
     }
 
-    // If Bluetooth is on, navigate to Bluetooth Device Scan page
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const BluetoothDeviceScanPage(),
-      ),
+      SlideRoute(page: const BluetoothDeviceScanPage()),
     );
   }
 
   void _handleRemoteMonitoring(BuildContext context) {
-    // TODO: Implement remote monitoring
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text('Remote monitoring coming soon!'),
-        backgroundColor: Color(0xFF1E7D4F),
+        backgroundColor: Color(0xFF1B6B3A),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
-  
-  
   void _showBluetoothNotSupportedDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Bluetooth Not Supported'),
-          content: const Text(
-            'This device does not support Bluetooth.',
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
+          title: const Text('Bluetooth Not Supported'),
+          content: const Text('This device does not support Bluetooth.'),
           actions: [
-            TextButton(
+            ElevatedButton(
               onPressed: () => Navigator.of(context).pop(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B6B3A),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                elevation: 0,
+              ),
               child: const Text('OK'),
             ),
           ],
