@@ -57,8 +57,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           style: TextStyle(
             color: Colors.white,
             fontSize: 16,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
+            fontWeight: FontWeight.w500,
+            letterSpacing: 1.3,
           ),
         ),
         leading: IconButton(
@@ -161,7 +161,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _handleSendLink,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1B6B3A),
+                    backgroundColor: const Color(0xFF3A6EAC),
                     foregroundColor: Colors.white,
                     disabledBackgroundColor:
                         const Color(0xFF1B6B3A).withOpacity(0.6),

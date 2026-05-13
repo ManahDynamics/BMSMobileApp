@@ -118,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(22),
                       child: Padding(
-                        padding: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(20),
                       child: Image.asset(
                         'assets/images/logo.png', 
                         width: 110,
@@ -321,10 +321,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                "if you don't an account you can  ",
+                                "if you don't an account you can ",
                                 style: TextStyle(
                                   color: Colors.grey[600],
-                                  fontSize: 13,
+                                  fontSize: 12,
                                 ),
                               ),
                               MouseRegion(

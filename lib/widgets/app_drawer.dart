@@ -33,7 +33,7 @@ class AppDrawer extends StatelessWidget {
           ),
           Positioned(
             bottom: -60,
-            right: 260,
+            right: 200,
             child: Container(
               width: 180,
               height: 180,

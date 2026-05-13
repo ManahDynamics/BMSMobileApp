@@ -5,6 +5,7 @@ import 'package:bmsmobileapp/screens/login_screen.dart';
 import 'package:bmsmobileapp/screens/editprofile_screen.dart';
 import 'package:bmsmobileapp/screens/forgotpassword_screen.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
+import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -37,8 +38,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to logout?'),
+        title: const Text('Logout', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text(
+        'Are you sure you want to logout?',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Colors.black87, fontSize: 16),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -78,7 +84,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   final RelativeRect position = RelativeRect.fromLTRB(
   overlay.size.width, 
-  buttonOffset.dy + buttonSize.height + 4,
+  buttonOffset.dy + buttonSize.height + 1,
   8, 
   0,
 );
@@ -90,24 +96,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     color: Colors.white,      
     surfaceTintColor: Colors.transparent,
     shape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(10),
     ),
     items: [
       PopupMenuItem<String>(
         value: 'edit_profile',
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
         child: _menuItem(Icons.person_outline_rounded, 'Edit Profile', Colors.black87),
       ),
-      const PopupMenuDivider(height: 0.5),
+      const PopupMenuDivider(height: 0.5, color: const Color(0xFFEEEEEE)),
       PopupMenuItem<String>(
         value: 'forgot_password',
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
         child: _menuItem(Icons.lock_reset_rounded, 'Forget Password', Colors.black87),
       ),
-      const PopupMenuDivider(height: 0.5),
+      const PopupMenuDivider(height: 0.5, color: const Color(0xFFEEEEEE)),
       PopupMenuItem<String>(
         value: 'logout',
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
         child: _menuItem(Icons.logout_rounded, 'Logout', Colors.red),
       ),
     ],
@@ -159,7 +165,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
           style: TextStyle(
             color: Colors.white,
             fontSize: 18,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             letterSpacing: 1.3,
           ),
         ),
@@ -321,24 +327,67 @@ Widget _menuItem(IconData icon, String label, Color color) {
         ),
         const Spacer(),
         ElevatedButton(
-          onPressed: () {},
-          style: ElevatedButton.styleFrom(
+        onPressed: () {
+            showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                title: const Text(
+                'Disconnect',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                content: Text(
+                    'Are you sure you want to disconnect?',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Colors.grey[700], fontSize: 16),
+                ),
+                actionsAlignment: MainAxisAlignment.center, 
+                actions: [
+                TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                ),
+                ElevatedButton(
+                    onPressed: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.pushAndRemoveUntil(
+                        context,
+                        SlideRoute(page: const BluetoothDeviceScanPage()),
+                        (route) => false,
+                    );
+                    },
+                    style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFD4621A),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                    ),
+                    child: const Text('Disconnect'),
+                ),
+                ],
+            ),
+            );
+        },
+        style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFD4621A),
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(6),
+            borderRadius: BorderRadius.circular(6),
             ),
             elevation: 0,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          ),
-          child: const Text(
+        ),
+        child: const Text(
             'DISCONNECT',
             style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
             ),
-          ),
+        ),
         ),
       ],
     );
@@ -348,7 +397,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
   Widget _buildBatteryStatusCard() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFF3A6EAC),
         borderRadius: BorderRadius.circular(10),
@@ -520,9 +569,9 @@ Widget _menuItem(IconData icon, String label, Color color) {
   String? subtitle,
 }) {
   return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     decoration: BoxDecoration(
-      color: const Color(0xFFE6E6E6),
+      color: const Color(0xFFF0F0F0),
       borderRadius: BorderRadius.circular(10),
     ),
     child: Row(
@@ -590,7 +639,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
           'Cell Summary',
           style: TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             color: Colors.black87,
           ),
         ),
@@ -609,7 +658,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
                   '${minCell} v',
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w500,
                     color: Colors.black87,
                   ),
                 ),
@@ -653,7 +702,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
                   '${maxCell} v',
                   style: const TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w500,
                     color: Colors.black87,
                   ),
                 ),
@@ -672,7 +721,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFFF2F2F2),
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         children: [

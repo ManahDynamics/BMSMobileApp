@@ -21,7 +21,7 @@ class ConnectScreen extends StatelessWidget {
           style: TextStyle(
             color: Colors.white,
             fontSize: 18,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             letterSpacing: 1.3,
           ),
         ),
@@ -35,13 +35,18 @@ class ConnectScreen extends StatelessWidget {
                 context: context,
                 builder: (ctx) => AlertDialog(
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   title: const Text(
-                    'Logout',
+                    'Logout', textAlign: TextAlign.center,
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
-                  content: const Text('Are you sure you want to logout?'),
+                  content: const Text(
+                  'Are you sure you want to logout?',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.black87, fontSize: 16),
+                  ),
+                  actionsAlignment: MainAxisAlignment.center,
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(ctx).pop(),
@@ -86,11 +91,11 @@ class ConnectScreen extends StatelessWidget {
               'Choose the Device option',
               style: TextStyle(
                 fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87,
+                fontWeight: FontWeight.w400,
+                color: Colors.black54,
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
 
             // Local Monitoring Card
             _buildConnectionCard(
@@ -128,7 +133,7 @@ class ConnectScreen extends StatelessWidget {
       onTap: onTap,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 22),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
         decoration: BoxDecoration(
           color: const Color(0xFF1B6B3A),
           borderRadius: BorderRadius.circular(15),
@@ -149,11 +154,11 @@ class ConnectScreen extends StatelessWidget {
               children: [
                 // Icon in white rounded square
                 Container(
-                  width: 44,
-                  height: 44,
+                  width: 34,
+                  height: 34,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(
                     icon,
@@ -165,8 +170,8 @@ class ConnectScreen extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
                     color: Colors.white,
                   ),
                 ),
