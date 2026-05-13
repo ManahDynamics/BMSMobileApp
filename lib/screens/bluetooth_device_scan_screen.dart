@@ -3,11 +3,13 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/login_screen.dart';
+import 'package:bmsmobileapp/screens/dashboard.dart';
 
 class BluetoothDeviceScanPage extends StatefulWidget {
   const BluetoothDeviceScanPage({super.key});
 
   @override
+
   State<BluetoothDeviceScanPage> createState() =>
       _BluetoothDeviceScanPageState();
 }
@@ -45,13 +47,18 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(10),
         ),
         title: const Text(
-          'Logout',
+          'Logout', textAlign: TextAlign.center,
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
-        content: const Text('Are you sure you want to logout?'),
+        content: const Text(
+        'Are you sure you want to logout?',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Colors.black87, fontSize: 16),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -97,7 +104,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
           style: TextStyle(
             color: Colors.white,
             fontSize: 18,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w500,
             letterSpacing: 1.3,
           ),
         ),
@@ -360,30 +367,62 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
   }
 
   Future<void> _connectToDevice(BluetoothDevice device) async {
-    try {
-      await device.connect();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Connected to ${device.name}'),
-            backgroundColor: const Color(0xFF1B6B3A),
-            behavior: SnackBarBehavior.floating,
+  // Show loading dialog while connecting
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      content: Row(
+        children: [
+          const CircularProgressIndicator(
+            color: Color(0xFF1B6B3A),
+            strokeWidth: 2.5,
           ),
-        );
-        Navigator.pop(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to connect: $e'),
-            backgroundColor: Colors.red,
-            behavior: SnackBarBehavior.floating,
+          const SizedBox(width: 10),
+          RichText(
+            text: TextSpan(
+              style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.8),
+              children: [
+                const TextSpan(text: 'Connecting to\n'),
+                TextSpan(
+                  text: device.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
           ),
-        );
-      }
+        ],
+      ),
+    ),
+  );
+
+  try {
+    await device.connect(timeout: const Duration(seconds: 10));
+
+    if (mounted) {
+      Navigator.of(context).pop(); // close loading dialog
+
+      // Navigate to Dashboard, clear all previous routes
+      Navigator.pushAndRemoveUntil(
+        context,
+        SlideRoute(page: const DashboardScreen()),
+        (route) => false,
+      );
+    }
+  } catch (e) {
+    if (mounted) {
+      Navigator.of(context).pop(); // close loading dialog
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to connect: $e'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
+}
 
   @override
   void dispose() {
