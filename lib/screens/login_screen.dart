@@ -396,7 +396,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             children: [
                               Text(
                                 "if you don't an account you can  ",
-                                style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
                               ),
                               MouseRegion(
                                 cursor: SystemMouseCursors.click,
