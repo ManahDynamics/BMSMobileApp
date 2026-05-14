@@ -18,7 +18,6 @@ class AlertsScreen extends StatelessWidget {
             color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.w500,
-            letterSpacing: 1.3,
           ),
         ),
         leading: Builder(

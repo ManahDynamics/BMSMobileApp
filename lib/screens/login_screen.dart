@@ -105,7 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Welcome back, $name!'),
-            backgroundColor: const Color(0xFF1B6B3A),
+            backgroundColor: const Color(0xFF5E93D4),
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -257,7 +257,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                               prefixIcon: Icon(Icons.email_rounded, color: Colors.grey[600], size: 20),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                             ),
                           ),
                         ),
@@ -288,7 +288,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     setState(() => _obscurePassword = !_obscurePassword),
                               ),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                             ),
                           ),
                         ),

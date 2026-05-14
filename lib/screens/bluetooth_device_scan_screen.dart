@@ -6,6 +6,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/login_screen.dart';
 import 'package:bmsmobileapp/screens/dashboard.dart';
+import 'package:bmsmobileapp/screens/connect_screen.dart';
+
 
 class BluetoothDeviceScanPage extends StatefulWidget {
   const BluetoothDeviceScanPage({super.key});
@@ -53,7 +55,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
         ),
         title: const Text(
           'Logout', textAlign: TextAlign.center,
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
         content: const Text(
         'Are you sure you want to logout?',
@@ -107,12 +109,20 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.w500,
-            letterSpacing: 1.3,
           ),
         ),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () async {
+            await FlutterBluePlus.stopScan();
+            if (mounted) {
+              Navigator.pushAndRemoveUntil(
+                context,
+                SlideRoute(page: const ConnectScreen()),
+                (route) => false,
+              );
+            }
+          },
         ),
         actions: [
           IconButton(
@@ -184,7 +194,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
                   child: OutlinedButton(
                     onPressed: _isScanning ? null : _scanForDevices,
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF1B6B3A),
+                      foregroundColor: const Color(0xFF4F4F4F),
                       side: const BorderSide(color: Color(0xFFCCCCCC)),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
@@ -289,17 +299,17 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
         ],
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
         leading: Container(
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: const Color(0xFF1B6B3A).withOpacity(0.1),
+            color: const Color(0xFF3A6EAC).withOpacity(0.1),
             borderRadius: BorderRadius.circular(10),
           ),
           child: const Icon(
             Icons.bluetooth,
-            color: Color(0xFF1B6B3A),
+            color: Color(0xFF4F4F4F),
             size: 22,
           ),
         ),
@@ -308,7 +318,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF1B6B3A),
+            color: Color(0xFF3A3939),
           ),
         ),
         subtitle: Text(
@@ -318,7 +328,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
         trailing: ElevatedButton(
           onPressed: () => _connectToDevice(device),
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF1B6B3A),
+            backgroundColor: const Color(0xFF3A6EAC),
             foregroundColor: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),

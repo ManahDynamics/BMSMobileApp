@@ -53,7 +53,7 @@ class AppDrawer extends StatelessWidget {
 
                 // ── User header ────────────────────────────────────────
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
                       // Avatar with initials
@@ -64,7 +64,7 @@ class AppDrawer extends StatelessWidget {
                           'VC',
                           style: TextStyle(
                             color: Color(0xFF1B6B3A),
-                            fontSize: 16,
+                            fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -181,7 +181,7 @@ class AppDrawer extends StatelessWidget {
                 color: Colors.white,
                 fontSize: 15,
                 fontWeight:
-                    isActive ? FontWeight.bold : FontWeight.w400,
+                    isActive ? FontWeight.w400 : FontWeight.w400,
               ),
             ),
           ],
