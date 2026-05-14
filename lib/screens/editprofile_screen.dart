@@ -9,8 +9,8 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final _nameController = TextEditingController(text: 'John Doe');
-  final _emailController = TextEditingController(text: 'johndoe@email.com');
+  final _nameController = TextEditingController(text: 'Venkat Cherka');
+  final _emailController = TextEditingController(text: 'venkat.cherka@email.com');
   final _phoneController = TextEditingController(text: '+91 9876543210');
 
   @override
@@ -35,7 +35,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.w500,
-            letterSpacing: 1.3,
           ),
         ),
         leading: IconButton(
@@ -80,7 +79,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'John Doe',
+              'Venkat Cherka',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -121,7 +120,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             // ── Save button ────────────────────────────────────────────
             SizedBox(
               width: double.infinity,
-              height: 52,
+              height: 50,
               child: ElevatedButton(
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -136,7 +135,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   backgroundColor: const Color(0xFF3A6EAC),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   elevation: 0,
                 ),
@@ -151,14 +150,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             // ── Cancel button ──────────────────────────────────────────
             SizedBox(
               width: double.infinity,
-              height: 52,
+              height: 50,
               child: OutlinedButton(
                 onPressed: () => Navigator.pop(context),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.grey[700],
                   side: const BorderSide(color: Color(0xFFCCCCCC)),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
                 child: const Text(
@@ -190,11 +189,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             color: Colors.black54,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Container(
           decoration: BoxDecoration(
             color: const Color(0xFFF0F0F0),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: TextField(
             controller: controller,
@@ -204,7 +203,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               border: InputBorder.none,
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
-                vertical: 16,
+                vertical: 14,
               ),
             ),
           ),

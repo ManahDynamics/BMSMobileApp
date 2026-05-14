@@ -24,7 +24,6 @@ class ConnectScreen extends StatelessWidget {
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.w500,
-            letterSpacing: 1.3,
           ),
         ),
         actions: [
@@ -40,7 +39,7 @@ class ConnectScreen extends StatelessWidget {
                   ),
                   title: const Text(
                     'Logout', textAlign: TextAlign.center,
-                    style: TextStyle(fontWeight: FontWeight.bold),
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
                   ),
                   content: const Text(
                   'Are you sure you want to logout?',

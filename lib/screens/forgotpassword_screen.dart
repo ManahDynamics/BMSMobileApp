@@ -58,7 +58,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.w500,
-            letterSpacing: 1.3,
           ),
         ),
         leading: IconButton(
@@ -133,7 +132,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               Container(
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0F0F0),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: TextField(
                   controller: _emailController,
@@ -147,7 +146,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 16,
+                      vertical: 14,
                     ),
                   ),
                 ),
@@ -157,7 +156,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               // ── Send button ──────────────────────────────────────────
               SizedBox(
                 width: double.infinity,
-                height: 52,
+                height: 50,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _handleSendLink,
                   style: ElevatedButton.styleFrom(
@@ -166,7 +165,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     disabledBackgroundColor:
                         const Color(0xFF1B6B3A).withOpacity(0.6),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     elevation: 0,
                   ),
@@ -193,14 +192,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               // ── Back to login ────────────────────────────────────────
               SizedBox(
                 width: double.infinity,
-                height: 52,
+                height: 50,
                 child: OutlinedButton(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.grey[700],
                     side: const BorderSide(color: Color(0xFFCCCCCC)),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                   ),
                   child: const Text(
@@ -247,14 +246,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               const SizedBox(height: 28),
               SizedBox(
                 width: double.infinity,
-                height: 52,
+                height: 50,
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF1B6B3A),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     elevation: 0,
                   ),

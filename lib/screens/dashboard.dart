@@ -166,7 +166,6 @@ Widget _menuItem(IconData icon, String label, Color color) {
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.w500,
-            letterSpacing: 1.3,
           ),
         ),
         actions: [
@@ -335,7 +334,7 @@ Widget _menuItem(IconData icon, String label, Color color) {
                 title: const Text(
                 'Disconnect',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.bold),
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
                 ),
                 content: Text(
                     'Are you sure you want to disconnect?',
@@ -377,15 +376,14 @@ Widget _menuItem(IconData icon, String label, Color color) {
             shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(6),
             ),
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            elevation: 1,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         ),
         child: const Text(
             'DISCONNECT',
             style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.bold,
-            letterSpacing: 0.5,
             ),
         ),
         ),
