@@ -6,6 +6,9 @@ import 'package:bmsmobileapp/screens/editprofile_screen.dart';
 import 'package:bmsmobileapp/screens/forgotpassword_screen.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
+import 'package:bmsmobileapp/screens/cells_screen.dart';
+import 'package:bmsmobileapp/utils/slide_route.dart';
+
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -246,22 +249,27 @@ Widget _menuItem(IconData icon, String label, Color color) {
 
             // ── View Cell Details button ────────────────────────────────
             SizedBox(
-              width: double.infinity,
-              height: 35,
-              child: OutlinedButton(
-                onPressed: () {},
+            width: double.infinity,
+            height: 45,
+            child: OutlinedButton(
+                onPressed: () {
+                Navigator.push(
+                    context,
+                    SlideRoute(page: const CellsScreen()),
+                );
+                },
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.black87,
-                  side: const BorderSide(color: Color(0xFFCCCCCC)),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
-                  ),
+                foregroundColor: Colors.black87,
+                side: const BorderSide(color: Color(0xFFCCCCCC)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                ),
                 ),
                 child: const Text(
-                  'View Cell Details',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                'View Cell Details',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
-              ),
+            ),
             ),
             const SizedBox(height: 16),
 
