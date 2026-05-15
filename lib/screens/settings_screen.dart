@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
+import 'package:bmsmobileapp/utils/slide_route.dart';
+import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -426,81 +428,116 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ── Widget Builders ─────────────────────────────────────────────────
 
   Widget _buildDeviceCard() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 2))
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8)),
-            child: const Icon(Icons.battery_full_rounded,
-                size: 28, color: Colors.black54),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('BMS_001',
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
+    decoration: BoxDecoration(
+      color: Colors.white,
+
+    ),
+    child: Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8)),
+          child: const Icon(Icons.battery_full_rounded,
+              size: 28, color: Colors.black54),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('BMS_001',
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 15)),
+            Row(
+              children: [
+                Text(
+                  isConnected ? 'Connected' : 'Disconnected',
                   style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 15)),
-              Row(
-                children: [
-                  Text(
-                    isConnected ? 'Connected' : 'Disconnected',
-                    style: TextStyle(
-                      color: isConnected
-                          ? const Color(0xFF1B6B3A)
-                          : Colors.red,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 13,
-                    ),
+                    color: isConnected
+                        ? const Color(0xFF1B6B3A)
+                        : Colors.red,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 13,
                   ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.circle,
-                      size: 8,
-                      color: isConnected
-                          ? const Color(0xFF1B6B3A)
-                          : Colors.red),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.circle,
+                    size: 8,
+                    color: isConnected
+                        ? const Color(0xFF1B6B3A)
+                        : Colors.red),
+              ],
+            ),
+          ],
+        ),
+        const Spacer(),
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFD4621A), // 👈 consistent orange
+            foregroundColor: Colors.white,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6)),
+            elevation: 0,
+          ),
+          onPressed: () {
+            // 👈 show confirmation dialog instead of toggling
+            showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+                title: const Text(
+                  'Disconnect',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                content: const Text(
+                  'Are you sure you want to disconnect from BMS_001?',
+                  textAlign: TextAlign.center,
+                ),
+                actionsAlignment: MainAxisAlignment.center,
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Cancel',
+                        style: TextStyle(color: Colors.grey)),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      Navigator.pushAndRemoveUntil(
+                        context,
+                        SlideRoute(page: const BluetoothDeviceScanPage()),
+                        (route) => false,
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFD4621A),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                      elevation: 0,
+                    ),
+                    child: const Text('Disconnect'),
+                  ),
                 ],
               ),
-            ],
+            );
+          },
+          child: const Text(
+            'DISCONNECT',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
           ),
-          const Spacer(),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFB86B2A),
-              foregroundColor: Colors.white,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6)),
-              elevation: 0,
-            ),
-            onPressed: () =>
-                setState(() => isConnected = !isConnected),
-            child: Text(
-              isConnected ? 'DISCONNECT' : 'CONNECT',
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 12),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 
   Widget _buildLockBanner() {
     return Container(
@@ -523,8 +560,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   'Protection Settings are Locked',
                   style: TextStyle(
                       color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16),
                 ),
               ),
             ],
@@ -542,7 +579,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.white,
               side:
-                  const BorderSide(color: Colors.white, width: 1.5),
+                  const BorderSide(color: Colors.white, width: 1),
               padding: const EdgeInsets.symmetric(
                   horizontal: 14, vertical: 8),
               shape: RoundedRectangleBorder(
