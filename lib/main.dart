@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/connect_screen.dart';
-import 'screens/bluetooth_device_scan_screen.dart';
 import 'screens/dashboard.dart';
 import 'screens/editprofile_screen.dart';
 import 'screens/forgotpassword_screen.dart';
 
+import 'services/bluetooth_service.dart';
+
+/// ✅ GLOBAL BLUETOOTH SERVICE (IMPORTANT)
+final BMSBluetoothService bmsService = BMSBluetoothService();
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -18,6 +24,7 @@ void main() {
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
+
   runApp(const MyApp());
 }
 
@@ -29,21 +36,32 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Smart BMS',
       debugShowCheckedModeBanner: false,
+
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1E7D4F),
         ),
         useMaterial3: true,
       ),
+
       initialRoute: '/splash',
+
       routes: {
         '/splash': (context) => const SplashScreen(),
+
         '/login': (context) => const LoginScreen(),
+
         '/register': (context) => const RegisterScreen(),
+
         '/connect': (context) => const ConnectScreen(),
-        '/bluetooth_scan': (context) => const BluetoothDeviceScanPage(),
+
+        // ❌ DO NOT pass BLE service through routes (causes crashes)
+        // Bluetooth screen is opened using Navigator.push directly
+
         '/dashboard': (context) => const DashboardScreen(),
+
         '/edit_profile': (context) => const EditProfileScreen(),
+
         '/forgot_password': (context) => const ForgotPasswordScreen(),
       },
     );

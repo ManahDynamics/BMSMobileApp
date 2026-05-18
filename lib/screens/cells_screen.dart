@@ -111,7 +111,9 @@ class _CellsScreenState extends State<CellsScreen> {
               Navigator.of(ctx).pop();
               Navigator.pushAndRemoveUntil(
                 context,
-                SlideRoute(page: const BluetoothDeviceScanPage()),
+                SlideRoute(page: BluetoothDeviceScanPage(
+              service: ModalRoute.of(context)!.settings.arguments as dynamic,
+            ),),
                 (route) => false,
               );
             },

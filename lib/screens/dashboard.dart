@@ -7,7 +7,6 @@ import 'package:bmsmobileapp/screens/forgotpassword_screen.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 import 'package:bmsmobileapp/screens/cells_screen.dart';
-import 'package:bmsmobileapp/utils/slide_route.dart';
 
 
 class DashboardScreen extends StatefulWidget {
@@ -360,7 +359,9 @@ Widget _menuItem(IconData icon, String label, Color color) {
                     Navigator.of(ctx).pop();
                     Navigator.pushAndRemoveUntil(
                         context,
-                        SlideRoute(page: const BluetoothDeviceScanPage()),
+                        SlideRoute(page:BluetoothDeviceScanPage(
+              service: ModalRoute.of(context)!.settings.arguments as dynamic,
+            ),),
                         (route) => false,
                     );
                     },
