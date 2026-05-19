@@ -133,13 +133,18 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('BMS Scanner'),
+        backgroundColor: const Color(0xFF1B6B3A),
+        title: const Text('BMS Scanner', style: TextStyle(color: Colors.white)),
         bottom: TabBar(
           controller: _tabController,
+           labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
           tabs: const [
-            Tab(icon: Icon(Icons.bluetooth_searching), text: 'Scan'),
-            Tab(icon: Icon(Icons.receipt_long),        text: 'Packets'),
+            Tab(icon: Icon(Icons.bluetooth_searching),text: 'Scan',),
+            Tab(icon: Icon(Icons.receipt_long),text: 'Packets',),
           ],
         ),
       ),
@@ -191,25 +196,31 @@ class _ScanTab extends StatelessWidget {
         const SizedBox(height: 8),
 
         // ── Scan button ────────────────────────────────────────────────────
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton.icon(
-              onPressed: isScanning ? null : onScan,
-              icon: isScanning
-                  ? const SizedBox(
-                      width: 16, height: 16,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.radar),
-              label: Text(isScanning ? 'Scanning…' : 'Scan for Devices'),
-            ),
-          ),
+       Padding(
+  padding: const EdgeInsets.symmetric(horizontal: 16),
+  child: SizedBox(
+    width: double.infinity,
+    height: 44,
+    child: ElevatedButton.icon(
+      onPressed: isScanning ? null : onScan,
+      icon: isScanning
+          ? const SizedBox(
+              width: 16, height: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white))
+          : const Icon(Icons.radar),
+      label: Text(isScanning ? 'Scanning…' : 'Scan for Devices'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF1B6B3A),
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
         ),
-
-        const SizedBox(height: 8),
+        elevation: 0,
+      ),
+    ),
+  ),
+),
 
         // ── Device list ────────────────────────────────────────────────────
         Expanded(
@@ -253,13 +264,21 @@ class _ScanTab extends StatelessWidget {
                                   label: 'Ready',
                                   color: Colors.green,
                                 )
-                              : ElevatedButton(
-                                  onPressed: () => onConnect(d),
-                                  child: const Text('Connect'),
-                                ),
-                    );
-                  },
-                ),
+                              :ElevatedButton(
+  onPressed: () => onConnect(d),
+  style: ElevatedButton.styleFrom(
+    backgroundColor: const Color(0xFF1B6B3A),
+    foregroundColor: Colors.white,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(8),
+    ),
+    elevation: 0,
+  ),
+  child: const Text('Connect'),
+),
+                );
+               },
+            ),
         ),
       ],
     );

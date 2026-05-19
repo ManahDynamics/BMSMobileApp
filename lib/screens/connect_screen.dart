@@ -7,7 +7,6 @@ import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/login_screen.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 
-// 🔥 IMPORT YOUR SERVICE (IMPORTANT)
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 
 class ConnectScreen extends StatelessWidget {
