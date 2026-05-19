@@ -197,9 +197,9 @@ class BMSBluetoothService extends ChangeNotifier {
   Future<void> sendHandshake() async {
     if (_writeChar == null) return;
 
-    final List<int> header = [0xAA, 0x05, 0x90];
+    final List<int> header = [0xCC, 0x05, 0x90];
     final int       crc    = BMSCrcService.calculateCRC8(header);
-    final List<int> packet = [...header, crc, 0xBB];
+    final List<int> packet = [...header, crc, 0xDD];
 
     debugPrint('══════════════════════════════');
     debugPrint('📤 HANDSHAKE TX : ${_toHex(packet)}');
@@ -262,9 +262,9 @@ class BMSBluetoothService extends ChangeNotifier {
 
     if (_writeChar != null) {
       try {
-        final List<int> header = [0xAA, 0x05, 0x91];
+        final List<int> header = [0xCC, 0x05, 0x91];
         final int       crc    = BMSCrcService.calculateCRC8(header);
-        final List<int> packet = [...header, crc, 0xBB];
+        final List<int> packet = [...header, crc, 0xDD];
 
         final bool useWithResponse = _writeChar!.properties.write;
         debugPrint('📤 DISCONNECT TX: ${_toHex(packet)}');
@@ -292,9 +292,9 @@ class BMSBluetoothService extends ChangeNotifier {
   Future<void> sendCustom(int dataId) async {
     if (_writeChar == null) return;
 
-    final List<int> header = [0xAA, 0x05, dataId];
+    final List<int> header = [0xCC, 0x05, dataId];
     final int       crc    = BMSCrcService.calculateCRC8(header);
-    final List<int> packet = [...header, crc, 0xBB];
+    final List<int> packet = [...header, crc, 0xDD];
 
     final bool useWithResponse = _writeChar!.properties.write;
     debugPrint('📤 CUSTOM TX: ${_toHex(packet)}');

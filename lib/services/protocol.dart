@@ -4,10 +4,10 @@ class BMSProtocol {
   BMSProtocol._();
 
   // ── Framing Bytes ─────────────────────────────────────────────────────────
-  static const int startByte  = 0xAA; // Mobile → BMS
-  static const int stopByte   = 0xBB;
-  static const int ackStart   = 0xCC; // BMS → Mobile
-  static const int ackStop    = 0xDD;
+  static const int startByte  = 0xCC; // Mobile → BMS
+  static const int stopByte   = 0xDD;
+  static const int ackStart   = 0xAA; // BMS → Mobile
+  static const int ackStop    = 0xBB;
 
   // ── Data IDs ──────────────────────────────────────────────────────────────
   static const int idHandshake  = 0x90;
