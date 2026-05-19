@@ -194,48 +194,47 @@ class BMSBluetoothService extends ChangeNotifier {
   // HANDSHAKE  (Mobile → BMS)
   //   Packet: AA  05  90  <crc8 of [AA,05,90]>  BB
   // ─────────────────────────────────────────────────────────────────────────
-  Future<void> sendHandshake() async {
-    if (_writeChar == null) return;
+Future<void> sendHandshake() async {
+  if (_writeChar == null) return;
 
-    final List<int> header = [0xCC, 0x05, 0x90];
-    final int       crc    = BMSCrcService.calculateCRC8(header);
-    final List<int> packet = [...header, crc, 0xDD];
+  // ── Correct CRC Input according to BMS spec ─────────────────────
+  final List<int> crcInput = [0x05, 0x90];        // Length + Command/Type (Exclude Start Byte)
+  
+  final int crc = BMSCrcService.calculateCRC8(crcInput);
+  
+  final List<int> packet = [0xCC, 0x05, 0x90, crc, 0xDD];
 
-    debugPrint('══════════════════════════════');
-    debugPrint('📤 HANDSHAKE TX : ${_toHex(packet)}');
-    debugPrint('   CRC-8        : 0x${crc.toRadixString(16).toUpperCase().padLeft(2,'0')}');
+  debugPrint('══════════════════════════════');
+  debugPrint('📤 HANDSHAKE TX : ${_toHex(packet)}');
+  debugPrint('   CRC Input    : ${_toHex(crcInput)}');
+  debugPrint('   CRC-8        : 0x${crc.toRadixString(16).toUpperCase().padLeft(2,'0')}');
 
-    // Log the sent packet
-    final parsed = BMSPacketParser.parse(packet);
-    if (parsed.isSuccess) packetLog.insert(0, parsed.packet!);
+  // Log the sent packet
+  final parsed = BMSPacketParser.parse(packet);
+  if (parsed.isSuccess) packetLog.insert(0, parsed.packet!);
 
-    state = BMSConnectionState.handshakeSent;
-    notifyListeners();
+  state = BMSConnectionState.handshakeSent;
+  notifyListeners();
 
-    // ── FIX: auto-detect write mode ───────────────────────────────────────
-    // Use write-with-response when supported; otherwise use without-response.
-    final bool useWithResponse = _writeChar!.properties.write;
-    debugPrint('   writeWithResponse = $useWithResponse');
+  final bool useWithResponse = _writeChar!.properties.write;
+  await _writeChar!.write(packet, withoutResponse: !useWithResponse);
 
-    await _writeChar!.write(packet, withoutResponse: !useWithResponse);
+  state = BMSConnectionState.waitingAck;
+  notifyListeners();
 
-    state = BMSConnectionState.waitingAck;
-    notifyListeners();
+  debugPrint('📡 WAITING FOR ACK…');
 
-    debugPrint('📡 WAITING FOR ACK…');
-
-    // Timeout guard
-    _ackTimer?.cancel();
-    _ackTimer = Timer(const Duration(seconds: 5), () {
-      if (state == BMSConnectionState.waitingAck) {
-        debugPrint('⏰ ACK TIMEOUT');
-        errorMessage = 'Handshake timeout — no response from device';
-        state        = BMSConnectionState.error;
-        isConnecting = false;
-        notifyListeners();
-      }
-    });
-  }
+  _ackTimer?.cancel();
+  _ackTimer = Timer(const Duration(seconds: 5), () {
+    if (state == BMSConnectionState.waitingAck) {
+      debugPrint('⏰ ACK TIMEOUT');
+      errorMessage = 'Handshake timeout — no response from device';
+      state = BMSConnectionState.error;
+      isConnecting = false;
+      notifyListeners();
+    }
+  });
+}
 
   // ─────────────────────────────────────────────────────────────────────────
   // ACK HANDLER
