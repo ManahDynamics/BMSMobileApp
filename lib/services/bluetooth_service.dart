@@ -200,8 +200,9 @@ class BMSBluetoothService extends ChangeNotifier {
   // HANDSHAKE
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> sendHandshake() async {
-    // CRC calculated over [start, length, dataId] = [0xCC, 0x05, 0x90]
-    final int crc = BMSCrcService.calculateCRC8([0xCC, 0x05, 0x90]);
+    // CRC calculated over [length, dataId] only — NOT start or stop byte
+    // Per protocol: CRC covers Length + Packet Type + Data only
+    final int crc = BMSCrcService.calculateCRC8([0x05, 0x90]);
     final List<int> packet = [0xCC, 0x05, 0x90, crc, 0xDD];
 
     debugPrint('🤝 HANDSHAKE packet : ${_toHex(packet)}');
@@ -244,7 +245,8 @@ class BMSBluetoothService extends ChangeNotifier {
     const int expDataId = BMSProtocol.idAck;        // 0x50
     const int expStop   = BMSProtocol.ackStop;      // 0xBB
 
-    final int expCrc = BMSCrcService.calculateCRC8([expStart, expLength, expDataId]);
+    // CRC over [length, dataId] only — start byte 0xAA is excluded per protocol
+    final int expCrc = BMSCrcService.calculateCRC8([expLength, expDataId]);
 
     final List<int> expectedAck = [expStart, expLength, expDataId, expCrc, expStop];
 
@@ -296,8 +298,8 @@ class BMSBluetoothService extends ChangeNotifier {
     _ackTimer?.cancel();
 
     if (_writeChar != null) {
-      // CRC over [start, length, dataId] = [0xCC, 0x05, 0x91]
-      final int crc = BMSCrcService.calculateCRC8([0xCC, 0x05, 0x91]);
+      // CRC over [length, dataId] only — NOT start or stop byte
+      final int crc = BMSCrcService.calculateCRC8([0x05, 0x91]);
       final List<int> packet = [0xCC, 0x05, 0x91, crc, 0xDD];
 
       await _sendPacket(packet, logName: 'DISCONNECT');
@@ -319,8 +321,8 @@ class BMSBluetoothService extends ChangeNotifier {
   Future<void> sendCustom(int dataId) async {
     if (_writeChar == null) return;
 
-    // CRC over [start, length, dataId]
-    final int crc = BMSCrcService.calculateCRC8([0xCC, 0x05, dataId]);
+    // CRC over [length, dataId] only — NOT start or stop byte
+    final int crc = BMSCrcService.calculateCRC8([0x05, dataId]);
     final List<int> packet = [0xCC, 0x05, dataId, crc, 0xDD];
 
     await _sendPacket(

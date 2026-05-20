@@ -30,11 +30,15 @@ class BMSPacketParser {
 
   /// Parse [bytes] and return a [BMSParseResult].
   ///
+  /// CRC Calculation Rule (per protocol spec):
+  ///   CRC IS computed over  : Length + DataId (+ Data bytes if any)
+  ///   CRC is NOT computed on: Start Byte, CRC Byte, Stop Byte
+  ///
   /// Validates in order:
   ///   1. Minimum 5 bytes present.
   ///   2. Start + stop bytes match a known frame direction.
   ///   3. Length field equals [BMSProtocol.packetLength].
-  ///   4. CRC-8 over [start, length, dataId] matches stored CRC byte.
+  ///   4. CRC-8 over [length, dataId] matches stored CRC byte.
   static BMSParseResult parse(List<int> bytes) {
     // 1. Length guard
     if (bytes.length < 5) {
@@ -63,7 +67,9 @@ class BMSPacketParser {
     }
 
     // 4. CRC guard
-    if (!BMSCrcService.verifyCRC8([start, length, dataId], crc)) {
+    // CRC is computed over [length, dataId] ONLY
+    // Start byte (0xCC / 0xAA) and stop byte (0xDD / 0xBB) are excluded
+    if (!BMSCrcService.verifyCRC8([length, dataId], crc)) {
       return const BMSParseResult.failure(BMSParseError.crcMismatch);
     }
 
