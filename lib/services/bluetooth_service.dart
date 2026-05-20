@@ -9,11 +9,8 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:bmsmobileapp/services/parsed_packet.dart';
 import 'package:bmsmobileapp/services/packet_parser.dart';
 import 'package:bmsmobileapp/services/crc_service.dart';
-import 'package:bmsmobileapp/services/packet_formatter.dart';
+import 'package:bmsmobileapp/services/protocol.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Connection states
-// ─────────────────────────────────────────────────────────────────────────────
 enum BMSConnectionState {
   disconnected,
   connecting,
@@ -26,26 +23,22 @@ enum BMSConnectionState {
   error,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BMSBluetoothService
-// ─────────────────────────────────────────────────────────────────────────────
 class BMSBluetoothService extends ChangeNotifier {
-
   // ── Public state ───────────────────────────────────────────────────────────
-  BluetoothDevice?   device;
-  BMSConnectionState state        = BMSConnectionState.disconnected;
-  String?            errorMessage;
-  bool               isConnecting = false;
+  BluetoothDevice? device;
+  BMSConnectionState state = BMSConnectionState.disconnected;
+  String? errorMessage;
+  bool isConnecting = false;
 
-  /// Every sent / received packet, newest first.
+  /// Every sent / received packet (newest first)
   final List<BMSParsedPacket> packetLog = [];
 
   // ── Private ────────────────────────────────────────────────────────────────
   BluetoothCharacteristic? _notifyChar;
   BluetoothCharacteristic? _writeChar;
-  StreamSubscription?      _notifySub;
-  Timer?                   _ackTimer;
-  int                      _sessionId = 0;
+  StreamSubscription? _notifySub;
+  Timer? _ackTimer;
+  int _sessionId = 0;
 
   // ─────────────────────────────────────────────────────────────────────────
   // CONNECT
@@ -58,7 +51,7 @@ class BMSBluetoothService extends ChangeNotifier {
 
     try {
       isConnecting = true;
-      state        = BMSConnectionState.connecting;
+      state = BMSConnectionState.connecting;
       notifyListeners();
 
       await d.connect(timeout: const Duration(seconds: 15));
@@ -70,11 +63,10 @@ class BMSBluetoothService extends ChangeNotifier {
 
       await _discoverServices();
       await sendHandshake();
-
     } catch (e, st) {
       debugPrint('❌ CONNECT ERROR: $e\n$st');
       errorMessage = e.toString();
-      state        = BMSConnectionState.error;
+      state = BMSConnectionState.error;
       isConnecting = false;
       notifyListeners();
     }
@@ -91,44 +83,34 @@ class BMSBluetoothService extends ChangeNotifier {
 
     final services = await device!.discoverServices();
 
-    // ── Print ALL services and characteristics so you can identify UUIDs ──
     debugPrint('────────────────────────────────────');
-    debugPrint('📋 ALL CHARACTERISTICS ON THIS DEVICE:');
     for (final s in services) {
       debugPrint('  SERVICE: ${s.uuid}');
       for (final c in s.characteristics) {
-        debugPrint('    CHAR : ${c.uuid}');
-        debugPrint('           write            = ${c.properties.write}');
-        debugPrint('           writeWithoutResp = ${c.properties.writeWithoutResponse}');
-        debugPrint('           notify           = ${c.properties.notify}');
-        debugPrint('           read             = ${c.properties.read}');
+        debugPrint(
+            '    CHAR : ${c.uuid} | write:${c.properties.write} notify:${c.properties.notify}');
       }
     }
     debugPrint('────────────────────────────────────');
 
-    // ── Pick best write characteristic ────────────────────────────────────
-    // Prefer write-with-response; fall back to write-without-response.
+    // Find notify and write characteristics
     for (final s in services) {
       for (final c in s.characteristics) {
         if (c.properties.notify) {
           _notifyChar = c;
-          debugPrint('✔ NOTIFY CHAR : ${c.uuid}');
         }
-        // Prefer write WITH response (more reliable)
         if (c.properties.write && _writeChar == null) {
           _writeChar = c;
-          debugPrint('✔ WRITE CHAR (with-response) : ${c.uuid}');
         }
       }
     }
 
-    // If no write-with-response found, fall back to write-without-response
+    // Fallback for write without response
     if (_writeChar == null) {
       for (final s in services) {
         for (final c in s.characteristics) {
           if (c.properties.writeWithoutResponse) {
             _writeChar = c;
-            debugPrint('✔ WRITE CHAR (no-response fallback) : ${c.uuid}');
             break;
           }
         }
@@ -137,11 +119,7 @@ class BMSBluetoothService extends ChangeNotifier {
     }
 
     if (_notifyChar == null || _writeChar == null) {
-      throw Exception(
-        'Required BLE characteristics not found.\n'
-        'This does not appear to be a BMS device.\n'
-        'Check logcat for the list of available characteristics.',
-      );
+      throw Exception('Required BLE characteristics not found on this device.');
     }
 
     await _startListening();
@@ -151,105 +129,163 @@ class BMSBluetoothService extends ChangeNotifier {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // RX LISTENER
+  // START LISTENING (RX)
+  // Every received packet is parsed, logged, and displayed in Packets tab.
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> _startListening() async {
     debugPrint('📡 SUBSCRIBING TO NOTIFICATIONS…');
-
     await _notifyChar!.setNotifyValue(true);
 
     _notifySub = _notifyChar!.value.listen((raw) {
       if (raw.isEmpty) return;
 
       final hex = _toHex(raw);
-      debugPrint('──────────────────────────────');
-      debugPrint('📥 RX  HEX : $hex');
+      debugPrint('📥 RX  : $hex');
 
       final result = BMSPacketParser.parse(Uint8List.fromList(raw));
 
-      if (result.isSuccess) {
-        final packet = result.packet!;
+      if (result.isSuccess && result.packet != null) {
+        // Tag as received and add to log → shows in Packets tab immediately
+        final packet = result.packet!.copyWith(direction: PacketDirection.receive);
+        _addToLog(packet);
 
-        packetLog.insert(0, packet);
+        debugPrint('✅ RX Parsed: ${packet.typeName}');
 
-        debugPrint('✅ PARSED   : ${packet.typeName}');
-        debugPrint('   Direction: ${packet.direction}');
-        debugPrint('   Data ID  : 0x${packet.dataId.toRadixString(16).toUpperCase().padLeft(2,'0')}');
-        debugPrint('   CRC-8    : 0x${packet.crc.toRadixString(16).toUpperCase().padLeft(2,'0')}');
-
+        // Only validate ACK when we are actively waiting for one
         if (state == BMSConnectionState.waitingAck && packet.isAck) {
-          debugPrint('🎯 ACK MATCHED → handshake accepted');
-          _onAckReceived();
+          _onAckReceived(packet);
         }
       } else {
-        debugPrint('❌ PARSE FAIL: ${result.error}');
-        debugPrint('   Reason   : ${BMSPacketFormatter.errorMessage(result.error!)}');
-      }
+        debugPrint('❌ RX Parse Failed: ${result.error}');
 
-      notifyListeners();
+        // Log raw failed packet so it still appears in Packets tab
+        final failedPacket = BMSParsedPacket(
+          startByte:  raw.isNotEmpty ? raw[0] & 0xFF : 0,
+          length:     raw.length > 1 ? raw[1] & 0xFF : 0,
+          dataId:     raw.length > 2 ? raw[2] & 0xFF : 0,
+          crc:        raw.length > 3 ? raw[3] & 0xFF : 0,
+          stopByte:   raw.length > 4 ? raw[4] & 0xFF : 0,
+          rawBytes:   Uint8List.fromList(raw),
+          receivedAt: DateTime.now(),
+          direction:  PacketDirection.receive,
+        );
+        _addToLog(failedPacket);
+      }
     });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // HANDSHAKE  (Mobile → BMS)
-  //   Packet: AA  05  90  <crc8 of [AA,05,90]>  BB
+  // COMMON SEND METHOD
+  // Every sent packet is parsed and logged → shows in Packets tab.
   // ─────────────────────────────────────────────────────────────────────────
-Future<void> sendHandshake() async {
-  if (_writeChar == null) return;
+  Future<void> _sendPacket(List<int> packetBytes, {String? logName}) async {
+    if (_writeChar == null) return;
 
-  // ── Correct CRC Input according to BMS spec ─────────────────────
-  final List<int> crcInput = [0x05, 0x90];        // Length + Command/Type (Exclude Start Byte)
-  
-  final int crc = BMSCrcService.calculateCRC8(crcInput);
-  
-  final List<int> packet = [0xCC, 0x05, 0x90, crc, 0xDD];
+    final bool useWithResponse = _writeChar!.properties.write;
+    final hex = _toHex(packetBytes);
 
-  debugPrint('══════════════════════════════');
-  debugPrint('📤 HANDSHAKE TX : ${_toHex(packet)}');
-  debugPrint('   CRC Input    : ${_toHex(crcInput)}');
-  debugPrint('   CRC-8        : 0x${crc.toRadixString(16).toUpperCase().padLeft(2,'0')}');
+    debugPrint('📤 TX${logName != null ? " ($logName)" : ""} : $hex');
 
-  // Log the sent packet
-  final parsed = BMSPacketParser.parse(packet);
-  if (parsed.isSuccess) packetLog.insert(0, parsed.packet!);
-
-  state = BMSConnectionState.handshakeSent;
-  notifyListeners();
-
-  final bool useWithResponse = _writeChar!.properties.write;
-  await _writeChar!.write(packet, withoutResponse: !useWithResponse);
-
-  state = BMSConnectionState.waitingAck;
-  notifyListeners();
-
-  debugPrint('📡 WAITING FOR ACK…');
-
-  _ackTimer?.cancel();
-  _ackTimer = Timer(const Duration(seconds: 5), () {
-    if (state == BMSConnectionState.waitingAck) {
-      debugPrint('⏰ ACK TIMEOUT');
-      errorMessage = 'Handshake timeout — no response from device';
-      state = BMSConnectionState.error;
-      isConnecting = false;
-      notifyListeners();
+    // Parse and log the sent packet so it appears in Packets tab
+    final result = BMSPacketParser.parse(Uint8List.fromList(packetBytes));
+    if (result.isSuccess && result.packet != null) {
+      final packet = result.packet!.copyWith(direction: PacketDirection.send);
+      _addToLog(packet);
     }
-  });
-}
+
+    await _writeChar!.write(packetBytes, withoutResponse: !useWithResponse);
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // ACK HANDLER
+  // HANDSHAKE
   // ─────────────────────────────────────────────────────────────────────────
-  void _onAckReceived() {
+  Future<void> sendHandshake() async {
+    // CRC calculated over [start, length, dataId] = [0xCC, 0x05, 0x90]
+    final int crc = BMSCrcService.calculateCRC8([0xCC, 0x05, 0x90]);
+    final List<int> packet = [0xCC, 0x05, 0x90, crc, 0xDD];
+
+    debugPrint('🤝 HANDSHAKE packet : ${_toHex(packet)}');
+
+    state = BMSConnectionState.handshakeSent;
+    notifyListeners();
+
+    await _sendPacket(packet, logName: 'HANDSHAKE');
+
+    state = BMSConnectionState.waitingAck;
+    notifyListeners();
+
     _ackTimer?.cancel();
-    debugPrint('🎉 DEVICE READY');
-    state        = BMSConnectionState.ready;
+    _ackTimer = Timer(const Duration(seconds: 5), () {
+      if (state == BMSConnectionState.waitingAck) {
+        debugPrint('⏰ ACK TIMEOUT');
+        errorMessage = 'Handshake timeout — no response from device';
+        state = BMSConnectionState.error;
+        isConnecting = false;
+        notifyListeners();
+      }
+    });
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ACK VALIDATION
+  //
+  // Expected ACK from BMS: [0xAA, 0x05, 0x50, crc, 0xBB]
+  // CRC is computed over   [0xAA, 0x05, 0x50]  (start + length + dataId)
+  //
+  // Both full byte-for-byte match required → redirect to Dashboard.
+  // Any mismatch           → error state   → SnackBar shown, no redirect.
+  // ─────────────────────────────────────────────────────────────────────────
+  void _onAckReceived(BMSParsedPacket packet) {
+    _ackTimer?.cancel();
+
+    // ── Build our expected ACK ──────────────────────────────────────────────
+    const int expStart  = BMSProtocol.ackStart;    // 0xAA
+    const int expLength = BMSProtocol.packetLength; // 0x05
+    const int expDataId = BMSProtocol.idAck;        // 0x50
+    const int expStop   = BMSProtocol.ackStop;      // 0xBB
+
+    final int expCrc = BMSCrcService.calculateCRC8([expStart, expLength, expDataId]);
+
+    final List<int> expectedAck = [expStart, expLength, expDataId, expCrc, expStop];
+
+    // ── Compare byte-for-byte with received packet ──────────────────────────
+    final List<int> receivedAck = packet.rawBytes.toList();
+
+    final bool matches = receivedAck.length == expectedAck.length &&
+        List.generate(
+          expectedAck.length,
+          (i) => receivedAck[i] == expectedAck[i],
+        ).every((ok) => ok);
+
+    debugPrint('══════════════════════════════════════════');
+    debugPrint('🔐 ACK VALIDATION');
+    debugPrint('   Expected : ${_toHex(expectedAck)}');
+    debugPrint('   Received : ${_toHex(receivedAck)}');
+    debugPrint(
+        '   Exp CRC  : 0x${expCrc.toRadixString(16).toUpperCase().padLeft(2, "0")}');
+    debugPrint(
+        '   Rcv CRC  : 0x${receivedAck[3].toRadixString(16).toUpperCase().padLeft(2, "0")}');
+    debugPrint('   Result   : ${matches ? "✅ MATCH — VALID" : "❌ MISMATCH — REJECTED"}');
+    debugPrint('══════════════════════════════════════════');
+
+    if (matches) {
+      debugPrint('🎉 ACK VALID — Redirecting to Dashboard');
+      state = BMSConnectionState.ready;       // → triggers _navigateToDashboard()
+    } else {
+      debugPrint('🚫 ACK INVALID — Connection rejected');
+      errorMessage =
+          'ACK validation failed — device not authenticated.\n'
+          'Expected : ${_toHex(expectedAck)}\n'
+          'Received : ${_toHex(receivedAck)}';
+      state = BMSConnectionState.error;       // → shows SnackBar, no redirect
+    }
+
     isConnecting = false;
     notifyListeners();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // DISCONNECT  (Mobile → BMS)
-  //   Packet: AA  05  91  <crc8 of [AA,05,91]>  BB
+  // DISCONNECT
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> disconnect() async {
     debugPrint('🔌 DISCONNECT');
@@ -260,28 +296,20 @@ Future<void> sendHandshake() async {
     _ackTimer?.cancel();
 
     if (_writeChar != null) {
-      try {
-        final List<int> header = [0xCC, 0x05, 0x91];
-        final int       crc    = BMSCrcService.calculateCRC8(header);
-        final List<int> packet = [...header, crc, 0xDD];
+      // CRC over [start, length, dataId] = [0xCC, 0x05, 0x91]
+      final int crc = BMSCrcService.calculateCRC8([0xCC, 0x05, 0x91]);
+      final List<int> packet = [0xCC, 0x05, 0x91, crc, 0xDD];
 
-        final bool useWithResponse = _writeChar!.properties.write;
-        debugPrint('📤 DISCONNECT TX: ${_toHex(packet)}');
-        await _writeChar!.write(packet, withoutResponse: !useWithResponse);
-        await Future.delayed(const Duration(milliseconds: 200));
-      } catch (_) {}
+      await _sendPacket(packet, logName: 'DISCONNECT');
+      await Future.delayed(const Duration(milliseconds: 300));
     }
 
     await _notifySub?.cancel();
     await device?.disconnect();
 
-    _notifyChar  = null;
-    _writeChar   = null;
-    _notifySub   = null;
-    device       = null;
-    isConnecting = false;
-    state        = BMSConnectionState.disconnected;
+    _cleanup();
 
+    state = BMSConnectionState.disconnected;
     notifyListeners();
   }
 
@@ -291,22 +319,35 @@ Future<void> sendHandshake() async {
   Future<void> sendCustom(int dataId) async {
     if (_writeChar == null) return;
 
-    final List<int> header = [0xCC, 0x05, dataId];
-    final int       crc    = BMSCrcService.calculateCRC8(header);
-    final List<int> packet = [...header, crc, 0xDD];
+    // CRC over [start, length, dataId]
+    final int crc = BMSCrcService.calculateCRC8([0xCC, 0x05, dataId]);
+    final List<int> packet = [0xCC, 0x05, dataId, crc, 0xDD];
 
-    final bool useWithResponse = _writeChar!.properties.write;
-    debugPrint('📤 CUSTOM TX: ${_toHex(packet)}');
-    await _writeChar!.write(packet, withoutResponse: !useWithResponse);
+    await _sendPacket(
+        packet, logName: 'CUSTOM 0x${dataId.toRadixString(16).toUpperCase()}');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // HELPERS
+  // LOG HELPER — inserts packet at top, caps at 200, notifies listeners
   // ─────────────────────────────────────────────────────────────────────────
+  void _addToLog(BMSParsedPacket packet) {
+    packetLog.insert(0, packet);
+    if (packetLog.length > 200) packetLog.removeLast();
+    notifyListeners();
+  }
+
   void _newSession() {
     _sessionId++;
     packetLog.clear();
     _ackTimer?.cancel();
+  }
+
+  void _cleanup() {
+    _notifyChar = null;
+    _writeChar = null;
+    _notifySub = null;
+    device = null;
+    isConnecting = false;
   }
 
   String _toHex(List<int> bytes) => bytes
