@@ -5,11 +5,17 @@ import 'package:bmsmobileapp/screens/dashboard.dart';
 import 'package:bmsmobileapp/screens/cells_screen.dart';
 import 'package:bmsmobileapp/screens/alerts_screen.dart';
 import 'package:bmsmobileapp/screens/settings_screen.dart';
+import 'package:bmsmobileapp/services/bluetooth_service.dart';
 
 class AppDrawer extends StatelessWidget {
   final String activeRoute;
+  final BMSBluetoothService service;
 
-  const AppDrawer({super.key, required this.activeRoute});
+  const AppDrawer({
+    super.key,
+    required this.activeRoute,
+    required this.service,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +24,6 @@ class AppDrawer extends StatelessWidget {
       width: MediaQuery.of(context).size.width * 0.78,
       child: Stack(
         children: [
-          // ── Decorative background circles ────────────────────────────
           Positioned(
             bottom: 0,
             right: -130,
@@ -43,24 +48,19 @@ class AppDrawer extends StatelessWidget {
               ),
             ),
           ),
-
-          // ── Content ──────────────────────────────────────────────────
           SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 28),
-
-                // ── User header ────────────────────────────────────────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
-                      // Avatar with initials
-                      CircleAvatar(
+                      const CircleAvatar(
                         radius: 28,
                         backgroundColor: Colors.white,
-                        child: const Text(
+                        child: Text(
                           'VC',
                           style: TextStyle(
                             color: Color(0xFF1B6B3A),
@@ -85,46 +85,42 @@ class AppDrawer extends StatelessWidget {
                           Text(
                             'ID: ABC28348624',
                             style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                            ),
+                                color: Colors.white70, fontSize: 13),
                           ),
                         ],
                       ),
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 28),
-
-                // ── Nav items ──────────────────────────────────────────
+                // ── All nav items now pass service ──────────────────────
                 _buildNavItem(
                   context,
                   icon: Icons.home_rounded,
                   label: 'Dashboard',
                   route: '/dashboard',
-                  page: const DashboardScreen(),
+                  page: DashboardScreen(service: service),
                 ),
                 _buildNavItem(
                   context,
                   icon: Icons.battery_full_rounded,
                   label: 'Cells',
                   route: '/cells',
-                  page: const CellsScreen(),
+                  page: CellsScreen(service: service),
                 ),
                 _buildNavItem(
                   context,
                   icon: Icons.notifications_rounded,
                   label: 'Alerts',
                   route: '/alerts',
-                  page: const AlertsScreen(),
+                  page: AlertsScreen(service: service),
                 ),
                 _buildNavItem(
                   context,
                   icon: Icons.settings_rounded,
                   label: 'Settings',
                   route: '/settings',
-                  page: const SettingsScreen(),
+                  page: SettingsScreen(service: service),
                 ),
               ],
             ),
@@ -145,26 +141,21 @@ class AppDrawer extends StatelessWidget {
 
     return GestureDetector(
       onTap: () {
-        Navigator.pop(context); // close drawer
+        Navigator.pop(context);
         if (!isActive) {
-          Navigator.pushReplacement(
-            context,
-            SlideRoute(page: page),
-          );
+          Navigator.pushReplacement(context, SlideRoute(page: page));
         }
       },
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: isActive
-              ? const Color(0xFF0A5338)
-              : Colors.transparent,
+          color:
+              isActive ? const Color(0xFF0A5338) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
           children: [
-            // Icon box
             Container(
               width: 38,
               height: 38,
@@ -177,11 +168,10 @@ class AppDrawer extends StatelessWidget {
             const SizedBox(width: 16),
             Text(
               label,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 15,
-                fontWeight:
-                    isActive ? FontWeight.w400 : FontWeight.w400,
+                fontWeight: FontWeight.w400,
               ),
             ),
           ],

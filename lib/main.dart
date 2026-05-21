@@ -11,7 +11,7 @@ import 'screens/forgotpassword_screen.dart';
 
 import 'services/bluetooth_service.dart';
 
-/// ✅ GLOBAL BLUETOOTH SERVICE (IMPORTANT)
+/// Global bluetooth service — single instance used across the entire app
 final BMSBluetoothService bmsService = BMSBluetoothService();
 
 void main() {
@@ -36,32 +36,20 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Smart BMS',
       debugShowCheckedModeBanner: false,
-
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1E7D4F),
         ),
         useMaterial3: true,
       ),
-
       initialRoute: '/splash',
-
       routes: {
-        '/splash': (context) => const SplashScreen(),
-
-        '/login': (context) => const LoginScreen(),
-
-        '/register': (context) => const RegisterScreen(),
-
-        '/connect': (context) => const ConnectScreen(),
-
-        // ❌ DO NOT pass BLE service through routes (causes crashes)
-        // Bluetooth screen is opened using Navigator.push directly
-
-        '/dashboard': (context) => const DashboardScreen(),
-
-        '/edit_profile': (context) => const EditProfileScreen(),
-
+        '/splash':          (context) => const SplashScreen(),
+        '/login':           (context) => const LoginScreen(),
+        '/register':        (context) => const RegisterScreen(),
+        '/connect':         (context) => const ConnectScreen(),
+        '/dashboard':       (context) => DashboardScreen(service: bmsService),
+        '/edit_profile':    (context) => const EditProfileScreen(),
         '/forgot_password': (context) => const ForgotPasswordScreen(),
       },
     );

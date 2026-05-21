@@ -12,9 +12,6 @@ import 'package:bmsmobileapp/services/protocol.dart';
 import 'package:bmsmobileapp/screens/dashboard.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BluetoothDeviceScanPage
-// ─────────────────────────────────────────────────────────────────────────────
 class BluetoothDeviceScanPage extends StatefulWidget {
   final BMSBluetoothService service;
   const BluetoothDeviceScanPage({super.key, required this.service});
@@ -45,12 +42,10 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     if (!mounted) return;
     setState(() {});
 
-    // ── ACK validated successfully → redirect to Dashboard ─────────────────
     if (widget.service.state == BMSConnectionState.ready) {
       _navigateToDashboard();
     }
 
-    // ── ACK mismatch or any other error → show SnackBar, stay on page ───────
     if (widget.service.state == BMSConnectionState.error &&
         widget.service.errorMessage != null) {
       _connectingDeviceId = null;
@@ -93,7 +88,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      SlideRoute(page: const DashboardScreen()),
+      SlideRoute(page: DashboardScreen(service: widget.service)), // ← pass service
       (route) => false,
     );
   }
@@ -152,9 +147,6 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TAB 1 — SCAN
-// ─────────────────────────────────────────────────────────────────────────────
 class _ScanTab extends StatelessWidget {
   final List<BluetoothDevice> devices;
   final bool isScanning;
@@ -178,7 +170,6 @@ class _ScanTab extends StatelessWidget {
       children: [
         _ConnectionStateBanner(state: service.state),
         const SizedBox(height: 8),
-
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: SizedBox(
@@ -205,7 +196,6 @@ class _ScanTab extends StatelessWidget {
             ),
           ),
         ),
-
         Expanded(
           child: devices.isEmpty
               ? Center(
@@ -294,10 +284,6 @@ class _ScanTab extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TAB 2 — PACKET LOG
-// Shows every TX and RX packet in real time using AnimatedBuilder.
-// ─────────────────────────────────────────────────────────────────────────────
 class _PacketLogTab extends StatelessWidget {
   final BMSBluetoothService service;
   const _PacketLogTab({required this.service});
@@ -326,7 +312,7 @@ class _PacketLogTab extends StatelessWidget {
 
         return ListView.builder(
           padding: const EdgeInsets.all(12),
-          reverse: true, // newest packets at bottom, scroll down to see latest
+          reverse: true,
           itemCount: service.packetLog.length,
           itemBuilder: (_, i) => _PacketCard(packet: service.packetLog[i]),
         );
@@ -335,21 +321,16 @@ class _PacketLogTab extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PACKET CARD
-// ─────────────────────────────────────────────────────────────────────────────
 class _PacketCard extends StatelessWidget {
   final BMSParsedPacket packet;
   const _PacketCard({required this.packet});
 
-  /// TX = green-teal, RX = blue, unknown = grey
   Color get _directionColor {
     if (packet.direction == PacketDirection.send) return const Color(0xFF1B6B3A);
     if (packet.direction == PacketDirection.receive) return Colors.blueAccent;
     return Colors.grey;
   }
 
-  /// ACK gets a gold accent regardless of direction
   Color get _accentColor {
     if (packet.isAck) return Colors.amber.shade700;
     if (packet.isDisconnect) return Colors.red;
@@ -377,10 +358,8 @@ class _PacketCard extends StatelessWidget {
         leading: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Direction arrow
             Icon(_directionIcon, size: 14, color: _directionColor),
             const SizedBox(height: 2),
-            // Data ID badge
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
@@ -420,25 +399,28 @@ class _PacketCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
             child: Column(
-              children: fields.entries.map((e) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 80,
-                          child: Text(e.key,
-                              style: TextStyle(
-                                  fontSize: 12, color: Colors.grey[500])),
+              children: fields.entries
+                  .map((e) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 80,
+                              child: Text(e.key,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[500])),
+                            ),
+                            Expanded(
+                              child: Text(e.value,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600)),
+                            ),
+                          ],
                         ),
-                        Expanded(
-                          child: Text(e.value,
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600)),
-                        ),
-                      ],
-                    ),
-                  )).toList(),
+                      ))
+                  .toList(),
             ),
           ),
         ],
@@ -447,9 +429,6 @@ class _PacketCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// CONNECTION STATE BANNER
-// ─────────────────────────────────────────────────────────────────────────────
 class _ConnectionStateBanner extends StatelessWidget {
   final BMSConnectionState state;
   const _ConnectionStateBanner({required this.state});
@@ -520,9 +499,6 @@ class _ConnectionStateBanner extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STATUS CHIP
-// ─────────────────────────────────────────────────────────────────────────────
 class _StatusChip extends StatelessWidget {
   final String label;
   final Color color;

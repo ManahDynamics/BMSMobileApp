@@ -1,8 +1,9 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
+import 'package:bmsmobileapp/services/bluetooth_service.dart'; // ← ADD
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data model
@@ -11,9 +12,9 @@ class AlertItem {
   final String title;
   final String description;
   final String time;
-  final String severity;   // 'High' | 'Medium' | 'Low'
-  final String status;     // 'Active' | 'Warning' | 'Cleared'
-  final String dateGroup;  // e.g. 'Today - 20 May 2026'
+  final String severity;
+  final String status;
+  final String dateGroup;
 
   const AlertItem({
     required this.title,
@@ -98,111 +99,7 @@ IconData _statusIcon(String s) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared: device header + disconnect
-// ─────────────────────────────────────────────────────────────────────────────
-Widget buildDeviceHeader(BuildContext context, VoidCallback onDisconnect) {
-  return Row(
-    children: [
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        decoration: BoxDecoration(
-          color: Colors.grey[200],
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(Icons.battery_4_bar_rounded,
-            color: Colors.black54, size: 32),
-      ),
-      const SizedBox(width: 12),
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('BMS_001',
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87)),
-          const SizedBox(height: 3),
-          Row(children: [
-            const Text('Connected',
-                style: TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF1B6B3A),
-                    fontWeight: FontWeight.w500)),
-            const SizedBox(width: 6),
-            Container(
-                width: 8,
-                height: 8,
-                decoration: const BoxDecoration(
-                    color: Color(0xFF1B6B3A), shape: BoxShape.circle)),
-          ]),
-        ],
-      ),
-      const Spacer(),
-      ElevatedButton(
-        onPressed: onDisconnect,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFD4621A),
-          foregroundColor: Colors.white,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        ),
-        child: const Text('DISCONNECT',
-            style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-                )),
-      ),
-    ],
-  );
-}
-
-void showDisconnectDialog(BuildContext context) {
-  showDialog(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text('Disconnect',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontWeight: FontWeight.bold)),
-      content: const Text(
-        'Are you sure you want to disconnect from BMS_001?',
-        textAlign: TextAlign.center,
-      ),
-      actionsAlignment: MainAxisAlignment.center,
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            Navigator.of(ctx).pop();
-            Navigator.pushAndRemoveUntil(
-              context,
-              SlideRoute(page: BluetoothDeviceScanPage(
-                service: ModalRoute.of(context)!.settings.arguments as dynamic,
-              )),
-              (route) => false,
-            );
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFD4621A),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8)),
-            elevation: 0,
-          ),
-          child: const Text('Disconnect'),
-        ),
-      ],
-    ),
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Alert card (shared between both screens)
+// Shared alert card
 // ─────────────────────────────────────────────────────────────────────────────
 Widget buildAlertCard(AlertItem alert, {bool showStatus = false}) {
   final severityColor = _severityColor(alert.severity);
@@ -219,13 +116,11 @@ Widget buildAlertCard(AlertItem alert, {bool showStatus = false}) {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Status icon
         Padding(
           padding: const EdgeInsets.only(top: 2),
           child: Icon(statusIcon, color: statusColor, size: 22),
         ),
         const SizedBox(width: 12),
-        // Title + desc
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,24 +132,21 @@ Widget buildAlertCard(AlertItem alert, {bool showStatus = false}) {
                       color: Colors.black87)),
               const SizedBox(height: 3),
               Text(alert.description,
-                  style:
-                      TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             ],
           ),
         ),
         const SizedBox(width: 8),
-        // Right column: status dot + time + severity badge
         Column(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            // Status dot + label (only in history screen)
             if (showStatus)
               Row(children: [
                 Container(
                   width: 8,
                   height: 8,
-                  decoration: BoxDecoration(
-                      color: statusColor, shape: BoxShape.circle),
+                  decoration:
+                      BoxDecoration(color: statusColor, shape: BoxShape.circle),
                 ),
                 const SizedBox(width: 4),
                 Text(alert.status,
@@ -264,17 +156,15 @@ Widget buildAlertCard(AlertItem alert, {bool showStatus = false}) {
                         fontWeight: FontWeight.w500)),
                 const SizedBox(width: 6),
                 Text(alert.time,
-                    style: TextStyle(
-                        fontSize: 12, color: Colors.grey[600])),
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600])),
               ])
             else
               Text(alert.time,
-                  style:
-                      TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
             const SizedBox(height: 6),
-            // Severity badge
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
               decoration: BoxDecoration(
                 border: Border.all(color: severityColor),
                 borderRadius: BorderRadius.circular(20),
@@ -298,7 +188,9 @@ Widget buildAlertCard(AlertItem alert, {bool showStatus = false}) {
 // ALERTS SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 class AlertsScreen extends StatelessWidget {
-  const AlertsScreen({super.key});
+  final BMSBluetoothService service; // ← ADD
+
+  const AlertsScreen({super.key, required this.service}); // ← ADD
 
   List<AlertItem> get _active =>
       _allAlerts.where((a) => a.status == 'Active').toList();
@@ -307,11 +199,118 @@ class AlertsScreen extends StatelessWidget {
   List<AlertItem> get _cleared =>
       _allAlerts.where((a) => a.status == 'Cleared').toList();
 
+  // ── Disconnect ─────────────────────────────────────────────────────────────
+  Future<void> _handleDisconnect(BuildContext context) async {
+    await service.disconnect(); // ← sends packet to BMS first
+    if (!context.mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      SlideRoute(page: BluetoothDeviceScanPage(service: service)),
+      (route) => false,
+    );
+  }
+
+  void _showDisconnectDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Disconnect',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text(
+          'Are you sure you want to disconnect from BMS_001?',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child:
+                const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _handleDisconnect(context);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD4621A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              elevation: 0,
+            ),
+            child: const Text('Disconnect'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceHeader(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.battery_4_bar_rounded,
+              color: Colors.black54, size: 32),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('BMS_001',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87)),
+            const SizedBox(height: 3),
+            Row(children: [
+              const Text('Connected',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF1B6B3A),
+                      fontWeight: FontWeight.w500)),
+              const SizedBox(width: 6),
+              Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                      color: Color(0xFF1B6B3A), shape: BoxShape.circle)),
+            ]),
+          ],
+        ),
+        const Spacer(),
+        ElevatedButton(
+          onPressed: () => _showDisconnectDialog(context),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFD4621A),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6)),
+            elevation: 0,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          ),
+          child: const Text('DISCONNECT',
+              style:
+                  TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      drawer: const AppDrawer(activeRoute: '/alerts'),
+      drawer: AppDrawer(activeRoute: '/alerts', service: service), // ← pass service
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B6B3A),
         elevation: 0,
@@ -320,11 +319,11 @@ class AlertsScreen extends StatelessWidget {
             style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,
-                fontWeight: FontWeight.bold,)),
+                fontWeight: FontWeight.bold)),
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon:
-                const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+            icon: const Icon(Icons.menu_rounded,
+                color: Colors.white, size: 26),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
@@ -334,42 +333,30 @@ class AlertsScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Device header
-            buildDeviceHeader(
-                context, () => showDisconnectDialog(context)),
+            _buildDeviceHeader(context),
             const SizedBox(height: 16),
-
-            // ── Summary bar ──────────────────────────────────────────
             _buildSummaryBar(),
             const SizedBox(height: 20),
-
-            // ── Active Alerts ────────────────────────────────────────
             _buildSectionHeader('Active Alerts (${_active.length})',
                 showViewAll: true, context: context),
             const SizedBox(height: 10),
             ..._active.map((a) => buildAlertCard(a)),
             const SizedBox(height: 10),
-
-            // ── Warnings ─────────────────────────────────────────────
             _buildSectionHeader('Warnings (${_warnings.length})'),
             const SizedBox(height: 10),
             ..._warnings.map((a) => buildAlertCard(a)),
             const SizedBox(height: 10),
-
-            // ── Cleared Alerts ───────────────────────────────────────
             _buildSectionHeader('Cleared Alerts (${_cleared.length})'),
             const SizedBox(height: 10),
             ..._cleared.map((a) => buildAlertCard(a)),
             const SizedBox(height: 16),
-
-            // ── Alert History button ─────────────────────────────────
             SizedBox(
               width: double.infinity,
               height: 45,
               child: OutlinedButton.icon(
                 onPressed: () => Navigator.push(
                   context,
-                  SlideRoute(page: const AlertHistoryScreen()),
+                  SlideRoute(page: AlertHistoryScreen(service: service)),
                 ),
                 icon: const Icon(Icons.calendar_month_outlined, size: 20),
                 label: const Text('Alert History',
@@ -384,8 +371,6 @@ class AlertsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-
-            // ── Info note ────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -401,7 +386,8 @@ class AlertsScreen extends StatelessWidget {
                   const Expanded(
                     child: Text(
                       'If any alert persist, please check your battery and contact support.',
-                      style: TextStyle(fontSize: 12, color: Colors.black54),
+                      style:
+                          TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                   ),
                 ],
@@ -451,7 +437,8 @@ class AlertsScreen extends StatelessWidget {
             Icon(icon, color: Colors.white, size: 22),
             const SizedBox(height: 4),
             Text(label,
-                style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                style:
+                    const TextStyle(color: Colors.white70, fontSize: 12)),
             const SizedBox(height: 2),
             Text(count,
                 style: const TextStyle(
@@ -466,9 +453,9 @@ class AlertsScreen extends StatelessWidget {
 
   Widget _divider() {
     return Container(
-        width: 1,
-        margin: const EdgeInsets.symmetric(vertical: 16),
-        color: Colors.white.withOpacity(0.25),
+      width: 1,
+      margin: const EdgeInsets.symmetric(vertical: 16),
+      color: Colors.white.withOpacity(0.25),
     );
   }
 
@@ -486,7 +473,7 @@ class AlertsScreen extends StatelessWidget {
           GestureDetector(
             onTap: () => Navigator.push(
               context,
-              SlideRoute(page: const AlertHistoryScreen()),
+              SlideRoute(page: AlertHistoryScreen(service: service)),
             ),
             child: Row(children: const [
               Text('View All',
@@ -508,7 +495,9 @@ class AlertsScreen extends StatelessWidget {
 // ALERT HISTORY SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 class AlertHistoryScreen extends StatefulWidget {
-  const AlertHistoryScreen({super.key});
+  final BMSBluetoothService service; // ← ADD
+
+  const AlertHistoryScreen({super.key, required this.service}); // ← ADD
 
   @override
   State<AlertHistoryScreen> createState() => _AlertHistoryScreenState();
@@ -520,7 +509,10 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
 
   final List<String> _tabs = ['All', 'Active', 'Warnings', 'Cleared'];
   final List<String> _filterOptions = [
-    'All Severity', 'High', 'Medium', 'Low'
+    'All Severity',
+    'High',
+    'Medium',
+    'Low'
   ];
 
   List<AlertItem> get _filtered {
@@ -534,19 +526,124 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
       list = list.where((a) => a.status == map[_selectedTab]).toList();
     }
     if (_selectedFilter != 'All Severity') {
-      list =
-          list.where((a) => a.severity == _selectedFilter).toList();
+      list = list.where((a) => a.severity == _selectedFilter).toList();
     }
     return list;
   }
 
-  // Group alerts by dateGroup
   Map<String, List<AlertItem>> get _grouped {
     final map = <String, List<AlertItem>>{};
     for (final a in _filtered) {
       map.putIfAbsent(a.dateGroup, () => []).add(a);
     }
     return map;
+  }
+
+  // ── Disconnect ─────────────────────────────────────────────────────────────
+  Future<void> _handleDisconnect() async {
+    await widget.service.disconnect();
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      SlideRoute(page: BluetoothDeviceScanPage(service: widget.service)),
+      (route) => false,
+    );
+  }
+
+  void _showDisconnectDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Disconnect',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text(
+          'Are you sure you want to disconnect from BMS_001?',
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child:
+                const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _handleDisconnect();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD4621A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8)),
+              elevation: 0,
+            ),
+            child: const Text('Disconnect'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceHeader() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.battery_4_bar_rounded,
+              color: Colors.black54, size: 32),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('BMS_001',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87)),
+            const SizedBox(height: 3),
+            Row(children: [
+              const Text('Connected',
+                  style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF1B6B3A),
+                      fontWeight: FontWeight.w500)),
+              const SizedBox(width: 6),
+              Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                      color: Color(0xFF1B6B3A), shape: BoxShape.circle)),
+            ]),
+          ],
+        ),
+        const Spacer(),
+        ElevatedButton(
+          onPressed: _showDisconnectDialog,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFD4621A),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6)),
+            elevation: 0,
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          ),
+          child: const Text('DISCONNECT',
+              style:
+                  TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        ),
+      ],
+    );
   }
 
   void _showFilterMenu(BuildContext context) async {
@@ -605,7 +702,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
             style: TextStyle(
                 color: Colors.white,
                 fontSize: 16,
-                fontWeight: FontWeight.bold,)),
+                fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => Navigator.pop(context),
@@ -617,59 +714,58 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                buildDeviceHeader(context, () => showDisconnectDialog(context)),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDeviceHeader(),
                 const SizedBox(height: 16),
-
-                // Tabs
                 SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
                     children: _tabs.map((tab) => _buildTab(tab)).toList(),
-                    ),
+                  ),
                 ),
                 const Divider(height: 15),
-
-                // Filter right-aligned below divider
                 Align(
-                    alignment: Alignment.centerRight,
-                    child: Builder(
+                  alignment: Alignment.centerRight,
+                  child: Builder(
                     builder: (ctx) => GestureDetector(
-                        onTap: () => _showFilterMenu(ctx),
-                        child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      onTap: () => _showFilterMenu(ctx),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(
-                            border: Border.all(color: const Color(0xFFCCCCCC)),
-                            borderRadius: BorderRadius.circular(8),
+                          border:
+                              Border.all(color: const Color(0xFFCCCCCC)),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
                             Text(
-                                _selectedFilter == 'All Severity' ? 'Filter' : _selectedFilter,
-                                style: const TextStyle(fontSize: 13),
+                              _selectedFilter == 'All Severity'
+                                  ? 'Filter'
+                                  : _selectedFilter,
+                              style: const TextStyle(fontSize: 13),
                             ),
                             const SizedBox(width: 4),
-                            const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-                            ],
+                            const Icon(
+                                Icons.keyboard_arrow_down_rounded,
+                                size: 18),
+                          ],
                         ),
-                        ),
+                      ),
                     ),
-                    ),
+                  ),
                 ),
                 const SizedBox(height: 1),
-                ],
+              ],
             ),
-            ),
-
-          // ── Scrollable grouped list ────────────────────────────
+          ),
           Expanded(
             child: Scrollbar(
               thumbVisibility: true,
               child: ListView.builder(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: dateGroups.length,
                 itemBuilder: (context, gi) {
                   final group = dateGroups[gi];
@@ -715,8 +811,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
           label,
           style: TextStyle(
             fontSize: 13,
-            fontWeight:
-                isActive ? FontWeight.bold : FontWeight.w400,
+            fontWeight: isActive ? FontWeight.bold : FontWeight.w400,
             color: isActive ? Colors.white : Colors.black54,
           ),
         ),

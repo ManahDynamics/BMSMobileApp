@@ -1,11 +1,14 @@
-// ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use, use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
+import 'package:bmsmobileapp/services/bluetooth_service.dart'; // ← ADD
 
 class CellsScreen extends StatefulWidget {
-  const CellsScreen({super.key});
+  final BMSBluetoothService service; // ← ADD
+
+  const CellsScreen({super.key, required this.service}); // ← ADD
 
   @override
   State<CellsScreen> createState() => _CellsScreenState();
@@ -88,11 +91,23 @@ class _CellsScreenState extends State<CellsScreen> {
     return Colors.grey.shade400;
   }
 
+  // ── Disconnect ─────────────────────────────────────────────────────────────
+  Future<void> _handleDisconnect() async {
+    await widget.service.disconnect(); // ← sends packet to BMS first
+    if (!mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      SlideRoute(page: BluetoothDeviceScanPage(service: widget.service)),
+      (route) => false,
+    );
+  }
+
   void _showDisconnectDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Disconnect',
             textAlign: TextAlign.center,
             style: TextStyle(fontWeight: FontWeight.bold)),
@@ -104,18 +119,13 @@ class _CellsScreenState extends State<CellsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child:
+                const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              Navigator.pushAndRemoveUntil(
-                context,
-                SlideRoute(page: BluetoothDeviceScanPage(
-              service: ModalRoute.of(context)!.settings.arguments as dynamic,
-            ),),
-                (route) => false,
-              );
+              _handleDisconnect();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFD4621A),
@@ -131,11 +141,12 @@ class _CellsScreenState extends State<CellsScreen> {
     );
   }
 
-  // ── Sort dropdown using showMenu (like kebab) ──────────────────────────────
   void _showSortMenu(BuildContext context) async {
     final RenderBox button = context.findRenderObject() as RenderBox;
-    final RenderBox overlay =
-        Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
+    final RenderBox overlay = Navigator.of(context)
+        .overlay!
+        .context
+        .findRenderObject() as RenderBox;
 
     final Offset buttonOffset =
         button.localToGlobal(Offset.zero, ancestor: overlay);
@@ -154,7 +165,8 @@ class _CellsScreenState extends State<CellsScreen> {
       elevation: 6,
       color: Colors.white,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       items: [
         PopupMenuItem<String>(
           value: 'Cell No.',
@@ -163,7 +175,8 @@ class _CellsScreenState extends State<CellsScreen> {
             children: [
               const Text('Cell No.', style: TextStyle(fontSize: 14)),
               if (_sortBy == 'Cell No.')
-                const Icon(Icons.check, color: Color(0xFF1B6B3A), size: 18),
+                const Icon(Icons.check,
+                    color: Color(0xFF1B6B3A), size: 18),
             ],
           ),
         ),
@@ -175,23 +188,22 @@ class _CellsScreenState extends State<CellsScreen> {
             children: [
               const Text('Voltage', style: TextStyle(fontSize: 14)),
               if (_sortBy == 'Voltage')
-                const Icon(Icons.check, color: Color(0xFF1B6B3A), size: 18),
+                const Icon(Icons.check,
+                    color: Color(0xFF1B6B3A), size: 18),
             ],
           ),
         ),
       ],
     );
 
-    if (result != null) {
-      setState(() => _sortBy = result);
-    }
+    if (result != null) setState(() => _sortBy = result);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      drawer: const AppDrawer(activeRoute: '/cells'),
+      drawer: AppDrawer(activeRoute: '/cells', service: widget.service), // ← pass service
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B6B3A),
         elevation: 0,
@@ -199,14 +211,14 @@ class _CellsScreenState extends State<CellsScreen> {
         title: const Text(
           'CELL DETAILS',
           style: TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold),
         ),
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+            icon: const Icon(Icons.menu_rounded,
+                color: Colors.white, size: 26),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
@@ -216,24 +228,17 @@ class _CellsScreenState extends State<CellsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Device header ────────────────────────────────────────
             _buildDeviceHeader(),
             const SizedBox(height: 16),
-
-            // ── Summary cards (equal height via IntrinsicHeight) ─────
             _buildSummaryCards(),
             const SizedBox(height: 16),
-
-            // ── Cell voltages header ─────────────────────────────────
             _buildTableHeader(),
             const SizedBox(height: 4),
-
-            // ── Scrollable cell list ─────────────────────────────────
             Expanded(
               child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
-                  borderRadius: const BorderRadius.only(
+                decoration: const BoxDecoration(
+                  color: Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.only(
                     bottomLeft: Radius.circular(10),
                     bottomRight: Radius.circular(10),
                   ),
@@ -259,7 +264,6 @@ class _CellsScreenState extends State<CellsScreen> {
     );
   }
 
-  // ── Device header ────────────────────────────────────────────────────────
   Widget _buildDeviceHeader() {
     return Row(
       children: [
@@ -303,48 +307,49 @@ class _CellsScreenState extends State<CellsScreen> {
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFD4621A),
             foregroundColor: Colors.white,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6)),
             elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
           child: const Text('DISCONNECT',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  )),
+              style:
+                  TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
         ),
       ],
     );
   }
 
-  // ── Summary cards — IntrinsicHeight ensures equal height ──────────────────
   Widget _buildSummaryCards() {
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Total Cells
           Expanded(
             child: _buildSummaryCard(
               topWidget: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
-                    Icon(Icons.battery_full, color: Colors.white, size: 16),
-                    SizedBox(width: 2),
-                    Icon(Icons.battery_full, color: Colors.white, size: 16),
-                    SizedBox(width: 2),
-                    Icon(Icons.battery_full, color: Colors.white, size: 16),
-                  ]),
+                  Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.battery_full, color: Colors.white, size: 16),
+                        SizedBox(width: 2),
+                        Icon(Icons.battery_full, color: Colors.white, size: 16),
+                        SizedBox(width: 2),
+                        Icon(Icons.battery_full, color: Colors.white, size: 16),
+                      ]),
                   const SizedBox(height: 2),
-                  Row(mainAxisAlignment: MainAxisAlignment.center, children: const [
-                    Icon(Icons.battery_full, color: Colors.white, size: 16),
-                    SizedBox(width: 2),
-                    Icon(Icons.battery_full, color: Colors.white, size: 16),
-                    SizedBox(width: 2),
-                    Icon(Icons.battery_full, color: Colors.white, size: 16),
-                  ]),
+                  Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.battery_full, color: Colors.white, size: 16),
+                        SizedBox(width: 2),
+                        Icon(Icons.battery_full, color: Colors.white, size: 16),
+                        SizedBox(width: 2),
+                        Icon(Icons.battery_full, color: Colors.white, size: 16),
+                      ]),
                 ],
               ),
               label: 'Total Cells',
@@ -352,12 +357,11 @@ class _CellsScreenState extends State<CellsScreen> {
             ),
           ),
           const SizedBox(width: 4),
-
-          // Max Cell
           Expanded(
             child: _buildSummaryCard(
               topWidget: Container(
-                width: 32, height: 32,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 1.5),
@@ -376,12 +380,11 @@ class _CellsScreenState extends State<CellsScreen> {
             ),
           ),
           const SizedBox(width: 4),
-
-          // Min Cell
           Expanded(
             child: _buildSummaryCard(
               topWidget: Container(
-                width: 32, height: 32,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 1.5),
@@ -400,8 +403,6 @@ class _CellsScreenState extends State<CellsScreen> {
             ),
           ),
           const SizedBox(width: 4),
-
-          // Balancing
           Expanded(
             child: _buildSummaryCard(
               topWidget: const Icon(Icons.balance_rounded,
@@ -439,7 +440,8 @@ class _CellsScreenState extends State<CellsScreen> {
           const SizedBox(height: 6),
           Text(label,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white70, fontSize: 10)),
+              style:
+                  const TextStyle(color: Colors.white70, fontSize: 10)),
           const SizedBox(height: 2),
           Text(value,
               textAlign: TextAlign.center,
@@ -451,7 +453,8 @@ class _CellsScreenState extends State<CellsScreen> {
             const SizedBox(height: 2),
             Text(sub,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                style: const TextStyle(
+                    color: Colors.white70, fontSize: 10)),
           ],
           if (bottomWidget != null) ...[
             const SizedBox(height: 4),
@@ -462,7 +465,6 @@ class _CellsScreenState extends State<CellsScreen> {
     );
   }
 
-  // ── Table header with sort dropdown ───────────────────────────────────────
   Widget _buildTableHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -494,7 +496,8 @@ class _CellsScreenState extends State<CellsScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: const Color(0xFFCCCCCC)),
+                      border:
+                          Border.all(color: const Color(0xFFCCCCCC)),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -516,7 +519,6 @@ class _CellsScreenState extends State<CellsScreen> {
     );
   }
 
-  // ── Cell row ───────────────────────────────────────────────────────────────
   Widget _buildCellRow(int no, double voltage, bool isLast) {
     final health = _getHealth(voltage);
     final healthColor = _getHealthColor(voltage);
@@ -527,10 +529,10 @@ class _CellsScreenState extends State<CellsScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
           child: Row(
             children: [
-              // Cell No.
               SizedBox(
                 width: 56,
                 child: Text(
@@ -541,7 +543,6 @@ class _CellsScreenState extends State<CellsScreen> {
                       color: Colors.black87),
                 ),
               ),
-              // Voltage
               SizedBox(
                 width: 56,
                 child: Text(
@@ -550,20 +551,22 @@ class _CellsScreenState extends State<CellsScreen> {
                 ),
               ),
               const SizedBox(width: 4),
-              // 8-segment bar
               Row(
-                children: List.generate(8, (i) => Container(
-                  width: 11,
-                  height: 15,
-                  margin: const EdgeInsets.only(right: 2),
-                  decoration: BoxDecoration(
-                    color: i < filled ? barColor : Colors.grey.shade300,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                )),
+                children: List.generate(
+                    8,
+                    (i) => Container(
+                          width: 11,
+                          height: 15,
+                          margin: const EdgeInsets.only(right: 2),
+                          decoration: BoxDecoration(
+                            color: i < filled
+                                ? barColor
+                                : Colors.grey.shade300,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        )),
               ),
               const Spacer(),
-              // Health
               Icon(healthIcon, color: healthColor, size: 17),
               const SizedBox(width: 4),
               Text(health,
