@@ -24,19 +24,17 @@ enum BMSConnectionState {
 }
 
 class BMSBluetoothService extends ChangeNotifier {
-  // ── Public state ───────────────────────────────────────────────────────────
   BluetoothDevice? device;
   BMSConnectionState state = BMSConnectionState.disconnected;
   String? errorMessage;
   bool isConnecting = false;
 
-  /// Every sent / received packet (newest first)
   final List<BMSParsedPacket> packetLog = [];
 
-  // ── Private ────────────────────────────────────────────────────────────────
   BluetoothCharacteristic? _notifyChar;
   BluetoothCharacteristic? _writeChar;
   StreamSubscription? _notifySub;
+  StreamSubscription? _connectionStateSub; // ← NEW
   Timer? _ackTimer;
   int _sessionId = 0;
 
@@ -58,14 +56,44 @@ class BMSBluetoothService extends ChangeNotifier {
       device = d;
       debugPrint('✅ BLE CONNECTED');
 
+      // ── Listen for unexpected disconnects ──────────────────────────────
+      _connectionStateSub = d.connectionState.listen((cs) {
+        if (cs == BluetoothConnectionState.disconnected &&
+            state != BMSConnectionState.disconnecting &&
+            state != BMSConnectionState.disconnected) {
+          debugPrint('⚠️  Device disconnected unexpectedly');
+          errorMessage = 'Device disconnected unexpectedly';
+          state = BMSConnectionState.error;
+          isConnecting = false;
+          _cleanup();
+          notifyListeners();
+        }
+      });
+
       state = BMSConnectionState.connected;
       notifyListeners();
+
+      // ── Request larger MTU for reliable packet delivery ────────────────
+      try {
+        await d.requestMtu(512);
+        debugPrint('📶 MTU negotiated');
+      } catch (e) {
+        debugPrint('⚠️  MTU request failed (non-fatal): $e');
+      }
 
       await _discoverServices();
       await sendHandshake();
     } catch (e, st) {
       debugPrint('❌ CONNECT ERROR: $e\n$st');
-      errorMessage = e.toString();
+      // Give a friendlier message for the common GATT_UNLIKELY case
+      final msg = e.toString();
+      if (msg.contains('android-code: 14') || msg.contains('GATT_UNLIKELY')) {
+        errorMessage =
+            'Write failed (GATT_UNLIKELY). The device rejected the write.\n'
+            'Try reconnecting — the BLE module may need a moment to settle.';
+      } else {
+        errorMessage = msg;
+      }
       state = BMSConnectionState.error;
       isConnecting = false;
       notifyListeners();
@@ -77,7 +105,6 @@ class BMSBluetoothService extends ChangeNotifier {
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> _discoverServices() async {
     debugPrint('🔍 DISCOVERING SERVICES…');
-
     state = BMSConnectionState.discovering;
     notifyListeners();
 
@@ -88,39 +115,51 @@ class BMSBluetoothService extends ChangeNotifier {
       debugPrint('  SERVICE: ${s.uuid}');
       for (final c in s.characteristics) {
         debugPrint(
-            '    CHAR : ${c.uuid} | write:${c.properties.write} notify:${c.properties.notify}');
+          '    CHAR : ${c.uuid}'
+          ' | write:${c.properties.write}'
+          ' | writeNoResp:${c.properties.writeWithoutResponse}'
+          ' | notify:${c.properties.notify}'
+          ' | read:${c.properties.read}',
+        );
       }
     }
     debugPrint('────────────────────────────────────');
 
-    // Find notify and write characteristics
+    _notifyChar = null;
+    _writeChar = null;
+
     for (final s in services) {
       for (final c in s.characteristics) {
-        if (c.properties.notify) {
+        // Prefer notify over indicate
+        if (c.properties.notify && _notifyChar == null) {
           _notifyChar = c;
         }
-        if (c.properties.write && _writeChar == null) {
-          _writeChar = c;
-        }
-      }
-    }
-
-    // Fallback for write without response
-    if (_writeChar == null) {
-      for (final s in services) {
-        for (final c in s.characteristics) {
+        // ── KEY FIX ───────────────────────────────────────────────────────
+        // BLE-UART modules (JDY-25M, HC-08, etc.) advertise BOTH
+        // write and writeWithoutResponse. Picking "write" causes
+        // GATT_UNLIKELY (android-code 14) on these modules.
+        // Prefer writeWithoutResponse; fall back to write only when
+        // writeWithoutResponse is absent.
+        if (_writeChar == null) {
           if (c.properties.writeWithoutResponse) {
-            _writeChar = c;
-            break;
+            _writeChar = c; // ← preferred for BLE-UART modules
+          } else if (c.properties.write) {
+            _writeChar = c; // ← fallback
           }
         }
-        if (_writeChar != null) break;
       }
     }
 
     if (_notifyChar == null || _writeChar == null) {
-      throw Exception('Required BLE characteristics not found on this device.');
+      throw Exception(
+        'Required BLE characteristics not found.\n'
+        'notify=${_notifyChar?.uuid}  write=${_writeChar?.uuid}',
+      );
     }
+
+    debugPrint('✅ Using notify char : ${_notifyChar!.uuid}');
+    debugPrint('✅ Using write  char : ${_writeChar!.uuid}'
+        ' (writeWithoutResponse=${_writeChar!.properties.writeWithoutResponse})');
 
     await _startListening();
 
@@ -130,7 +169,6 @@ class BMSBluetoothService extends ChangeNotifier {
 
   // ─────────────────────────────────────────────────────────────────────────
   // START LISTENING (RX)
-  // Every received packet is parsed, logged, and displayed in Packets tab.
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> _startListening() async {
     debugPrint('📡 SUBSCRIBING TO NOTIFICATIONS…');
@@ -145,29 +183,25 @@ class BMSBluetoothService extends ChangeNotifier {
       final result = BMSPacketParser.parse(Uint8List.fromList(raw));
 
       if (result.isSuccess && result.packet != null) {
-        // Tag as received and add to log → shows in Packets tab immediately
-        final packet = result.packet!.copyWith(direction: PacketDirection.receive);
+        final packet =
+            result.packet!.copyWith(direction: PacketDirection.receive);
         _addToLog(packet);
-
         debugPrint('✅ RX Parsed: ${packet.typeName}');
 
-        // Only validate ACK when we are actively waiting for one
         if (state == BMSConnectionState.waitingAck && packet.isAck) {
           _onAckReceived(packet);
         }
       } else {
         debugPrint('❌ RX Parse Failed: ${result.error}');
-
-        // Log raw failed packet so it still appears in Packets tab
         final failedPacket = BMSParsedPacket(
-          startByte:  raw.isNotEmpty ? raw[0] & 0xFF : 0,
-          length:     raw.length > 1 ? raw[1] & 0xFF : 0,
-          dataId:     raw.length > 2 ? raw[2] & 0xFF : 0,
-          crc:        raw.length > 3 ? raw[3] & 0xFF : 0,
-          stopByte:   raw.length > 4 ? raw[4] & 0xFF : 0,
-          rawBytes:   Uint8List.fromList(raw),
+          startByte: raw.isNotEmpty ? raw[0] & 0xFF : 0,
+          length: raw.length > 1 ? raw[1] & 0xFF : 0,
+          dataId: raw.length > 2 ? raw[2] & 0xFF : 0,
+          crc: raw.length > 3 ? raw[3] & 0xFF : 0,
+          stopByte: raw.length > 4 ? raw[4] & 0xFF : 0,
+          rawBytes: Uint8List.fromList(raw),
           receivedAt: DateTime.now(),
-          direction:  PacketDirection.receive,
+          direction: PacketDirection.receive,
         );
         _addToLog(failedPacket);
       }
@@ -175,33 +209,39 @@ class BMSBluetoothService extends ChangeNotifier {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // COMMON SEND METHOD
-  // Every sent packet is parsed and logged → shows in Packets tab.
+  // SEND PACKET
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> _sendPacket(List<int> packetBytes, {String? logName}) async {
     if (_writeChar == null) return;
 
-    final bool useWithResponse = _writeChar!.properties.write;
+    // ── KEY FIX ─────────────────────────────────────────────────────────────
+    // Use writeWithoutResponse when the characteristic supports it.
+    // This avoids GATT_UNLIKELY (android-code 14) on BLE-UART modules.
+    final bool useWithoutResponse =
+        _writeChar!.properties.writeWithoutResponse;
+
     final hex = _toHex(packetBytes);
+    debugPrint(
+      '📤 TX${logName != null ? " ($logName)" : ""}'
+      ' [withoutResponse=$useWithoutResponse] : $hex',
+    );
 
-    debugPrint('📤 TX${logName != null ? " ($logName)" : ""} : $hex');
-
-    // Parse and log the sent packet so it appears in Packets tab
     final result = BMSPacketParser.parse(Uint8List.fromList(packetBytes));
     if (result.isSuccess && result.packet != null) {
       final packet = result.packet!.copyWith(direction: PacketDirection.send);
       _addToLog(packet);
     }
 
-    await _writeChar!.write(packetBytes, withoutResponse: !useWithResponse);
+    await _writeChar!.write(
+      packetBytes,
+      withoutResponse: useWithoutResponse,
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // HANDSHAKE
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> sendHandshake() async {
-    // CRC calculated over [length, dataId] only — NOT start or stop byte
-    // Per protocol: CRC covers Length + Packet Type + Data only
     final int crc = BMSCrcService.calculateCRC8([0x05, 0x90]);
     final List<int> packet = [0xCC, 0x05, 0x90, crc, 0xDD];
 
@@ -209,6 +249,10 @@ class BMSBluetoothService extends ChangeNotifier {
 
     state = BMSConnectionState.handshakeSent;
     notifyListeners();
+
+    // Small delay after MTU + service discovery — gives BLE-UART module
+    // time to settle before the first write
+    await Future.delayed(const Duration(milliseconds: 300));
 
     await _sendPacket(packet, logName: 'HANDSHAKE');
 
@@ -229,28 +273,21 @@ class BMSBluetoothService extends ChangeNotifier {
 
   // ─────────────────────────────────────────────────────────────────────────
   // ACK VALIDATION
-  //
-  // Expected ACK from BMS: [0xAA, 0x05, 0x50, crc, 0xBB]
-  // CRC is computed over   [0xAA, 0x05, 0x50]  (start + length + dataId)
-  //
-  // Both full byte-for-byte match required → redirect to Dashboard.
-  // Any mismatch           → error state   → SnackBar shown, no redirect.
   // ─────────────────────────────────────────────────────────────────────────
   void _onAckReceived(BMSParsedPacket packet) {
     _ackTimer?.cancel();
 
-    // ── Build our expected ACK ──────────────────────────────────────────────
-    const int expStart  = BMSProtocol.ackStart;    // 0xAA
-    const int expLength = BMSProtocol.packetLength; // 0x05
-    const int expDataId = BMSProtocol.idAck;        // 0x50
-    const int expStop   = BMSProtocol.ackStop;      // 0xBB
+    const int expStart  = BMSProtocol.ackStart;
+    const int expLength = BMSProtocol.packetLength;
+    const int expDataId = BMSProtocol.idAck;
+    const int expStop   = BMSProtocol.ackStop;
 
-    // CRC over [length, dataId] only — start byte 0xAA is excluded per protocol
-    final int expCrc = BMSCrcService.calculateCRC8([expLength, expDataId]);
+    final int expCrc =
+        BMSCrcService.calculateCRC8([expLength, expDataId]);
 
-    final List<int> expectedAck = [expStart, expLength, expDataId, expCrc, expStop];
-
-    // ── Compare byte-for-byte with received packet ──────────────────────────
+    final List<int> expectedAck = [
+      expStart, expLength, expDataId, expCrc, expStop
+    ];
     final List<int> receivedAck = packet.rawBytes.toList();
 
     final bool matches = receivedAck.length == expectedAck.length &&
@@ -263,23 +300,21 @@ class BMSBluetoothService extends ChangeNotifier {
     debugPrint('🔐 ACK VALIDATION');
     debugPrint('   Expected : ${_toHex(expectedAck)}');
     debugPrint('   Received : ${_toHex(receivedAck)}');
-    debugPrint(
-        '   Exp CRC  : 0x${expCrc.toRadixString(16).toUpperCase().padLeft(2, "0")}');
-    debugPrint(
-        '   Rcv CRC  : 0x${receivedAck[3].toRadixString(16).toUpperCase().padLeft(2, "0")}');
-    debugPrint('   Result   : ${matches ? "✅ MATCH — VALID" : "❌ MISMATCH — REJECTED"}');
+    debugPrint('   Exp CRC  : 0x${expCrc.toRadixString(16).toUpperCase().padLeft(2, "0")}');
+    debugPrint('   Rcv CRC  : 0x${receivedAck.length > 3 ? receivedAck[3].toRadixString(16).toUpperCase().padLeft(2, "0") : "??"}');
+    debugPrint('   Result   : ${matches ? "✅ MATCH" : "❌ MISMATCH"}');
     debugPrint('══════════════════════════════════════════');
 
     if (matches) {
       debugPrint('🎉 ACK VALID — Redirecting to Dashboard');
-      state = BMSConnectionState.ready;       // → triggers _navigateToDashboard()
+      state = BMSConnectionState.ready;
     } else {
       debugPrint('🚫 ACK INVALID — Connection rejected');
       errorMessage =
           'ACK validation failed — device not authenticated.\n'
           'Expected : ${_toHex(expectedAck)}\n'
           'Received : ${_toHex(receivedAck)}';
-      state = BMSConnectionState.error;       // → shows SnackBar, no redirect
+      state = BMSConnectionState.error;
     }
 
     isConnecting = false;
@@ -291,22 +326,20 @@ class BMSBluetoothService extends ChangeNotifier {
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> disconnect() async {
     debugPrint('🔌 DISCONNECT');
-
     state = BMSConnectionState.disconnecting;
     notifyListeners();
 
     _ackTimer?.cancel();
 
     if (_writeChar != null) {
-      // CRC over [length, dataId] only — NOT start or stop byte
       final int crc = BMSCrcService.calculateCRC8([0x05, 0x91]);
       final List<int> packet = [0xCC, 0x05, 0x91, crc, 0xDD];
-
       await _sendPacket(packet, logName: 'DISCONNECT');
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
     await _notifySub?.cancel();
+    await _connectionStateSub?.cancel();
     await device?.disconnect();
 
     _cleanup();
@@ -320,17 +353,14 @@ class BMSBluetoothService extends ChangeNotifier {
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> sendCustom(int dataId) async {
     if (_writeChar == null) return;
-
-    // CRC over [length, dataId] only — NOT start or stop byte
     final int crc = BMSCrcService.calculateCRC8([0x05, dataId]);
     final List<int> packet = [0xCC, 0x05, dataId, crc, 0xDD];
-
     await _sendPacket(
         packet, logName: 'CUSTOM 0x${dataId.toRadixString(16).toUpperCase()}');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // LOG HELPER — inserts packet at top, caps at 200, notifies listeners
+  // HELPERS
   // ─────────────────────────────────────────────────────────────────────────
   void _addToLog(BMSParsedPacket packet) {
     packetLog.insert(0, packet);
@@ -347,7 +377,10 @@ class BMSBluetoothService extends ChangeNotifier {
   void _cleanup() {
     _notifyChar = null;
     _writeChar = null;
+    _notifySub?.cancel();
     _notifySub = null;
+    _connectionStateSub?.cancel();
+    _connectionStateSub = null;
     device = null;
     isConnecting = false;
   }
