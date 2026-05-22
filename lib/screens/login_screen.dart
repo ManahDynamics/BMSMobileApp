@@ -1,12 +1,16 @@
 // ignore_for_file: deprecated_member_use
+
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
+
 import 'package:bmsmobileapp/screens/register_screen.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 
+import 'package:bmsmobileapp/services/translation_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -16,23 +20,154 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // ── Controllers ────────────────────────────────────────────────────────
+
   final _emailController    = TextEditingController();
   final _passwordController = TextEditingController();
 
-  // ── UI state ───────────────────────────────────────────────────────────
   bool    _obscurePassword = true;
   bool    _isLoading       = false;
   String? _errorMessage;
 
+  String _selectedLanguage = 'English';
+
+  final _langCodeMap = {
+    'English': 'en',
+    'Telugu': 'te',
+    'Hindi': 'hi',
+  };
+
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
+
+  String tr(String key) {
+    return TranslationService.t(key);
+  }
+
   @override
   void dispose() {
+    _removeOverlay();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  // ── Fetch real device info ─────────────────────────────────────────────
+  // ── Overlay helpers ────────────────────────────────────────────────────
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  void _showLanguageOverlay() {
+    _removeOverlay();
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _removeOverlay,
+        child: Stack(
+          children: [
+            CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: const Offset(0, 44),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 6,
+                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.white,
+                  child: SizedBox(
+                    width: 140,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: _langCodeMap.keys.map((lang) {
+                        final isSelected = lang == _selectedLanguage;
+                        return InkWell(
+                          onTap: () async {
+                            setState(() => _selectedLanguage = lang);
+                            await TranslationService.loadTranslations(
+                              _langCodeMap[lang]!,
+                            );
+                            if (mounted) setState(() {});
+                            _removeOverlay();
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Colors.grey.shade200
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              lang,
+                              style: TextStyle(
+                                color: Colors.black87,
+                                fontSize: 14,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  // ── Language dropdown widget ───────────────────────────────────────────
+
+  Widget _buildLanguageDropdown() {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: GestureDetector(
+        onTap: _showLanguageOverlay,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.20),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.language, color: Colors.white, size: 16),
+              const SizedBox(width: 6),
+              Text(
+                _selectedLanguage,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── Device info ────────────────────────────────────────────────────────
+
   Future<Map<String, String>> _getDeviceInfo() async {
     final deviceInfo = DeviceInfoPlugin();
 
@@ -41,14 +176,14 @@ class _LoginScreenState extends State<LoginScreen> {
       return {
         'deviceId'      : android.id,
         'devicePlatform': 'android',
-        'deviceToken'   : android.id, // replace with FCM token if available
+        'deviceToken'   : android.id,
       };
     } else if (Platform.isIOS) {
       final ios = await deviceInfo.iosInfo;
       return {
         'deviceId'      : ios.identifierForVendor ?? 'unknown',
         'devicePlatform': 'ios',
-        'deviceToken'   : ios.identifierForVendor ?? 'unknown', // replace with FCM token if available
+        'deviceToken'   : ios.identifierForVendor ?? 'unknown',
       };
     }
 
@@ -59,7 +194,8 @@ class _LoginScreenState extends State<LoginScreen> {
     };
   }
 
-  // ── API call ───────────────────────────────────────────────────────────
+  // ── Login API ──────────────────────────────────────────────────────────
+
   Future<void> _handleLogin() async {
     setState(() {
       _errorMessage = null;
@@ -67,7 +203,6 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      // Fetch device info before making the request
       final deviceInfo = await _getDeviceInfo();
 
       final Map<String, String> body = {
@@ -87,7 +222,8 @@ class _LoginScreenState extends State<LoginScreen> {
         body: jsonEncode(body),
       ).timeout(
         const Duration(seconds: 30),
-        onTimeout: () => throw Exception('Request timed out. Please try again.'),
+        onTimeout: () =>
+            throw Exception('Request timed out. Please try again.'),
       );
 
       final Map<String, dynamic> data =
@@ -95,13 +231,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final userData = data['data'] as Map<String, dynamic>?;
-
-        // final accessToken  = userData?['accessToken'];
-        // final refreshToken = userData?['refreshToken'];
-
         final name = userData?['fullName'] ?? 'User';
 
         if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Welcome back, $name!'),
@@ -119,15 +252,18 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _errorMessage = serverMessage);
       }
     } on FormatException {
-      setState(() => _errorMessage = 'Unexpected server response. Please contact support.');
+      setState(() =>
+          _errorMessage = 'Unexpected server response. Please contact support.');
     } catch (e) {
-      setState(() => _errorMessage = e.toString().replaceFirst('Exception: ', ''));
+      setState(() =>
+          _errorMessage = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
   // ── Build ──────────────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -135,7 +271,8 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-            // ── Background decorative circles ────────────────────────────
+
+            // ── Background decorative circles ──────────────────────────
             Positioned(
               top: -60,
               right: -60,
@@ -161,13 +298,25 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
 
-            // ── Main content ─────────────────────────────────────────────
+            // ── Main content ───────────────────────────────────────────
             SingleChildScrollView(
               child: Column(
                 children: [
-                  const SizedBox(height: 48),
 
-                  // ── Logo ───────────────────────────────────────────────
+                  const SizedBox(height: 20),
+
+                  // ── Language dropdown (top-right) ──────────────────
+                  Padding(
+                    padding: const EdgeInsets.only(right: 20),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _buildLanguageDropdown(),
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  // ── Logo ─────────────────────────────────────────
                   Container(
                     width: 110,
                     height: 110,
@@ -198,10 +347,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 22),
 
-                  // ── App title ──────────────────────────────────────────
-                  const Text(
-                    'BMS Mobile App',
-                    style: TextStyle(
+                  // ── App title ────────────────────────────────────
+                  Text(
+                    tr('login.app_title'),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
@@ -209,9 +358,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  const Text(
-                    'Smart Battery Management System',
-                    style: TextStyle(
+                  Text(
+                    tr('login.app_subtitle'),
+                    style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 13.5,
                       fontWeight: FontWeight.w400,
@@ -220,7 +369,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 36),
 
-                  // ── White card ─────────────────────────────────────────
+                  // ── White card ───────────────────────────────────
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -243,7 +392,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
 
-                        // ── Email field ────────────────────────────────────
+                        // ── Email field ──────────────────────────
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0F0F0),
@@ -253,17 +402,28 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             decoration: InputDecoration(
-                              hintText: 'Email',
-                              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                              prefixIcon: Icon(Icons.email_rounded, color: Colors.grey[600], size: 20),
+                              hintText: tr('login.email_or_phone'),
+                              hintStyle: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 14,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.email_rounded,
+                                color: Colors.grey[600],
+                                size: 20,
+                              ),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
                             ),
                           ),
                         ),
+
                         const SizedBox(height: 16),
 
-                        // ── Password field ─────────────────────────────────
+                        // ── Password field ───────────────────────
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0F0F0),
@@ -273,9 +433,16 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _passwordController,
                             obscureText: _obscurePassword,
                             decoration: InputDecoration(
-                              hintText: 'Password',
-                              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                              prefixIcon: Icon(Icons.lock_rounded, color: Colors.grey[600], size: 20),
+                              hintText: tr('login.password'),
+                              hintStyle: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 14,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.lock_rounded,
+                                color: Colors.grey[600],
+                                size: 20,
+                              ),
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscurePassword
@@ -284,17 +451,22 @@ class _LoginScreenState extends State<LoginScreen> {
                                   color: Colors.grey,
                                   size: 20,
                                 ),
-                                onPressed: () =>
-                                    setState(() => _obscurePassword = !_obscurePassword),
+                                onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                               ),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
                             ),
                           ),
                         ),
+
                         const SizedBox(height: 8),
 
-                        // ── Forgot password ────────────────────────────────
+                        // ── Forgot password ──────────────────────
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
@@ -304,19 +476,26 @@ class _LoginScreenState extends State<LoginScreen> {
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            child: const Text(
-                              'Forgot Password?',
-                              style: TextStyle(color: Colors.grey, fontSize: 13),
+                            child: Text(
+                              tr('login.forgot_password'),
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
                             ),
                           ),
                         ),
+
                         const SizedBox(height: 8),
 
-                        // ── Error banner ───────────────────────────────────
+                        // ── Error banner ─────────────────────────
                         if (_errorMessage != null)
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
                             margin: const EdgeInsets.only(bottom: 12),
                             decoration: BoxDecoration(
                               color: Colors.red.shade50,
@@ -325,19 +504,26 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             child: Row(
                               children: [
-                                Icon(Icons.error_outline, color: Colors.red.shade400, size: 16),
+                                Icon(
+                                  Icons.error_outline,
+                                  color: Colors.red.shade400,
+                                  size: 16,
+                                ),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Text(
                                     _errorMessage!,
-                                    style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                                    style: TextStyle(
+                                      color: Colors.red.shade700,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
 
-                        // ── Login button ───────────────────────────────────
+                        // ── Login button ─────────────────────────
                         SizedBox(
                           width: double.infinity,
                           height: 50,
@@ -362,41 +548,55 @@ class _LoginScreenState extends State<LoginScreen> {
                                       strokeWidth: 2.5,
                                     ),
                                   )
-                                : const Text(
-                                    'Login',
-                                    style: TextStyle(
+                                : Text(
+                                    tr('login.login'),
+                                    style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                           ),
                         ),
+
                         const SizedBox(height: 20),
 
-                        // ── Divider ────────────────────────────────────────
+                        // ── Divider ──────────────────────────────
                         Row(
                           children: [
-                            Expanded(child: Divider(color: Colors.grey.shade300)),
+                            Expanded(
+                              child: Divider(color: Colors.grey.shade300),
+                            ),
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
                               child: Text(
                                 'or',
-                                style: TextStyle(color: Colors.grey[500], fontSize: 13),
+                                style: TextStyle(
+                                  color: Colors.grey[500],
+                                  fontSize: 13,
+                                ),
                               ),
                             ),
-                            Expanded(child: Divider(color: Colors.grey.shade300)),
+                            Expanded(
+                              child: Divider(color: Colors.grey.shade300),
+                            ),
                           ],
                         ),
+
                         const SizedBox(height: 16),
 
-                        // ── Register link ──────────────────────────────────
+                        // ── Register link ────────────────────────
                         Center(
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                "if you don't an account you can  ",
-                                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                                tr('login.no_account_prefix'),
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
+                                ),
                               ),
                               MouseRegion(
                                 cursor: SystemMouseCursors.click,
@@ -405,11 +605,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ? null
                                       : () => Navigator.push(
                                             context,
-                                            SlideRoute(page: const RegisterScreen()),
+                                            SlideRoute(
+                                              page: const RegisterScreen(),
+                                            ),
                                           ),
-                                  child: const Text(
-                                    'Register here!',
-                                    style: TextStyle(
+                                  child: Text(
+                                    tr('login.register_here'),
+                                    style: const TextStyle(
                                       color: Color(0xFF3A6EAC),
                                       fontSize: 13,
                                       fontWeight: FontWeight.w600,

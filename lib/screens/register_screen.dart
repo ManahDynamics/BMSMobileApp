@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+import 'package:bmsmobileapp/services/translation_service.dart';
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -19,6 +21,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
+
+  String tr(String key) {
+    return TranslationService.t(key);
+  }
 
   @override
   void dispose() {
@@ -177,9 +183,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   const SizedBox(height: 20),
 
-                  const Text(
-                    'BMS Mobile App',
-                    style: TextStyle(
+                  Text(
+                    tr('login.app_title'),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 26,
                       fontWeight: FontWeight.bold,
@@ -188,9 +194,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   const SizedBox(height: 6),
 
-                  const Text(
-                    'Smart Battery Management System',
-                    style: TextStyle(
+                  Text(
+                    tr('login.app_subtitle'),
+                    style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 13.5,
                     ),
@@ -219,9 +225,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        const Text(
-                          'Registration',
-                          style: TextStyle(
+                        Text(
+                          tr('register.title'),
+                          style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF4F4F4F),
@@ -239,7 +245,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           child: TextField(
                           controller: _fullNameController,
                           decoration: InputDecoration(
-                            hintText: 'Full Name', 
+                            hintText: tr('register.full_name'),
                             hintStyle: const TextStyle(color: Color.fromARGB(255, 128, 128, 128), fontSize: 14),
                               prefixIcon: const Icon(Icons.person_rounded, color: Color.fromARGB(255, 96, 96, 96), size: 20),
                               border: InputBorder.none,
@@ -259,7 +265,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: _emailOrPhoneController,
                             keyboardType: TextInputType.emailAddress,
                             decoration: InputDecoration(
-                              hintText: 'Email or Phone Number',
+                              hintText: tr('register.email_or_phone'),
                               hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                               prefixIcon: Icon(Icons.email_rounded, color: Colors.grey[600], size: 20),
                               border: InputBorder.none,
@@ -279,7 +285,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: _passwordController,
                             obscureText: _obscurePassword,
                             decoration: InputDecoration(
-                              hintText: 'Password',
+                              hintText: tr('register.password'),
                               hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                               prefixIcon: Icon(Icons.lock_rounded, color: Colors.grey[600], size: 20),
                               suffixIcon: IconButton(
@@ -310,7 +316,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             controller: _confirmPasswordController,
                             obscureText: _obscureConfirmPassword,
                             decoration: InputDecoration(
-                              hintText: 'Confirm Password',
+                              hintText: tr('register.confirm_password'),
                               hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                               prefixIcon: Icon(Icons.lock_rounded, color: Colors.grey[600], size: 20),
                               suffixIcon: IconButton(
@@ -356,9 +362,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                       strokeWidth: 2.5,
                                     ),
                                   )
-                                : const Text(
-                                    'Register',
-                                    style: TextStyle(
+                                : Text(
+                                    tr('register.register'),
+                                    style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -370,7 +376,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
-                              'Already have an account?  ',
+                              tr('register.already_have_account'),
                               style: TextStyle(
                                 color: Colors.grey[600],
                                 fontSize: 13,
@@ -380,9 +386,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               onTap: _isLoading
                                   ? null
                                   : () => Navigator.pop(context),
-                              child: const Text(
-                                'Login',
-                                style: TextStyle(
+                              child: Text(
+                                tr('register.login'),
+                                style: const TextStyle(
                                   color: Color(0xFF3A6EAC),
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
