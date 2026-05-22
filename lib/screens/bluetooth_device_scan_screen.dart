@@ -11,6 +11,7 @@ import 'package:bmsmobileapp/services/parsed_packet.dart';
 import 'package:bmsmobileapp/services/protocol.dart';
 import 'package:bmsmobileapp/screens/dashboard.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
+import 'package:bmsmobileapp/services/translation_service.dart';
 
 class BluetoothDeviceScanPage extends StatefulWidget {
   final BMSBluetoothService service;
@@ -29,6 +30,8 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
   StreamSubscription? _scanSub;
   StreamSubscription? _scanStateSub;
   String? _connectingDeviceId;
+
+  String tr(String key) => TranslationService.t(key);
 
   @override
   void initState() {
@@ -88,7 +91,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      SlideRoute(page: DashboardScreen(service: widget.service)), // ← pass service
+      SlideRoute(page: DashboardScreen(service: widget.service)),
       (route) => false,
     );
   }
@@ -117,15 +120,15 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B6B3A),
-        title: const Text('BMS Scanner', style: TextStyle(color: Colors.white)),
+        title: Text(tr('scan.title'), style: const TextStyle(color: Colors.white)),
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicatorColor: Colors.white,
-          tabs: const [
-            Tab(icon: Icon(Icons.bluetooth_searching), text: 'Scan'),
-            Tab(icon: Icon(Icons.receipt_long), text: 'Packets'),
+          tabs: [
+            Tab(icon: const Icon(Icons.bluetooth_searching), text: tr('scan.tab_scan')),
+            Tab(icon: const Icon(Icons.receipt_long), text: tr('scan.tab_packets')),
           ],
         ),
       ),
@@ -164,6 +167,8 @@ class _ScanTab extends StatelessWidget {
     required this.connectingDeviceId,
   });
 
+  String tr(String key) => TranslationService.t(key);
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -184,7 +189,7 @@ class _ScanTab extends StatelessWidget {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.radar),
-              label: Text(isScanning ? 'Scanning…' : 'Scan for Devices'),
+              label: Text(isScanning ? tr('scan.scanning') : tr('scan.scan_button')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1B6B3A),
                 foregroundColor: Colors.white,
@@ -205,7 +210,7 @@ class _ScanTab extends StatelessWidget {
                       Icon(Icons.bluetooth_disabled,
                           size: 56, color: Colors.grey[300]),
                       const SizedBox(height: 10),
-                      Text('No devices found',
+                      Text(tr('scan.no_devices'),
                           style: TextStyle(color: Colors.grey[400])),
                     ],
                   ),
@@ -221,7 +226,7 @@ class _ScanTab extends StatelessWidget {
                     return ListTile(
                       leading: const Icon(Icons.bluetooth),
                       title: Text(
-                        d.name.isEmpty ? 'Unknown' : d.name,
+                        d.name.isEmpty ? tr('scan.unknown_device') : d.name,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       subtitle: Text(d.remoteId.str,
@@ -233,8 +238,8 @@ class _ScanTab extends StatelessWidget {
                               loading: true,
                             )
                           : isThis && service.state == BMSConnectionState.ready
-                              ? const _StatusChip(
-                                  label: 'Authenticated',
+                              ? _StatusChip(
+                                  label: tr('scan.authenticated'),
                                   color: Colors.green,
                                 )
                               : ElevatedButton(
@@ -247,7 +252,7 @@ class _ScanTab extends StatelessWidget {
                                     ),
                                     elevation: 0,
                                   ),
-                                  child: const Text('Connect'),
+                                  child: Text(tr('scan.connect')),
                                 ),
                     );
                   },
@@ -260,15 +265,15 @@ class _ScanTab extends StatelessWidget {
   String _chipLabel(BMSConnectionState s) {
     switch (s) {
       case BMSConnectionState.connecting:
-        return 'Connecting…';
+        return tr('scan.state_connecting');
       case BMSConnectionState.discovering:
-        return 'Discovering…';
+        return tr('scan.state_discovering');
       case BMSConnectionState.handshakeSent:
-        return 'Handshake…';
+        return tr('scan.state_handshake');
       case BMSConnectionState.waitingAck:
-        return 'Validating ACK…';
+        return tr('scan.state_validating_ack');
       default:
-        return 'Connecting…';
+        return tr('scan.state_connecting');
     }
   }
 
@@ -288,6 +293,8 @@ class _PacketLogTab extends StatelessWidget {
   final BMSBluetoothService service;
   const _PacketLogTab({required this.service});
 
+  String tr(String key) => TranslationService.t(key);
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -300,10 +307,10 @@ class _PacketLogTab extends StatelessWidget {
               children: [
                 Icon(Icons.inbox, size: 72, color: Colors.grey[300]),
                 const SizedBox(height: 16),
-                Text('No packets yet',
+                Text(tr('scan.no_packets'),
                     style: TextStyle(fontSize: 18, color: Colors.grey[500])),
                 const SizedBox(height: 8),
-                Text('Sent and received packets will appear here',
+                Text(tr('scan.packets_hint'),
                     style: TextStyle(color: Colors.grey[400])),
               ],
             ),
@@ -389,7 +396,7 @@ class _PacketCard extends StatelessWidget {
             Icon(_directionIcon, size: 11, color: _directionColor),
             const SizedBox(width: 4),
             Text(
-              '${packet.directionLabel}  •  ${fields['Time'] ?? ''}',
+              '${packet.directionLabel}  •  ${fields[TranslationService.t('scan.packet_field_time')] ?? fields['Time'] ?? ''}',
               style: TextStyle(fontSize: 11, color: Colors.grey[500]),
             ),
           ],
@@ -433,46 +440,48 @@ class _ConnectionStateBanner extends StatelessWidget {
   final BMSConnectionState state;
   const _ConnectionStateBanner({required this.state});
 
+  String tr(String key) => TranslationService.t(key);
+
   @override
   Widget build(BuildContext context) {
     final (String msg, Color bg, IconData icon) = switch (state) {
       BMSConnectionState.ready => (
-        '✅  ACK Validated — Connection Authenticated',
+        tr('scan.banner_ready'),
         const Color(0xFFE8F5E9),
         Icons.verified_user
       ),
       BMSConnectionState.handshakeSent => (
-        'Sending handshake…',
+        tr('scan.banner_handshake'),
         const Color(0xFFFFF8E1),
         Icons.sync
       ),
       BMSConnectionState.waitingAck => (
-        'Validating ACK from device…',
+        tr('scan.banner_waiting_ack'),
         const Color(0xFFEDE7F6),
         Icons.shield_outlined
       ),
       BMSConnectionState.connecting => (
-        'Connecting to device…',
+        tr('scan.banner_connecting'),
         const Color(0xFFE3F2FD),
         Icons.bluetooth_searching
       ),
       BMSConnectionState.discovering => (
-        'Discovering services…',
+        tr('scan.banner_discovering'),
         const Color(0xFFE3F2FD),
         Icons.manage_search
       ),
       BMSConnectionState.error => (
-        'Connection failed — ACK mismatch or error',
+        tr('scan.banner_error'),
         const Color(0xFFFFEBEE),
         Icons.error_outline
       ),
       BMSConnectionState.disconnecting => (
-        'Disconnecting…',
+        tr('scan.banner_disconnecting'),
         const Color(0xFFF5F5F5),
         Icons.link_off
       ),
       _ => (
-        'Not connected — tap Scan',
+        tr('scan.banner_idle'),
         const Color(0xFFF5F5F5),
         Icons.bluetooth_disabled
       ),

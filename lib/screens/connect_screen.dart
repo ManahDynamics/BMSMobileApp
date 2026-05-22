@@ -8,9 +8,12 @@ import 'package:bmsmobileapp/screens/login_screen.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
+import 'package:bmsmobileapp/services/translation_service.dart';
 
 class ConnectScreen extends StatelessWidget {
   const ConnectScreen({super.key});
+
+  String tr(String key) => TranslationService.t(key);
 
   @override
   Widget build(BuildContext context) {
@@ -21,9 +24,9 @@ class ConnectScreen extends StatelessWidget {
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
-        title: const Text(
-          'CONNECT',
-          style: TextStyle(
+        title: Text(
+          tr('connect.title'),
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.w500,
@@ -49,9 +52,9 @@ class ConnectScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 36),
-            const Text(
-              'Choose the Device option',
-              style: TextStyle(
+            Text(
+              tr('connect.choose_device'),
+              style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w400,
                 color: Colors.black54,
@@ -62,8 +65,8 @@ class ConnectScreen extends StatelessWidget {
             // LOCAL
             _buildConnectionCard(
               context,
-              title: 'Local Monitoring',
-              subtitle: 'Bluetooth Device',
+              title: tr('connect.local_monitoring'),
+              subtitle: tr('connect.bluetooth_device'),
               icon: Icons.bluetooth_rounded,
               onTap: () => _handleLocalMonitoring(context),
             ),
@@ -73,8 +76,8 @@ class ConnectScreen extends StatelessWidget {
             // REMOTE
             _buildConnectionCard(
               context,
-              title: 'Remote Monitoring',
-              subtitle: 'Wifi or 4G/5G Devices',
+              title: tr('connect.remote_monitoring'),
+              subtitle: tr('connect.wifi_devices'),
               icon: Icons.router_rounded,
               onTap: () => _handleRemoteMonitoring(context),
             ),
@@ -161,12 +164,12 @@ class ConnectScreen extends StatelessWidget {
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: const Text('Bluetooth Off'),
-          content: const Text('Please enable Bluetooth to continue.'),
+          title: Text(tr('connect.bluetooth_off')),
+          content: Text(tr('connect.enable_bluetooth')),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('OK'),
+              child: Text(tr('connect.ok')),
             )
           ],
         ),
@@ -189,9 +192,9 @@ class ConnectScreen extends StatelessWidget {
   // ============================
   void _handleRemoteMonitoring(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Remote monitoring coming soon!'),
-        backgroundColor: Color(0xFF1B6B3A),
+      SnackBar(
+        content: Text(tr('connect.remote_coming_soon')),
+        backgroundColor: const Color(0xFF1B6B3A),
       ),
     );
   }
@@ -201,12 +204,12 @@ class ConnectScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Bluetooth Not Supported'),
-        content: const Text('This device does not support Bluetooth.'),
+        title: Text(tr('connect.bluetooth_not_supported')),
+        content: Text(tr('connect.device_no_bluetooth')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            child: Text(tr('connect.ok')),
           )
         ],
       ),
