@@ -32,12 +32,11 @@ class BMSPacketFormatter {
   static String toOneLine(BMSParsedPacket p) =>
       '[${BMSProtocol.dataIdName(p.dataId)}]  '
       '${toHexDump(p.rawBytes)}  '
-      '(${p.directionLabel})  '          // ← was p.direction
+      '(${p.direction})  '          // ← was p.direction
       '${_timeString(p.receivedAt)}';
 
   static Map<String, String> toFieldMap(BMSParsedPacket p) => {
         'Type':      BMSProtocol.dataIdName(p.dataId),
-        'Direction': p.directionLabel,   // ← was p.direction
         'Raw (hex)': toHexDump(p.rawBytes),
         'Start':     byteToHex(p.startByte),
         'Length':    '${p.length} bytes',
@@ -50,7 +49,7 @@ class BMSPacketFormatter {
   /// Full multi-line text block — useful for debug logs or dialogs.
   static String toFullDetail(BMSParsedPacket p) => [
         'Type      : ${BMSProtocol.dataIdName(p.dataId)}',
-        'Direction : ${p.directionLabel}',  // ← was p.direction
+        'Direction : ${p.direction}',  // ← was p.direction
         'Raw (hex) : ${toHexDump(p.rawBytes)}',
         '─────────────────────────',
         'Byte 0 – Start  : ${byteToHex(p.startByte)}',

@@ -1,4 +1,10 @@
+// lib/screens/dashboard_screen.dart
+//
+// Uses ListenableBuilder instead of Consumer<> so provider package
+// is NOT required. widget.service is a ChangeNotifier — ListenableBuilder
+// rebuilds the body automatically whenever notifyListeners() is called.
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/login_screen.dart';
@@ -7,45 +13,40 @@ import 'package:bmsmobileapp/screens/forgotpassword_screen.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 import 'package:bmsmobileapp/screens/cells_screen.dart';
-import 'package:bmsmobileapp/services/bluetooth_service.dart'; // ← ADD THIS
+import 'package:bmsmobileapp/services/bluetooth_service.dart';
+import 'package:bmsmobileapp/services/parsed_packet.dart';
 
 class DashboardScreen extends StatefulWidget {
-  final BMSBluetoothService service; // ← ADD THIS
+  final BMSBluetoothService service;
 
-  const DashboardScreen({super.key, required this.service}); // ← ADD THIS
+  const DashboardScreen({super.key, required this.service});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // ── Mock BMS data ─────────────────────────────────────────────────────────
-  final String deviceName = 'BMS_001';
-  final bool isConnected = true;
-  final double soc = 82;
+  // ── Static / mock fields (replace when other packets are added) ───────────
+  final String deviceName    = 'BMS_001';
   final String batteryStatus = 'Discharging';
   final String remainingTime = '04h 35m';
-  final String health = 'Good';
-  final double voltage = 48.5;
-  final double current = -12.3;
-  final double temperature = 32.0;
-  final double power = -591;
-  final double minCell = 3.215;
-  final double maxCell = 3.298;
+  final String health        = 'Good';
+  final double temperature   = 32.0;
+  final double minCell       = 3.215;
+  final double maxCell       = 3.298;
   final List<double> cellValues = [
     3.24, 3.28, 3.22, 3.29, 3.25, 3.27, 3.21, 3.30, 3.26, 3.23
   ];
 
-  // ── Disconnect ─────────────────────────────────────────────────────────────
-  // Sends disconnect packet to BMS, then navigates back to scan screen
+  // ─────────────────────────────────────────────────────────────────────────
+  // DISCONNECT
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> _handleDisconnect() async {
-    await widget.service.disconnect(); // ← sends CC 05 91 crc DD to BMS first
+    await widget.service.disconnect();
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      SlideRoute(
-        page: BluetoothDeviceScanPage(service: widget.service),
-      ),
+      SlideRoute(page: BluetoothDeviceScanPage(service: widget.service)),
       (route) => false,
     );
   }
@@ -55,16 +56,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        title: const Text(
-          'Disconnect',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
-        ),
-        content: Text(
-          'Are you sure you want to disconnect?',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey[700], fontSize: 16),
-        ),
+        title: const Text('Disconnect',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+        content: Text('Are you sure you want to disconnect?',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey[700], fontSize: 16)),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
@@ -74,13 +71,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              _handleDisconnect(); // ← calls service.disconnect() then navigates
+              _handleDisconnect();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFD4621A),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               elevation: 0,
             ),
             child: const Text('Disconnect'),
@@ -90,27 +86,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ── Logout dialog ─────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // LOGOUT
+  // ─────────────────────────────────────────────────────────────────────────
   void _showLogoutDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         title: const Text('Logout',
             textAlign: TextAlign.center,
             style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text(
-          'Are you sure you want to logout?',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.black87, fontSize: 16),
-        ),
+        content: const Text('Are you sure you want to logout?',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.black87, fontSize: 16)),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child:
-                const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -124,8 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF3A6EAC),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               elevation: 0,
             ),
             child: const Text('Logout'),
@@ -135,18 +128,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ── Kebab menu ────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // KEBAB MENU
+  // ─────────────────────────────────────────────────────────────────────────
   void _showKebabMenu(BuildContext context) async {
     final RenderBox button = context.findRenderObject() as RenderBox;
-    final RenderBox overlay = Navigator.of(context)
-        .overlay!
-        .context
-        .findRenderObject() as RenderBox;
-
+    final RenderBox overlay =
+        Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
     final Offset buttonOffset =
         button.localToGlobal(Offset.zero, ancestor: overlay);
     final Size buttonSize = button.size;
-
     final RelativeRect position = RelativeRect.fromLTRB(
       overlay.size.width,
       buttonOffset.dy + buttonSize.height + 1,
@@ -165,24 +156,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         PopupMenuItem<String>(
           value: 'edit_profile',
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
-          child: _menuItem(
-              Icons.person_outline_rounded, 'Edit Profile', Colors.black87),
+          child: _menuItem(Icons.person_outline_rounded, 'Edit Profile', Colors.black87),
         ),
-        const PopupMenuDivider(
-            height: 0.5, color: Color(0xFFEEEEEE)),
+        const PopupMenuDivider(height: 0.5, color: Color(0xFFEEEEEE)),
         PopupMenuItem<String>(
           value: 'forgot_password',
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
-          child: _menuItem(Icons.lock_reset_rounded, 'Forget Password',
-              Colors.black87),
+          child: _menuItem(Icons.lock_reset_rounded, 'Forget Password', Colors.black87),
         ),
-        const PopupMenuDivider(
-            height: 0.5, color: Color(0xFFEEEEEE)),
+        const PopupMenuDivider(height: 0.5, color: Color(0xFFEEEEEE)),
         PopupMenuItem<String>(
           value: 'logout',
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
-          child:
-              _menuItem(Icons.logout_rounded, 'Logout', Colors.red),
+          child: _menuItem(Icons.logout_rounded, 'Logout', Colors.red),
         ),
       ],
     );
@@ -190,8 +176,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (result == 'edit_profile') {
       Navigator.push(context, SlideRoute(page: const EditProfileScreen()));
     } else if (result == 'forgot_password') {
-      Navigator.push(
-          context, SlideRoute(page: const ForgotPasswordScreen()));
+      Navigator.push(context, SlideRoute(page: const ForgotPasswordScreen()));
     } else if (result == 'logout') {
       _showLogoutDialog();
     }
@@ -202,42 +187,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
       children: [
         Icon(icon, size: 20, color: color),
         const SizedBox(width: 14),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 15,
-            color: color,
-            fontWeight: FontWeight.w400,
-          ),
-        ),
+        Text(label,
+            style: TextStyle(fontSize: 15, color: color, fontWeight: FontWeight.w400)),
       ],
     );
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // BUILD
+  // ─────────────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      drawer: AppDrawer(activeRoute: '/dashboard', service: widget.service), // ← pass service
+      drawer: AppDrawer(activeRoute: '/dashboard', service: widget.service),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B6B3A),
         elevation: 0,
         centerTitle: true,
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_rounded,
-                color: Colors.white, size: 26),
+            icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: const Text(
-          'DASHBOARD',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        title: const Text('DASHBOARD',
+            style: TextStyle(
+                color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
         actions: [
           Builder(
             builder: (ctx) => IconButton(
@@ -247,98 +223,123 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   color: Colors.white.withOpacity(0.15),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.more_vert,
-                    color: Colors.white, size: 22),
+                child: const Icon(Icons.more_vert, color: Colors.white, size: 22),
               ),
               onPressed: () => _showKebabMenu(ctx),
             ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDeviceHeader(),
-            const SizedBox(height: 16),
-            _buildBatteryStatusCard(),
-            const SizedBox(height: 16),
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                      child: _buildMetricCard(
-                    icon: Icons.circle_outlined,
-                    iconLabel: 'V',
-                    label: 'Voltage',
-                    value: '$voltage V',
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: _buildMetricCard(
-                    icon: Icons.circle_outlined,
-                    iconLabel: 'A',
-                    label: 'Current',
-                    value: '$current A',
-                    subtitle: 'Discharging',
-                  )),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(
-                      child: _buildMetricCard(
-                    icon: Icons.thermostat_rounded,
-                    label: 'Temperature',
-                    value: '$temperature C',
-                  )),
-                  const SizedBox(width: 12),
-                  Expanded(
-                      child: _buildMetricCard(
-                    icon: Icons.power_outlined,
-                    label: 'Power',
-                    value: '${power.toInt()} W',
-                  )),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            _buildCellSummary(),
-            const SizedBox(height: 14),
-            SizedBox(
-              width: double.infinity,
-              height: 45,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                   SlideRoute(page: CellsScreen(service: widget.service)),
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.black87,
-                  side: const BorderSide(color: Color(0xFFCCCCCC)),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+
+      // ── ListenableBuilder — no provider package needed ────────────────────
+      // Rebuilds automatically whenever service.notifyListeners() is called
+      // (i.e. every time a new BLE packet arrives including Packet 4)
+      body: ListenableBuilder(
+        listenable: widget.service,
+        builder: (context, _) {
+          // Read live Packet 4 values
+          final BMSParsedPacket? p4 = widget.service.latestPacket4;
+
+          final double socValue     = p4?.soc?.toDouble() ?? 0.0;
+          final String socText      = p4?.soc != null ? '${p4!.soc}' : '–';
+          final String voltageText  = p4?.voltageDisplay  ?? '– V';
+          final String currentText  = p4?.currentDisplay  ?? '– A';
+          final String capacityText = p4?.capacityDisplay ?? '– Ah';
+          final String powerText    = (p4 != null)
+              ? '${(p4.totalVoltage! * p4.totalCurrent!).toStringAsFixed(0)} W'
+              : '– W';
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildDeviceHeader(),
+                const SizedBox(height: 16),
+                _buildBatteryStatusCard(
+                  socValue:     socValue,
+                  socText:      socText,
+                  capacityText: capacityText,
                 ),
-                child: const Text(
-                  'View Cell Details',
-                  style:
-                      TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                const SizedBox(height: 16),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _buildMetricCard(
+                          icon: Icons.circle_outlined,
+                          iconLabel: 'V',
+                          label: 'Voltage',
+                          value: voltageText,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildMetricCard(
+                          icon: Icons.circle_outlined,
+                          iconLabel: 'A',
+                          label: 'Current',
+                          value: currentText,
+                          subtitle: 'Discharging',
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
+                const SizedBox(height: 12),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _buildMetricCard(
+                          icon: Icons.thermostat_rounded,
+                          label: 'Temperature',
+                          value: '$temperature °C',
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildMetricCard(
+                          icon: Icons.power_outlined,
+                          label: 'Power',
+                          value: powerText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 20),
+                _buildCellSummary(),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 45,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        SlideRoute(page: CellsScreen(service: widget.service)),
+                      );
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.black87,
+                      side: const BorderSide(color: Color(0xFFCCCCCC)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('View Cell Details',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _buildAlertsCard(),
+                const SizedBox(height: 16),
+              ],
             ),
-            const SizedBox(height: 16),
-            _buildAlertsCard(),
-            const SizedBox(height: 16),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -350,9 +351,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-            color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(8),
-          ),
+              color: Colors.grey[200], borderRadius: BorderRadius.circular(8)),
           child: const Icon(Icons.battery_4_bar_rounded,
               color: Colors.black54, size: 32),
         ),
@@ -360,33 +359,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              deviceName,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
+            Text(deviceName,
+                style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87)),
             const SizedBox(height: 3),
             Row(
               children: [
-                const Text(
-                  'Connected',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF1B6B3A),
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
+                const Text('Connected',
+                    style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF1B6B3A),
+                        fontWeight: FontWeight.w500)),
                 const SizedBox(width: 6),
                 Container(
                   width: 8,
                   height: 8,
                   decoration: const BoxDecoration(
-                    color: Color(0xFF1B6B3A),
-                    shape: BoxShape.circle,
-                  ),
+                      color: Color(0xFF1B6B3A), shape: BoxShape.circle),
                 ),
               ],
             ),
@@ -394,34 +385,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const Spacer(),
         ElevatedButton(
-          onPressed: _showDisconnectDialog, // ← clean, uses _showDisconnectDialog
+          onPressed: _showDisconnectDialog,
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFD4621A),
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             elevation: 1,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           ),
-          child: const Text(
-            'DISCONNECT',
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-          ),
+          child: const Text('DISCONNECT',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
         ),
       ],
     );
   }
 
   // ── Battery status card ────────────────────────────────────────────────────
-  Widget _buildBatteryStatusCard() {
+  Widget _buildBatteryStatusCard({
+    required double socValue,
+    required String socText,
+    required String capacityText,
+  }) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF3A6EAC),
-        borderRadius: BorderRadius.circular(10),
-      ),
+          color: const Color(0xFF3A6EAC),
+          borderRadius: BorderRadius.circular(10)),
       child: Row(
         children: [
           SizedBox(
@@ -434,7 +424,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   width: 110,
                   height: 110,
                   child: CircularProgressIndicator(
-                    value: soc / 100,
+                    value: socValue / 100,
                     strokeWidth: 10,
                     backgroundColor: Colors.white.withOpacity(0.25),
                     valueColor:
@@ -449,32 +439,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       text: TextSpan(
                         children: [
                           TextSpan(
-                            text: '${soc.toInt()}',
+                            text: socText,
                             style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 28,
-                              fontWeight: FontWeight.bold,
-                            ),
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold),
                           ),
                           const TextSpan(
                             text: '%',
                             style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
+                                color: Colors.white70,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500),
                           ),
                         ],
                       ),
                     ),
-                    const Text(
-                      'SOC',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    const Text('SOC',
+                        style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500)),
                   ],
                 ),
               ],
@@ -530,12 +515,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Health',
+                        Text('Remaining Capacity',
                             style: TextStyle(
                                 color: Colors.white.withOpacity(0.75),
                                 fontSize: 11)),
                         const SizedBox(height: 2),
-                        Text(health,
+                        Text(capacityText,
                             style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 15,
@@ -565,9 +550,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F0F0),
-        borderRadius: BorderRadius.circular(10),
-      ),
+          color: const Color(0xFFF0F0F0),
+          borderRadius: BorderRadius.circular(10)),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -576,8 +560,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             height: 36,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border:
-                  Border.all(color: Colors.grey.shade400, width: 1.5),
+              border: Border.all(color: Colors.grey.shade400, width: 1.5),
             ),
             child: Center(
               child: iconLabel != null
@@ -595,8 +578,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(label,
-                  style:
-                      TextStyle(fontSize: 14, color: Colors.grey[600])),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600])),
               const SizedBox(height: 2),
               Text(value,
                   style: const TextStyle(
@@ -605,8 +587,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       color: Color(0xFF575757))),
               if (subtitle != null)
                 Text(subtitle,
-                    style: TextStyle(
-                        fontSize: 11, color: Colors.grey[500])),
+                    style: TextStyle(fontSize: 11, color: Colors.grey[500])),
             ],
           ),
         ],
@@ -635,8 +616,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Min. Cell',
-                    style: TextStyle(
-                        fontSize: 11, color: Colors.grey[600])),
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                 const SizedBox(height: 2),
                 Text('$minCell v',
                     style: const TextStyle(
@@ -660,9 +640,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       width: 14,
                       height: barHeight,
                       decoration: BoxDecoration(
-                        color: const Color(0xFF1B6B3A),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
+                          color: const Color(0xFF1B6B3A),
+                          borderRadius: BorderRadius.circular(3)),
                     );
                   }).toList(),
                 ),
@@ -673,8 +652,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text('Max. Cell',
-                    style: TextStyle(
-                        fontSize: 11, color: Colors.grey[600])),
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                 const SizedBox(height: 2),
                 Text('$maxCell v',
                     style: const TextStyle(
@@ -695,9 +673,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF2F2F2),
-        borderRadius: BorderRadius.circular(10),
-      ),
+          color: const Color(0xFFF2F2F2),
+          borderRadius: BorderRadius.circular(10)),
       child: Column(
         children: [
           Row(
@@ -716,8 +693,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
               ),
               Text('No Active Alerts',
-                  style:
-                      TextStyle(fontSize: 13, color: Colors.grey[500])),
+                  style: TextStyle(fontSize: 13, color: Colors.grey[500])),
             ],
           ),
           const SizedBox(height: 12),

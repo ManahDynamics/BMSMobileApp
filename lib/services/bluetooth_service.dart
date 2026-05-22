@@ -12,15 +12,8 @@ import 'package:bmsmobileapp/services/crc_service.dart';
 import 'package:bmsmobileapp/services/protocol.dart';
 
 enum BMSConnectionState {
-  disconnected,
-  connecting,
-  connected,
-  discovering,
-  handshakeSent,
-  waitingAck,
-  ready,
-  disconnecting,
-  error,
+  disconnected, connecting, connected, discovering,
+  handshakeSent, waitingAck, ready, disconnecting, error,
 }
 
 class BMSBluetoothService extends ChangeNotifier {
@@ -31,10 +24,13 @@ class BMSBluetoothService extends ChangeNotifier {
 
   final List<BMSParsedPacket> packetLog = [];
 
+  // Latest Packet 4 — null until first packet received
+  BMSParsedPacket? latestPacket4;
+
   BluetoothCharacteristic? _notifyChar;
   BluetoothCharacteristic? _writeChar;
   StreamSubscription? _notifySub;
-  StreamSubscription? _connectionStateSub; // ← NEW
+  StreamSubscription? _connectionStateSub;
   Timer? _ackTimer;
   int _sessionId = 0;
 
@@ -43,7 +39,6 @@ class BMSBluetoothService extends ChangeNotifier {
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> connect(BluetoothDevice d) async {
     _newSession();
-
     debugPrint('══════════════════════════════');
     debugPrint('🚀 SESSION $_sessionId — connect to ${d.remoteId.str}');
 
@@ -56,7 +51,6 @@ class BMSBluetoothService extends ChangeNotifier {
       device = d;
       debugPrint('✅ BLE CONNECTED');
 
-      // ── Listen for unexpected disconnects ──────────────────────────────
       _connectionStateSub = d.connectionState.listen((cs) {
         if (cs == BluetoothConnectionState.disconnected &&
             state != BMSConnectionState.disconnecting &&
@@ -73,7 +67,6 @@ class BMSBluetoothService extends ChangeNotifier {
       state = BMSConnectionState.connected;
       notifyListeners();
 
-      // ── Request larger MTU for reliable packet delivery ────────────────
       try {
         await d.requestMtu(512);
         debugPrint('📶 MTU negotiated');
@@ -85,7 +78,6 @@ class BMSBluetoothService extends ChangeNotifier {
       await sendHandshake();
     } catch (e, st) {
       debugPrint('❌ CONNECT ERROR: $e\n$st');
-      // Give a friendlier message for the common GATT_UNLIKELY case
       final msg = e.toString();
       if (msg.contains('android-code: 14') || msg.contains('GATT_UNLIKELY')) {
         errorMessage =
@@ -126,43 +118,31 @@ class BMSBluetoothService extends ChangeNotifier {
     debugPrint('────────────────────────────────────');
 
     _notifyChar = null;
-    _writeChar = null;
+    _writeChar  = null;
 
     for (final s in services) {
       for (final c in s.characteristics) {
-        // Prefer notify over indicate
         if (c.properties.notify && _notifyChar == null) {
           _notifyChar = c;
         }
-        // ── KEY FIX ───────────────────────────────────────────────────────
-        // BLE-UART modules (JDY-25M, HC-08, etc.) advertise BOTH
-        // write and writeWithoutResponse. Picking "write" causes
-        // GATT_UNLIKELY (android-code 14) on these modules.
-        // Prefer writeWithoutResponse; fall back to write only when
-        // writeWithoutResponse is absent.
         if (_writeChar == null) {
           if (c.properties.writeWithoutResponse) {
-            _writeChar = c; // ← preferred for BLE-UART modules
+            _writeChar = c;
           } else if (c.properties.write) {
-            _writeChar = c; // ← fallback
+            _writeChar = c;
           }
         }
       }
     }
 
     if (_notifyChar == null || _writeChar == null) {
-      throw Exception(
-        'Required BLE characteristics not found.\n'
-        'notify=${_notifyChar?.uuid}  write=${_writeChar?.uuid}',
-      );
+      throw Exception('Required BLE characteristics not found.');
     }
 
     debugPrint('✅ Using notify char : ${_notifyChar!.uuid}');
-    debugPrint('✅ Using write  char : ${_writeChar!.uuid}'
-        ' (writeWithoutResponse=${_writeChar!.properties.writeWithoutResponse})');
+    debugPrint('✅ Using write  char : ${_writeChar!.uuid}');
 
     await _startListening();
-
     state = BMSConnectionState.connected;
     notifyListeners();
   }
@@ -177,33 +157,36 @@ class BMSBluetoothService extends ChangeNotifier {
     _notifySub = _notifyChar!.value.listen((raw) {
       if (raw.isEmpty) return;
 
-      final hex = _toHex(raw);
-      debugPrint('📥 RX  : $hex');
+      debugPrint('📥 RX : ${_toHex(raw)}');
 
       final result = BMSPacketParser.parse(Uint8List.fromList(raw));
 
       if (result.isSuccess && result.packet != null) {
-        final packet =
-            result.packet!.copyWith(direction: PacketDirection.receive);
+        final packet = result.packet!.copyWith(direction: PacketDirection.receive);
         _addToLog(packet);
         debugPrint('✅ RX Parsed: ${packet.typeName}');
+
+        // Store latest Packet 4 for dashboard
+        if (packet.isPacket4) {
+          latestPacket4 = packet;
+          debugPrint('📊 Packet4: $packet');
+        }
 
         if (state == BMSConnectionState.waitingAck && packet.isAck) {
           _onAckReceived(packet);
         }
       } else {
         debugPrint('❌ RX Parse Failed: ${result.error}');
-        final failedPacket = BMSParsedPacket(
-          startByte: raw.isNotEmpty ? raw[0] & 0xFF : 0,
-          length: raw.length > 1 ? raw[1] & 0xFF : 0,
-          dataId: raw.length > 2 ? raw[2] & 0xFF : 0,
-          crc: raw.length > 3 ? raw[3] & 0xFF : 0,
-          stopByte: raw.length > 4 ? raw[4] & 0xFF : 0,
-          rawBytes: Uint8List.fromList(raw),
+        _addToLog(BMSParsedPacket(
+          startByte:  raw.isNotEmpty ? raw[0] & 0xFF : 0,
+          length:     raw.length > 1 ? raw[1] & 0xFF : 0,
+          dataId:     raw.length > 2 ? raw[2] & 0xFF : 0,
+          crc:        raw.length > 3 ? raw[3] & 0xFF : 0,
+          stopByte:   raw.length > 4 ? raw[4] & 0xFF : 0,
+          rawBytes:   Uint8List.fromList(raw),
           receivedAt: DateTime.now(),
-          direction: PacketDirection.receive,
-        );
-        _addToLog(failedPacket);
+          direction:  PacketDirection.receive,
+        ));
       }
     });
   }
@@ -214,28 +197,19 @@ class BMSBluetoothService extends ChangeNotifier {
   Future<void> _sendPacket(List<int> packetBytes, {String? logName}) async {
     if (_writeChar == null) return;
 
-    // ── KEY FIX ─────────────────────────────────────────────────────────────
-    // Use writeWithoutResponse when the characteristic supports it.
-    // This avoids GATT_UNLIKELY (android-code 14) on BLE-UART modules.
-    final bool useWithoutResponse =
-        _writeChar!.properties.writeWithoutResponse;
+    final bool useWithoutResponse = _writeChar!.properties.writeWithoutResponse;
 
-    final hex = _toHex(packetBytes);
     debugPrint(
       '📤 TX${logName != null ? " ($logName)" : ""}'
-      ' [withoutResponse=$useWithoutResponse] : $hex',
+      ' [withoutResponse=$useWithoutResponse] : ${_toHex(packetBytes)}',
     );
 
     final result = BMSPacketParser.parse(Uint8List.fromList(packetBytes));
     if (result.isSuccess && result.packet != null) {
-      final packet = result.packet!.copyWith(direction: PacketDirection.send);
-      _addToLog(packet);
+      _addToLog(result.packet!.copyWith(direction: PacketDirection.send));
     }
 
-    await _writeChar!.write(
-      packetBytes,
-      withoutResponse: useWithoutResponse,
-    );
+    await _writeChar!.write(packetBytes, withoutResponse: useWithoutResponse);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -250,10 +224,7 @@ class BMSBluetoothService extends ChangeNotifier {
     state = BMSConnectionState.handshakeSent;
     notifyListeners();
 
-    // Small delay after MTU + service discovery — gives BLE-UART module
-    // time to settle before the first write
     await Future.delayed(const Duration(milliseconds: 300));
-
     await _sendPacket(packet, logName: 'HANDSHAKE');
 
     state = BMSConnectionState.waitingAck;
@@ -281,13 +252,9 @@ class BMSBluetoothService extends ChangeNotifier {
     const int expLength = BMSProtocol.packetLength;
     const int expDataId = BMSProtocol.idAck;
     const int expStop   = BMSProtocol.ackStop;
+    final int  expCrc   = BMSCrcService.calculateCRC8([expLength, expDataId]);
 
-    final int expCrc =
-        BMSCrcService.calculateCRC8([expLength, expDataId]);
-
-    final List<int> expectedAck = [
-      expStart, expLength, expDataId, expCrc, expStop
-    ];
+    final List<int> expectedAck = [expStart, expLength, expDataId, expCrc, expStop];
     final List<int> receivedAck = packet.rawBytes.toList();
 
     final bool matches = receivedAck.length == expectedAck.length &&
@@ -300,8 +267,6 @@ class BMSBluetoothService extends ChangeNotifier {
     debugPrint('🔐 ACK VALIDATION');
     debugPrint('   Expected : ${_toHex(expectedAck)}');
     debugPrint('   Received : ${_toHex(receivedAck)}');
-    debugPrint('   Exp CRC  : 0x${expCrc.toRadixString(16).toUpperCase().padLeft(2, "0")}');
-    debugPrint('   Rcv CRC  : 0x${receivedAck.length > 3 ? receivedAck[3].toRadixString(16).toUpperCase().padLeft(2, "0") : "??"}');
     debugPrint('   Result   : ${matches ? "✅ MATCH" : "❌ MISMATCH"}');
     debugPrint('══════════════════════════════════════════');
 
@@ -341,7 +306,6 @@ class BMSBluetoothService extends ChangeNotifier {
     await _notifySub?.cancel();
     await _connectionStateSub?.cancel();
     await device?.disconnect();
-
     _cleanup();
 
     state = BMSConnectionState.disconnected;
@@ -356,7 +320,9 @@ class BMSBluetoothService extends ChangeNotifier {
     final int crc = BMSCrcService.calculateCRC8([0x05, dataId]);
     final List<int> packet = [0xCC, 0x05, dataId, crc, 0xDD];
     await _sendPacket(
-        packet, logName: 'CUSTOM 0x${dataId.toRadixString(16).toUpperCase()}');
+      packet,
+      logName: 'CUSTOM 0x${dataId.toRadixString(16).toUpperCase()}',
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -371,12 +337,13 @@ class BMSBluetoothService extends ChangeNotifier {
   void _newSession() {
     _sessionId++;
     packetLog.clear();
+    latestPacket4 = null;
     _ackTimer?.cancel();
   }
 
   void _cleanup() {
     _notifyChar = null;
-    _writeChar = null;
+    _writeChar  = null;
     _notifySub?.cancel();
     _notifySub = null;
     _connectionStateSub?.cancel();

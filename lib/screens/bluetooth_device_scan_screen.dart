@@ -338,12 +338,7 @@ class _PacketCard extends StatelessWidget {
     return Colors.grey;
   }
 
-  Color get _accentColor {
-    if (packet.isAck) return Colors.amber.shade700;
-    if (packet.isDisconnect) return Colors.red;
-    if (packet.isHandshake) return const Color(0xFF1B6B3A);
-    return _directionColor;
-  }
+  Color get _accentColor => _directionColor;
 
   IconData get _directionIcon {
     if (packet.direction == PacketDirection.send) return Icons.arrow_upward;

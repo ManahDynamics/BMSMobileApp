@@ -29,7 +29,6 @@ class TranslationService {
 
     translations = json.decode(jsonString);
 
-    print('Translations Loaded: $translations');
   }
 
   /// Get translation value
