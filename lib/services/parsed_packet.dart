@@ -37,8 +37,11 @@ class BMSParsedPacket {
   });
 
   // ── Convenience flags ─────────────────────────────────────────────────────
+
+  // FIX: dataId changed from 0x90 → 0x50 to match actual ACK packet
+  // ACK packet from device: 0xAA 0x05 0x50 xx 0xBB
   bool get isAck =>
-      startByte == 0xAA && stopByte == 0xBB && dataId == 0x90;
+      startByte == 0xAA && stopByte == 0xBB && dataId == 0x50;
 
   bool get isDisconnect =>
       dataId == 0x91;
@@ -65,9 +68,11 @@ class BMSParsedPacket {
   String get capacityDisplay        => remainingCapacity != null ? '${remainingCapacity!.toStringAsFixed(1)} Ah' : '– Ah';
 
   // ── Human-readable type name for logs ─────────────────────────────────────
+  // FIX: split 0x90 / 0x50 into separate cases — 0x90 = HANDSHAKE, 0x50 = ACK
   String get typeName {
     switch (dataId) {
-      case 0x90: return isHandshake ? 'HANDSHAKE' : 'ACK';
+      case 0x90: return 'HANDSHAKE';
+      case 0x50: return 'ACK';
       case 0x91: return 'DISCONNECT';
       case 0x51: return 'Packet4 (SOC/Voltage/Current)';
       default:

@@ -41,18 +41,25 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     _listenScan();
   }
 
+  // FIX: wrap navigation and snackbar in addPostFrameCallback so they
+  // fire after the current build frame — prevents "navigator called
+  // during build" silent failures.
   void _onServiceChanged() {
     if (!mounted) return;
     setState(() {});
 
     if (widget.service.state == BMSConnectionState.ready) {
-      _navigateToDashboard();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _navigateToDashboard();
+      });
     }
 
     if (widget.service.state == BMSConnectionState.error &&
         widget.service.errorMessage != null) {
       _connectingDeviceId = null;
-      _showSnackBar(widget.service.errorMessage!, isError: true);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showSnackBar(widget.service.errorMessage!, isError: true);
+      });
     }
   }
 

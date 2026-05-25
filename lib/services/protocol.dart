@@ -10,9 +10,11 @@ class BMSProtocol {
   static const int ackStop    = 0xBB;
 
   // ── Data IDs ──────────────────────────────────────────────────────────────
-  static const int idHandshake  = 0x90;
-  static const int idAck        = 0x50;
-  static const int idDisconnect = 0x91;
+  static const int idHandshake   = 0x90;
+  static const int idAck         = 0x50;
+  static const int idDisconnect  = 0x91;
+  static const int idAutoRefresh = 0x92; // Mobile → BMS: request Packet 4
+  static const int idPacket4     = 0x51; // BMS → Mobile: SOC/Voltage/Current
 
   // ── Packet Structure ──────────────────────────────────────────────────────
   static const int packetLength   = 0x05;
@@ -25,10 +27,13 @@ class BMSProtocol {
   // ── Helpers ───────────────────────────────────────────────────────────────
   static String dataIdName(int id) {
     switch (id) {
-      case idHandshake:  return 'Handshake';
-      case idAck:        return 'ACK';
-      case idDisconnect: return 'Disconnect';
-      default:           return 'Unknown (0x${id.toRadixString(16).toUpperCase().padLeft(2, '0')})';
+      case idHandshake:   return 'Handshake';
+      case idAck:         return 'ACK';
+      case idDisconnect:  return 'Disconnect';
+      case idAutoRefresh: return 'Auto Refresh';
+      case idPacket4:     return 'Packet4 (SOC/V/A)';
+      default:
+        return 'Unknown (0x${id.toRadixString(16).toUpperCase().padLeft(2, '0')})';
     }
   }
 }

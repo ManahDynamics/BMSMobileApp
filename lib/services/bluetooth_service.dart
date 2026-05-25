@@ -32,6 +32,7 @@ class BMSBluetoothService extends ChangeNotifier {
   StreamSubscription? _notifySub;
   StreamSubscription? _connectionStateSub;
   Timer? _ackTimer;
+  Timer? _pollTimer;           // ← periodic Packet 4 pull timer
   int _sessionId = 0;
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -59,6 +60,7 @@ class BMSBluetoothService extends ChangeNotifier {
           errorMessage = 'Device disconnected unexpectedly';
           state = BMSConnectionState.error;
           isConnecting = false;
+          _stopPolling();
           _cleanup();
           notifyListeners();
         }
@@ -169,7 +171,8 @@ class BMSBluetoothService extends ChangeNotifier {
         // Store latest Packet 4 for dashboard
         if (packet.isPacket4) {
           latestPacket4 = packet;
-          debugPrint('📊 Packet4: $packet');
+          debugPrint('📊 Packet4 received: $packet');
+          notifyListeners();
         }
 
         if (state == BMSConnectionState.waitingAck && packet.isAck) {
@@ -271,8 +274,13 @@ class BMSBluetoothService extends ChangeNotifier {
     debugPrint('══════════════════════════════════════════');
 
     if (matches) {
-      debugPrint('🎉 ACK VALID — Redirecting to Dashboard');
+      debugPrint('🎉 ACK VALID — Starting Packet 4 polling');
       state = BMSConnectionState.ready;
+      isConnecting = false;
+      notifyListeners();
+
+      // ── Start polling Packet 4 immediately then every 2 seconds ──────────
+      _startPolling();
     } else {
       debugPrint('🚫 ACK INVALID — Connection rejected');
       errorMessage =
@@ -280,10 +288,43 @@ class BMSBluetoothService extends ChangeNotifier {
           'Expected : ${_toHex(expectedAck)}\n'
           'Received : ${_toHex(receivedAck)}';
       state = BMSConnectionState.error;
+      isConnecting = false;
+      notifyListeners();
     }
+  }
 
-    isConnecting = false;
-    notifyListeners();
+  // ─────────────────────────────────────────────────────────────────────────
+  // PACKET 4 POLLING
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Sends Auto Refresh Packet [0xCC, 0x05, 0x92, CRC, 0xDD] to BMS.
+  /// BMS responds with 12-byte Packet 4 [0xAA, 0x0C, 0x51, ...data..., CRC, 0xBB]
+  /// containing Total Voltage, Total Current, SOC, Remaining Capacity.
+  Future<void> requestPacket4() async {
+    if (_writeChar == null || state != BMSConnectionState.ready) return;
+    final int crc = BMSCrcService.calculateCRC8([0x05, 0x92]);
+    final List<int> packet = [0xCC, 0x05, 0x92, crc, 0xDD];
+    debugPrint('📤 AUTO REFRESH REQUEST (0x92) : ${_toHex(packet)}');
+    await _sendPacket(packet, logName: 'AUTO_REFRESH');
+  }
+
+  void _startPolling() {
+    _stopPolling();
+    debugPrint('⏱️  Starting Packet 4 poll every 2s');
+
+    // Send immediately on connect
+    requestPacket4();
+
+    // Then repeat every 2 seconds
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      requestPacket4();
+    });
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+    debugPrint('⏹️  Packet 4 polling stopped');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -295,6 +336,7 @@ class BMSBluetoothService extends ChangeNotifier {
     notifyListeners();
 
     _ackTimer?.cancel();
+    _stopPolling();           // ← stop polling on disconnect
 
     if (_writeChar != null) {
       final int crc = BMSCrcService.calculateCRC8([0x05, 0x91]);
@@ -339,6 +381,7 @@ class BMSBluetoothService extends ChangeNotifier {
     packetLog.clear();
     latestPacket4 = null;
     _ackTimer?.cancel();
+    _stopPolling();
   }
 
   void _cleanup() {
