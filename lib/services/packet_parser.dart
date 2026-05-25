@@ -1,11 +1,8 @@
 // lib/services/packet_parser.dart
-
-import 'dart:typed_data';
 import 'protocol.dart';
 import 'crc_service.dart';
 import 'parsed_packet.dart';
-// ← No packet4_data.dart import needed anymore
-
+import 'package:flutter/foundation.dart';
 enum BMSParseError { tooShort, invalidFraming, invalidLength, crcMismatch }
 
 class BMSParseResult {
@@ -95,10 +92,35 @@ class BMSPacketParser {
     double? remainingCapacity;
 
     if (dataId == 0x51) {
-      totalVoltage      = (bytes[3] | (bytes[4] << 8)) / 10.0;  // 602  → 60.2 V
-      totalCurrent      = (bytes[5] | (bytes[6] << 8)) / 10.0;  // 306  → 30.6 A
-      soc               =  bytes[7];                             // 52   → 52 %
-      remainingCapacity = (bytes[8] | (bytes[9] << 8)) / 10.0;  // 220  → 22.0 Ah
+      // ── Total Voltage (Byte 3–4) little-endian, always positive ──────────
+      // Range: 0 to 100.0V
+      final int rawVoltage = (bytes[3] & 0xFF) | ((bytes[4] & 0xFF) << 8);
+      totalVoltage = rawVoltage / 10.0;
+
+      // ── Total Current (Byte 5–6) little-endian, SIGNED 16-bit ────────────
+      // Range: -3276.8A to +3276.7A
+      // MSB (bit 15) = 1 → negative number (2's complement)
+      // MSB (bit 15) = 0 → positive number
+      //
+      // Example: FF97 → MSB=1 → negative
+      //   2's complement: 0xFFFF - 0xFF97 + 1 = 0x0069 = 105 → -10.5A
+      final int rawCurrent = (bytes[5] & 0xFF) | ((bytes[6] & 0xFF) << 8);
+      totalCurrent = _decodeSigned16(rawCurrent) / 10.0;
+
+      // ── SOC (Byte 7) ──────────────────────────────────────────────────────
+      // Range: 0 to 100%
+      soc = bytes[7] & 0xFF;
+
+      // ── Remaining Capacity (Byte 8–9) little-endian, always positive ──────
+      // Range: 0 to 100.0Ah
+      final int rawCapacity = (bytes[8] & 0xFF) | ((bytes[9] & 0xFF) << 8);
+      remainingCapacity = rawCapacity / 10.0;
+
+      debugPrint('🔢 Raw Current bytes: '
+          '${(bytes[5] & 0xFF).toRadixString(16).toUpperCase().padLeft(2,"0")} '
+          '${(bytes[6] & 0xFF).toRadixString(16).toUpperCase().padLeft(2,"0")} '
+          '→ rawCurrent=0x${rawCurrent.toRadixString(16).toUpperCase().padLeft(4,"0")} '
+          '→ ${totalCurrent}A');
     }
 
     return BMSParseResult.success(BMSParsedPacket(
@@ -114,6 +136,27 @@ class BMSPacketParser {
       soc:               soc,
       remainingCapacity: remainingCapacity,
     ));
+  }
+
+  // ── Signed 16-bit decoder (2's complement) ────────────────────────────────
+  //
+  // Checks MSB (bit 15):
+  //   if (value & 0x8000) → negative → apply 2's complement
+  //   else                → positive → return as-is
+  //
+  // Examples:
+  //   0x0001 →  +1   →  +0.1A
+  //   0x7FFF → +32767 → +3276.7A
+  //   0xFFFF → -1    →  -0.1A
+  //   0xFF97 → -105  →  -10.5A
+  //   0x8000 → -32768 → -3276.8A
+  static int _decodeSigned16(int raw) {
+    if (raw & 0x8000 != 0) {
+      // Negative: apply 2's complement
+      // = -(0xFFFF - raw + 1)
+      return -(0xFFFF - raw + 1);
+    }
+    return raw; // Positive: return as-is
   }
 
   static BMSParsedPacket? tryParse(List<int> bytes) => parse(bytes).packet;

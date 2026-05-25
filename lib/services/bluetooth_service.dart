@@ -16,7 +16,7 @@ enum BMSConnectionState {
   handshakeSent, waitingAck, ready, disconnecting, error,
 }
 
-class BMSBluetoothService extends ChangeNotifier {
+class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   BluetoothDevice? device;
   BMSConnectionState state = BMSConnectionState.disconnected;
   String? errorMessage;
@@ -32,8 +32,42 @@ class BMSBluetoothService extends ChangeNotifier {
   StreamSubscription? _notifySub;
   StreamSubscription? _connectionStateSub;
   Timer? _ackTimer;
-  Timer? _pollTimer;           // ← periodic Packet 4 pull timer
+  Timer? _pollTimer;
   int _sessionId = 0;
+
+  BMSBluetoothService() {
+    // Register to receive app lifecycle events
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // APP LIFECYCLE — pause polling when minimized, resume when foregrounded
+  // ─────────────────────────────────────────────────────────────────────────
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.detached:
+        // App minimized or backgrounded — stop polling
+        if (_pollTimer != null) {
+          debugPrint('📱 App backgrounded — pausing Packet 4 polling');
+          _stopPolling();
+        }
+        break;
+
+      case AppLifecycleState.resumed:
+        // App brought back to foreground — resume polling if connected
+        if (this.state == BMSConnectionState.ready) {
+          debugPrint('📱 App foregrounded — resuming Packet 4 polling');
+          _startPolling();
+        }
+        break;
+
+      default:
+        break;
+    }
+  }
 
   // ─────────────────────────────────────────────────────────────────────────
   // CONNECT
@@ -278,8 +312,6 @@ class BMSBluetoothService extends ChangeNotifier {
       state = BMSConnectionState.ready;
       isConnecting = false;
       notifyListeners();
-
-      // ── Start polling Packet 4 immediately then every 2 seconds ──────────
       _startPolling();
     } else {
       debugPrint('🚫 ACK INVALID — Connection rejected');
@@ -311,11 +343,7 @@ class BMSBluetoothService extends ChangeNotifier {
   void _startPolling() {
     _stopPolling();
     debugPrint('⏱️  Starting Packet 4 poll every 2s');
-
-    // Send immediately on connect
     requestPacket4();
-
-    // Then repeat every 2 seconds
     _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       requestPacket4();
     });
@@ -336,7 +364,7 @@ class BMSBluetoothService extends ChangeNotifier {
     notifyListeners();
 
     _ackTimer?.cancel();
-    _stopPolling();           // ← stop polling on disconnect
+    _stopPolling();
 
     if (_writeChar != null) {
       final int crc = BMSCrcService.calculateCRC8([0x05, 0x91]);
@@ -393,6 +421,13 @@ class BMSBluetoothService extends ChangeNotifier {
     _connectionStateSub = null;
     device = null;
     isConnecting = false;
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _stopPolling();
+    super.dispose();
   }
 
   String _toHex(List<int> bytes) => bytes
