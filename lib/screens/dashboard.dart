@@ -15,6 +15,7 @@ import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 import 'package:bmsmobileapp/screens/cells_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/parsed_packet.dart';
+import 'package:bmsmobileapp/services/translation_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -38,6 +39,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     3.24, 3.28, 3.22, 3.29, 3.25, 3.27, 3.21, 3.30, 3.26, 3.23
   ];
 
+  String tr(String key) {
+    return TranslationService.t(key);
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // DISCONNECT
   // ─────────────────────────────────────────────────────────────────────────
@@ -56,17 +61,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        title: const Text('Disconnect',
+        title: Text(tr('disconnect'),
             textAlign: TextAlign.center,
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
-        content: Text('Are you sure you want to disconnect?',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
+        content: Text(tr('disconnect_confirmation'),
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey[700], fontSize: 16)),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -79,7 +84,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               elevation: 0,
             ),
-            child: const Text('Disconnect'),
+            child: Text(tr('disconnect')),
           ),
         ],
       ),
@@ -94,17 +99,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        title: const Text('Logout',
+        title: Text(tr('logout'),
             textAlign: TextAlign.center,
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Are you sure you want to logout?',
+            style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(tr('logout_confirmation'),
             textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.black87, fontSize: 16)),
+            style: const TextStyle(color: Colors.black87, fontSize: 16)),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -121,7 +126,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               elevation: 0,
             ),
-            child: const Text('Logout'),
+            child: Text(tr('logout')),
           ),
         ],
       ),
@@ -156,19 +161,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         PopupMenuItem<String>(
           value: 'edit_profile',
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
-          child: _menuItem(Icons.person_outline_rounded, 'Edit Profile', Colors.black87),
+          child: _menuItem(Icons.person_outline_rounded, tr('edit_profile'), Colors.black87),
         ),
         const PopupMenuDivider(height: 0.5, color: Color(0xFFEEEEEE)),
         PopupMenuItem<String>(
           value: 'forgot_password',
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
-          child: _menuItem(Icons.lock_reset_rounded, 'Forget Password', Colors.black87),
+          child: _menuItem(Icons.lock_reset_rounded, tr('forget_password'), Colors.black87),
         ),
         const PopupMenuDivider(height: 0.5, color: Color(0xFFEEEEEE)),
         PopupMenuItem<String>(
           value: 'logout',
           padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
-          child: _menuItem(Icons.logout_rounded, 'Logout', Colors.red),
+          child: _menuItem(Icons.logout_rounded, tr('logout'), Colors.red),
         ),
       ],
     );
@@ -211,8 +216,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: const Text('DASHBOARD',
-            style: TextStyle(
+        title: Text(tr('dashboard'),
+            style: const TextStyle(
                 color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
         actions: [
           Builder(
@@ -270,7 +275,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: _buildMetricCard(
                           icon: Icons.circle_outlined,
                           iconLabel: 'V',
-                          label: 'Voltage',
+                          label: tr('voltage'),
                           value: voltageText,
                         ),
                       ),
@@ -279,9 +284,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: _buildMetricCard(
                           icon: Icons.circle_outlined,
                           iconLabel: 'A',
-                          label: 'Current',
+                          label: tr('current'),
                           value: currentText,
-                          subtitle: 'Discharging',
+                          subtitle: tr('discharging'),
                         ),
                       ),
                     ],
@@ -295,7 +300,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Expanded(
                         child: _buildMetricCard(
                           icon: Icons.thermostat_rounded,
-                          label: 'Temperature',
+                          label: tr('temperature'),
                           value: '$temperature °C',
                         ),
                       ),
@@ -303,7 +308,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Expanded(
                         child: _buildMetricCard(
                           icon: Icons.power_outlined,
-                          label: 'Power',
+                          label: tr('power'),
                           value: powerText,
                         ),
                       ),
@@ -329,8 +334,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
                     ),
-                    child: const Text('View Cell Details',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                    child: Text(tr('view_cell_details'),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -367,8 +372,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(height: 3),
             Row(
               children: [
-                const Text('Connected',
-                    style: TextStyle(
+                Text(tr('connected'),
+                    style: const TextStyle(
                         fontSize: 13,
                         color: Color(0xFF1B6B3A),
                         fontWeight: FontWeight.w500)),
@@ -393,8 +398,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             elevation: 1,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           ),
-          child: const Text('DISCONNECT',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          child: Text(tr('disconnect'),
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
         ),
       ],
     );
@@ -476,7 +481,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Battery Status',
+                        Text(tr('battery_status'),
                             style: TextStyle(
                                 color: Colors.white.withOpacity(0.75),
                                 fontSize: 11)),
@@ -496,7 +501,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Remaining Time',
+                    Text(tr('remaining_time'),
                         style: TextStyle(
                             color: Colors.white.withOpacity(0.75),
                             fontSize: 11)),
@@ -515,7 +520,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Remaining Capacity',
+                        Text(tr('remaining_capacity'),
                             style: TextStyle(
                                 color: Colors.white.withOpacity(0.75),
                                 fontSize: 11)),
@@ -603,8 +608,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Cell Summary',
-            style: TextStyle(
+        Text(tr('cell_summary'),
+            style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w500,
                 color: Colors.black87)),
@@ -615,7 +620,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Min. Cell',
+                Text(tr('min_cell'),
                     style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                 const SizedBox(height: 2),
                 Text('$minCell v',
@@ -651,7 +656,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text('Max. Cell',
+                Text(tr('max_cell'),
                     style: TextStyle(fontSize: 11, color: Colors.grey[600])),
                 const SizedBox(height: 2),
                 Text('$maxCell v',
@@ -681,29 +686,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Row(
-                children: const [
-                  Icon(Icons.notifications_none_rounded,
+                children: [
+                  const Icon(Icons.notifications_none_rounded,
                       color: Colors.black87, size: 22),
-                  SizedBox(width: 10),
-                  Text('Active Alerts',
-                      style: TextStyle(
+                  const SizedBox(width: 10),
+                  Text(tr('active_alerts'),
+                      style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
                           color: Color(0xFF3A3939))),
                 ],
               ),
-              Text('No Active Alerts',
+              Text(tr('no_active_alerts'),
                   style: TextStyle(fontSize: 13, color: Colors.grey[500])),
             ],
           ),
           const SizedBox(height: 12),
           Row(
-            children: const [
-              Icon(Icons.check_circle_rounded,
+            children: [
+              const Icon(Icons.check_circle_rounded,
                   color: Color(0xFF1B6B3A), size: 20),
-              SizedBox(width: 10),
-              Text('All Systems Normal',
-                  style: TextStyle(
+              const SizedBox(width: 10),
+              Text(tr('all_systems_normal'),
+                  style: const TextStyle(
                       fontSize: 14,
                       color: Colors.black87,
                       fontWeight: FontWeight.w500)),

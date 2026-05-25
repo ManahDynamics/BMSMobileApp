@@ -4,6 +4,7 @@ import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart'; // ← ADD
+import 'package:bmsmobileapp/services/translation_service.dart';
 
 class CellsScreen extends StatefulWidget {
   final BMSBluetoothService service; // ← ADD
@@ -23,7 +24,11 @@ class _CellsScreenState extends State<CellsScreen> {
   final int minCellNo = 12;
   final String balancingStatus = 'Active';
 
-  String _sortBy = 'Cell No.';
+  String _sortBy = 'cell_no';
+
+  String tr(String key) {
+    return TranslationService.t(key);
+  }
 
   final List<Map<String, dynamic>> _cells = [
     {'no': 1, 'voltage': 3.298},
@@ -46,7 +51,7 @@ class _CellsScreenState extends State<CellsScreen> {
 
   List<Map<String, dynamic>> get _sortedCells {
     final sorted = List<Map<String, dynamic>>.from(_cells);
-    if (_sortBy == 'Voltage') {
+    if (_sortBy == 'voltage') {
       sorted.sort((a, b) =>
           (b['voltage'] as double).compareTo(a['voltage'] as double));
     } else {
@@ -56,9 +61,9 @@ class _CellsScreenState extends State<CellsScreen> {
   }
 
   String _getHealth(double v) {
-    if (v >= 3.2) return 'Healthy';
-    if (v >= 3.1) return 'Medium';
-    return 'Low';
+    if (v >= 3.2) return tr('healthy');
+    if (v >= 3.1) return tr('medium');
+    return tr('low');
   }
 
   Color _getHealthColor(double v) {
@@ -108,11 +113,11 @@ class _CellsScreenState extends State<CellsScreen> {
       builder: (ctx) => AlertDialog(
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Disconnect',
+        title: Text(tr('disconnect'),
             textAlign: TextAlign.center,
-            style: TextStyle(fontWeight: FontWeight.bold)),
+            style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text(
-          'Are you sure you want to disconnect from $deviceName?',
+          '${tr('disconnect_confirmation_from')} $deviceName?',
           textAlign: TextAlign.center,
         ),
         actionsAlignment: MainAxisAlignment.center,
@@ -120,7 +125,7 @@ class _CellsScreenState extends State<CellsScreen> {
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child:
-                const Text('Cancel', style: TextStyle(color: Colors.grey)),
+                Text(tr('cancel'), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -134,7 +139,7 @@ class _CellsScreenState extends State<CellsScreen> {
                   borderRadius: BorderRadius.circular(8)),
               elevation: 0,
             ),
-            child: const Text('Disconnect'),
+            child: Text(tr('disconnect')),
           ),
         ],
       ),
@@ -169,12 +174,12 @@ class _CellsScreenState extends State<CellsScreen> {
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       items: [
         PopupMenuItem<String>(
-          value: 'Cell No.',
+          value: 'cell_no',
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Cell No.', style: TextStyle(fontSize: 14)),
-              if (_sortBy == 'Cell No.')
+              Text(tr('cell_no'), style: const TextStyle(fontSize: 14)),
+              if (_sortBy == 'cell_no')
                 const Icon(Icons.check,
                     color: Color(0xFF1B6B3A), size: 18),
             ],
@@ -182,12 +187,12 @@ class _CellsScreenState extends State<CellsScreen> {
         ),
         const PopupMenuDivider(height: 1),
         PopupMenuItem<String>(
-          value: 'Voltage',
+          value: 'voltage',
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Voltage', style: TextStyle(fontSize: 14)),
-              if (_sortBy == 'Voltage')
+              Text(tr('voltage'), style: const TextStyle(fontSize: 14)),
+              if (_sortBy == 'voltage')
                 const Icon(Icons.check,
                     color: Color(0xFF1B6B3A), size: 18),
             ],
@@ -208,9 +213,9 @@ class _CellsScreenState extends State<CellsScreen> {
         backgroundColor: const Color(0xFF1B6B3A),
         elevation: 0,
         centerTitle: true,
-        title: const Text(
-          'CELL DETAILS',
-          style: TextStyle(
+        title: Text(
+          tr('cell_details'),
+          style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
               fontWeight: FontWeight.bold),
@@ -287,8 +292,8 @@ class _CellsScreenState extends State<CellsScreen> {
                     color: Colors.black87)),
             const SizedBox(height: 3),
             Row(children: [
-              const Text('Connected',
-                  style: TextStyle(
+              Text(tr('connected'),
+                  style: const TextStyle(
                       fontSize: 13,
                       color: Color(0xFF1B6B3A),
                       fontWeight: FontWeight.w500)),
@@ -313,9 +318,9 @@ class _CellsScreenState extends State<CellsScreen> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
-          child: const Text('DISCONNECT',
+          child: Text(tr('disconnect'),
               style:
-                  TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
         ),
       ],
     );
@@ -352,7 +357,7 @@ class _CellsScreenState extends State<CellsScreen> {
                       ]),
                 ],
               ),
-              label: 'Total Cells',
+              label: tr('total_cells'),
               value: '$totalCells',
             ),
           ),
@@ -374,7 +379,7 @@ class _CellsScreenState extends State<CellsScreen> {
                           fontWeight: FontWeight.bold)),
                 ),
               ),
-              label: 'Max. Cell',
+              label: tr('max_cell'),
               value: '$maxCellVoltage V',
               sub: 'Cell ${maxCellNo.toString().padLeft(2, '0')}',
             ),
@@ -397,7 +402,7 @@ class _CellsScreenState extends State<CellsScreen> {
                           fontWeight: FontWeight.bold)),
                 ),
               ),
-              label: 'Min. Cell',
+              label: tr('min_cell'),
               value: '$minCellVoltage V',
               sub: 'Cell ${minCellNo.toString().padLeft(2, '0')}',
             ),
@@ -407,7 +412,7 @@ class _CellsScreenState extends State<CellsScreen> {
             child: _buildSummaryCard(
               topWidget: const Icon(Icons.balance_rounded,
                   color: Colors.white, size: 26),
-              label: 'Balancing',
+              label: tr('balancing'),
               value: balancingStatus,
               valueSize: 15,
               bottomWidget: const Icon(Icons.bar_chart_rounded,
@@ -478,15 +483,15 @@ class _CellsScreenState extends State<CellsScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Text('Cell Voltages',
-              style: TextStyle(
+          Text(tr('cell_voltages'),
+              style: const TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: Colors.black54)),
           Row(
             children: [
-              const Text('Sort by: ',
-                  style: TextStyle(fontSize: 13, color: Colors.black54)),
+              Text('${tr('sort_by')}: ',
+                  style: const TextStyle(fontSize: 13, color: Colors.black54)),
               Builder(
                 builder: (ctx) => GestureDetector(
                   onTap: () => _showSortMenu(ctx),
