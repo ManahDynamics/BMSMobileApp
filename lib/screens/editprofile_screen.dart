@@ -1,5 +1,6 @@
 // ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:bmsmobileapp/services/translation_service.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -12,6 +13,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _nameController = TextEditingController(text: 'Venkat Cherka');
   final _emailController = TextEditingController(text: 'venkat.cherka@email.com');
   final _phoneController = TextEditingController(text: '+91 9876543210');
+
+  String tr(String key) {
+    return TranslationService.t(key);
+  }
 
   @override
   void dispose() {
@@ -29,9 +34,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         backgroundColor: const Color(0xFF1B6B3A),
         elevation: 0,
         centerTitle: true,
-        title: const Text(
-          'EDIT PROFILE',
-          style: TextStyle(
+        title: Text(
+          tr('edit_profile'),
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.w500,
@@ -48,7 +53,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           children: [
             const SizedBox(height: 20),
 
-            // ── Avatar ─────────────────────────────────────────────────
+            // Avatar
             Stack(
               alignment: Alignment.bottomRight,
               children: [
@@ -78,55 +83,55 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ],
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Venkat Cherka',
-              style: TextStyle(
+            Text(
+              _nameController.text,
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: Colors.black87,
               ),
             ),
             const SizedBox(height: 4),
-            const Text(
-              'BMS User',
-              style: TextStyle(fontSize: 13, color: Colors.grey),
+            Text(
+              tr('bms_user'),
+              style: const TextStyle(fontSize: 13, color: Colors.grey),
             ),
 
             const SizedBox(height: 32),
 
-            // ── Form fields ────────────────────────────────────────────
+            // Form fields
             _buildTextField(
               controller: _nameController,
-              label: 'Full Name',
+              label: tr('full_name'),
               icon: Icons.person_outline_rounded,
             ),
             const SizedBox(height: 16),
             _buildTextField(
               controller: _emailController,
-              label: 'Email Address',
+              label: tr('email_address'),
               icon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
             ),
             const SizedBox(height: 16),
             _buildTextField(
               controller: _phoneController,
-              label: 'Phone Number',
+              label: tr('phone_number'),
               icon: Icons.phone_outlined,
               keyboardType: TextInputType.phone,
             ),
 
             const SizedBox(height: 36),
 
-            // ── Save button ────────────────────────────────────────────
+            // Save button
             SizedBox(
               width: double.infinity,
               height: 50,
               child: ElevatedButton(
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Profile updated successfully!'),
-                      backgroundColor: Color(0xFF1B6B3A),
+                    SnackBar(
+                      content: Text(tr('profile_updated_success')),
+                      backgroundColor: const Color(0xFF1B6B3A),
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
@@ -139,15 +144,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   ),
                   elevation: 0,
                 ),
-                child: const Text(
-                  'Save Changes',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                child: Text(
+                  tr('save_changes'),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
               ),
             ),
             const SizedBox(height: 12),
 
-            // ── Cancel button ──────────────────────────────────────────
+            // Cancel button
             SizedBox(
               width: double.infinity,
               height: 50,
@@ -160,9 +165,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                 ),
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                child: Text(
+                  tr('cancel'),
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                 ),
               ),
             ),

@@ -39,9 +39,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      SlideRoute(
-        page: BluetoothDeviceScanPage(service: widget.service),
-      ),
+      SlideRoute(page: BluetoothDeviceScanPage(service: widget.service)),
       (route) => false,
     );
   }
@@ -50,8 +48,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           tr('disconnect'),
           textAlign: TextAlign.center,
@@ -65,8 +62,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(tr('cancel'),
-                style: const TextStyle(color: Colors.grey)),
+            child: Text(
+              tr('cancel'),
+              style: const TextStyle(color: Colors.grey),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
@@ -77,7 +76,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               backgroundColor: const Color(0xFFD4621A),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
               elevation: 0,
             ),
             child: Text(tr('disconnect')),
@@ -114,9 +114,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () {
               setState(() => isLocked = false);
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(tr('settings_unlocked'))),
-              );
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(tr('settings_unlocked'))));
             },
             child: Text(tr('unlock')),
           ),
@@ -126,7 +126,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _showResetConfirmation(
-      String title, String message, VoidCallback onConfirm) {
+    String title,
+    String message,
+    VoidCallback onConfirm,
+  ) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -154,17 +157,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _editDoubleParam(
-      String title, double current, String unit, Function(double) onSave) {
-    final controller =
-        TextEditingController(text: current.toStringAsFixed(2));
+    String title,
+    double current,
+    String unit,
+    Function(double) onSave,
+  ) {
+    final controller = TextEditingController(text: current.toStringAsFixed(2));
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
         content: TextField(
           controller: controller,
-          keyboardType:
-              const TextInputType.numberWithOptions(decimal: true),
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
           decoration: InputDecoration(
             suffixText: unit,
             border: const OutlineInputBorder(),
@@ -172,8 +177,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(tr('cancel'))),
+            onPressed: () => Navigator.pop(context),
+            child: Text(tr('cancel')),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1B6B3A),
@@ -194,7 +200,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _editIntParam(
-      String title, int current, String unit, Function(int) onSave) {
+    String title,
+    int current,
+    String unit,
+    Function(int) onSave,
+  ) {
     final controller = TextEditingController(text: current.toString());
     showDialog(
       context: context,
@@ -210,8 +220,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(tr('cancel'))),
+            onPressed: () => Navigator.pop(context),
+            child: Text(tr('cancel')),
+          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF1B6B3A),
@@ -242,20 +253,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: Text(
           tr('settings'),
           style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.w500),
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+          ),
         ),
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_rounded,
-                color: Colors.white, size: 26),
+            icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
       ),
-      drawer:
-          AppDrawer(activeRoute: '/settings', service: widget.service),
+      drawer: AppDrawer(activeRoute: '/settings', service: widget.service),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -265,11 +275,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 16),
             if (isLocked) _buildLockBanner(),
             if (isLocked) const SizedBox(height: 16),
-            Text(tr('protection_parameters'),
-                style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87)),
+            Text(
+              tr('protection_parameters'),
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
             const SizedBox(height: 8),
             _buildParameterCard(
               icon: Icons.battery_charging_full_rounded,
@@ -279,11 +292,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: isLocked
                   ? null
                   : () => _editDoubleParam(
-                        tr('charge_cutoff_voltage'),
-                        chargeCutoffVoltage,
-                        'V',
-                        (v) => setState(() => chargeCutoffVoltage = v),
-                      ),
+                      tr('charge_cutoff_voltage'),
+                      chargeCutoffVoltage,
+                      'V',
+                      (v) => setState(() => chargeCutoffVoltage = v),
+                    ),
             ),
             _buildParameterCard(
               icon: Icons.battery_alert_rounded,
@@ -293,12 +306,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: isLocked
                   ? null
                   : () => _editDoubleParam(
-                        tr('discharge_cutoff_voltage'),
-                        dischargeCutoffVoltage,
-                        'V',
-                        (v) => setState(
-                            () => dischargeCutoffVoltage = v),
-                      ),
+                      tr('discharge_cutoff_voltage'),
+                      dischargeCutoffVoltage,
+                      'V',
+                      (v) => setState(() => dischargeCutoffVoltage = v),
+                    ),
             ),
             _buildParameterCard(
               icon: Icons.thermostat_rounded,
@@ -315,12 +327,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: isLocked
                   ? null
                   : () => _editIntParam(
-                        tr('charge_current_limit'),
-                        chargeCurrentLimit,
-                        'A',
-                        (v) =>
-                            setState(() => chargeCurrentLimit = v),
-                      ),
+                      tr('charge_current_limit'),
+                      chargeCurrentLimit,
+                      'A',
+                      (v) => setState(() => chargeCurrentLimit = v),
+                    ),
             ),
             _buildParameterCard(
               icon: Icons.electric_bolt_outlined,
@@ -330,12 +341,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: isLocked
                   ? null
                   : () => _editIntParam(
-                        tr('discharge_current_limit'),
-                        dischargeCurrentLimit,
-                        'A',
-                        (v) => setState(
-                            () => dischargeCurrentLimit = v),
-                      ),
+                      tr('discharge_current_limit'),
+                      dischargeCurrentLimit,
+                      'A',
+                      (v) => setState(() => dischargeCurrentLimit = v),
+                    ),
             ),
             _buildParameterCard(
               icon: Icons.timer_rounded,
@@ -345,12 +355,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: isLocked
                   ? null
                   : () => _editIntParam(
-                        tr('short_circuit_delay'),
-                        shortCircuitDelay,
-                        'ms',
-                        (v) =>
-                            setState(() => shortCircuitDelay = v),
-                      ),
+                      tr('short_circuit_delay'),
+                      shortCircuitDelay,
+                      'ms',
+                      (v) => setState(() => shortCircuitDelay = v),
+                    ),
             ),
             _buildParameterCard(
               icon: Icons.balance_rounded,
@@ -360,19 +369,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: isLocked
                   ? null
                   : () => _editDoubleParam(
-                        tr('cell_balancing_voltage'),
-                        cellBalancingVoltage,
-                        'V',
-                        (v) => setState(
-                            () => cellBalancingVoltage = v),
-                      ),
+                      tr('cell_balancing_voltage'),
+                      cellBalancingVoltage,
+                      'V',
+                      (v) => setState(() => cellBalancingVoltage = v),
+                    ),
             ),
             const SizedBox(height: 20),
-            Text(tr('reset_options'),
-                style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87)),
+            Text(
+              tr('reset_options'),
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -385,8 +396,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       tr('reset_warnings'),
                       tr('reset_warnings_confirm'),
                       () => ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(tr('warnings_cleared'))),
+                        SnackBar(content: Text(tr('warnings_cleared'))),
                       ),
                     ),
                   ),
@@ -401,8 +411,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       tr('reset_counters'),
                       tr('reset_counters_confirm'),
                       () => ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(tr('counters_reset'))),
+                        SnackBar(content: Text(tr('counters_reset'))),
                       ),
                     ),
                   ),
@@ -431,8 +440,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       cellBalancingVoltage = 0.03;
                     });
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(tr('factory_reset_complete'))),
+                      SnackBar(content: Text(tr('factory_reset_complete'))),
                     );
                   },
                 ),
@@ -449,14 +457,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline_rounded,
-                      color: Colors.grey.shade600, size: 18),
+                  Icon(
+                    Icons.info_outline_rounded,
+                    color: Colors.grey.shade600,
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       tr('settings_warning'),
                       style: const TextStyle(
-                          fontSize: 12, color: Colors.black54),
+                        fontSize: 12,
+                        color: Colors.black54,
+                      ),
                     ),
                   ),
                 ],
@@ -480,55 +493,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Container(
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
-                color: Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8)),
-            child: const Icon(Icons.battery_full_rounded,
-                size: 28, color: Colors.black54),
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.battery_full_rounded,
+              size: 28,
+              color: Colors.black54,
+            ),
           ),
           const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('BMS_001',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 15)),
-              Row(
-                children: [
-                  Text(
-                    isConnected ? tr('connected') : tr('disconnected'),
-                    style: TextStyle(
-                      color: isConnected
-                          ? const Color(0xFF1B6B3A)
-                          : Colors.red,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 13,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'BMS_001',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        isConnected ? tr('connected') : tr('disconnected'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: isConnected
+                              ? const Color(0xFF1B6B3A)
+                              : Colors.red,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.circle,
+                    const SizedBox(width: 4),
+                    Icon(
+                      Icons.circle,
                       size: 8,
-                      color: isConnected
-                          ? const Color(0xFF1B6B3A)
-                          : Colors.red),
-                ],
-              ),
-            ],
+                      color: isConnected ? const Color(0xFF1B6B3A) : Colors.red,
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFD4621A),
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6)),
+                borderRadius: BorderRadius.circular(6),
+              ),
               elevation: 0,
             ),
             onPressed: _showDisconnectDialog,
-            child: Text(tr('disconnect'),
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700, fontSize: 12)),
+            child: Text(
+              tr('disconnect'),
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+            ),
           ),
         ],
       ),
@@ -548,16 +575,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.verified_user_rounded,
-                  color: Colors.white, size: 22),
+              const Icon(
+                Icons.verified_user_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   tr('protection_locked'),
                   style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16),
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ],
@@ -567,8 +598,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: const EdgeInsets.only(left: 32),
             child: Text(
               tr('protection_locked_desc'),
-              style:
-                  const TextStyle(color: Colors.white70, fontSize: 12),
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
           ),
           const SizedBox(height: 12),
@@ -576,15 +606,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: OutlinedButton.styleFrom(
               foregroundColor: Colors.white,
               side: const BorderSide(color: Colors.white, width: 1),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 14, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6)),
+                borderRadius: BorderRadius.circular(6),
+              ),
             ),
             onPressed: _showUnlockDialog,
             icon: const Icon(Icons.lock_open_rounded, size: 16),
-            label: Text(tr('unlock_settings'),
-                style: const TextStyle(fontWeight: FontWeight.w600)),
+            label: Text(
+              tr('unlock_settings'),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),
@@ -602,17 +634,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 8),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(color: Colors.grey.shade100),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 4,
-                offset: const Offset(0, 1))
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
           ],
         ),
         child: Row(
@@ -622,8 +654,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               height: 38,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(
-                    color: Colors.grey.shade300, width: 1.5),
+                border: Border.all(color: Colors.grey.shade300, width: 1.5),
               ),
               child: Icon(icon, size: 20, color: Colors.black54),
             ),
@@ -632,35 +663,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13.5)),
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13.5,
+                    ),
+                  ),
                   const SizedBox(height: 2),
-                  Text(subtitle,
-                      style: const TextStyle(
-                          color: Colors.black45, fontSize: 11.5)),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      color: Colors.black45,
+                      fontSize: 11.5,
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(width: 8),
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey.shade300),
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Text(value,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 13)),
+              child: Text(
+                value,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
             ),
             const SizedBox(width: 4),
             Icon(
               Icons.chevron_right_rounded,
-              color: onTap != null
-                  ? Colors.black54
-                  : Colors.grey.shade300,
+              color: onTap != null ? Colors.black54 : Colors.grey.shade300,
               size: 20,
             ),
           ],
@@ -678,8 +717,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
           color: const Color(0xFF2B5FA5),
           borderRadius: BorderRadius.circular(10),
@@ -688,18 +726,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             Icon(icon, color: Colors.white, size: 22),
             const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 13)),
-                Text(sublabel,
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 11)),
-              ],
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    sublabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

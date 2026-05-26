@@ -6,6 +6,7 @@ import 'package:bmsmobileapp/screens/cells_screen.dart';
 import 'package:bmsmobileapp/screens/alerts_screen.dart';
 import 'package:bmsmobileapp/screens/settings_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
+import 'package:bmsmobileapp/services/translation_service.dart';
 
 class AppDrawer extends StatelessWidget {
   final String activeRoute;
@@ -16,6 +17,10 @@ class AppDrawer extends StatelessWidget {
     required this.activeRoute,
     required this.service,
   });
+
+  String tr(String key) {
+    return TranslationService.t(key);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +90,9 @@ class AppDrawer extends StatelessWidget {
                           Text(
                             'ID: ABC28348624',
                             style: TextStyle(
-                                color: Colors.white70, fontSize: 13),
+                              color: Colors.white70,
+                              fontSize: 13,
+                            ),
                           ),
                         ],
                       ),
@@ -97,28 +104,28 @@ class AppDrawer extends StatelessWidget {
                 _buildNavItem(
                   context,
                   icon: Icons.home_rounded,
-                  label: 'Dashboard',
+                  label: tr('dashboard'),
                   route: '/dashboard',
                   page: DashboardScreen(service: service),
                 ),
                 _buildNavItem(
                   context,
                   icon: Icons.battery_full_rounded,
-                  label: 'Cells',
+                  label: tr('cells'),
                   route: '/cells',
                   page: CellsScreen(service: service),
                 ),
                 _buildNavItem(
                   context,
                   icon: Icons.notifications_rounded,
-                  label: 'Alerts',
+                  label: tr('alerts'),
                   route: '/alerts',
                   page: AlertsScreen(service: service),
                 ),
                 _buildNavItem(
                   context,
                   icon: Icons.settings_rounded,
-                  label: 'Settings',
+                  label: tr('settings'),
                   route: '/settings',
                   page: SettingsScreen(service: service),
                 ),
@@ -150,8 +157,7 @@ class AppDrawer extends StatelessWidget {
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color:
-              isActive ? const Color(0xFF0A5338) : Colors.transparent,
+          color: isActive ? const Color(0xFF0A5338) : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
