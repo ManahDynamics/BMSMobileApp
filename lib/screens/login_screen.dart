@@ -1,3 +1,4 @@
+// lib/screens/login_screen.dart
 // ignore_for_file: deprecated_member_use
 
 import 'dart:convert';
@@ -8,6 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 
 import 'package:bmsmobileapp/screens/register_screen.dart';
+import 'package:bmsmobileapp/screens/forgotpassword_screen.dart'; // ← ADD
 import 'package:bmsmobileapp/utils/slide_route.dart';
 
 import 'package:bmsmobileapp/services/translation_service.dart';
@@ -469,18 +471,24 @@ class _LoginScreenState extends State<LoginScreen> {
                         // ── Forgot password ──────────────────────
                         Align(
                           alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () {},
-                            style: TextButton.styleFrom(
-                              padding: EdgeInsets.zero,
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: Text(
-                              tr('login.forgot_password'),
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 13,
+                          child: MouseRegion(
+                            cursor: SystemMouseCursors.click,
+                            child: GestureDetector(
+                              onTap: _isLoading
+                                  ? null
+                                  : () => Navigator.push(
+                                        context,
+                                        SlideRoute(
+                                          page: const ForgotPasswordScreen(),
+                                        ),
+                                      ),
+                              child: Text(
+                                tr('login.forgot_password'),
+                                style: const TextStyle(
+                                  color: Color(0xFF3A6EAC),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),

@@ -1,5 +1,7 @@
+// lib/screens/forgotpassword_screen.dart
 // ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:bmsmobileapp/services/translation_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -13,6 +15,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _isLoading = false;
   bool _emailSent = false;
 
+  String tr(String key) => TranslationService.t(key);
+
   @override
   void dispose() {
     _emailController.dispose();
@@ -22,8 +26,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Future<void> _handleSendLink() async {
     if (_emailController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter your email address.'),
+        SnackBar(
+          content: Text(tr('fp_enter_email_error')),
           backgroundColor: Colors.red,
           behavior: SnackBarBehavior.floating,
         ),
@@ -52,9 +56,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         backgroundColor: const Color(0xFF1B6B3A),
         elevation: 0,
         centerTitle: true,
-        title: const Text(
-          'FORGOT PASSWORD',
-          style: TextStyle(
+        title: Text(
+          tr('fp_title').toUpperCase(),
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 16,
             fontWeight: FontWeight.w500,
@@ -91,10 +95,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             const SizedBox(height: 28),
 
             // ── Title ──────────────────────────────────────────────────
-            const Center(
+            Center(
               child: Text(
-                'Reset Password',
-                style: TextStyle(
+                tr('fp_reset_password'),
+                style: const TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: Colors.black87,
@@ -105,8 +109,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             Center(
               child: Text(
                 _emailSent
-                    ? 'A reset link has been sent to your email.'
-                    : 'Enter your registered email address and\nwe\'ll send you a password reset link.',
+                    ? tr('fp_link_sent_message')
+                    : tr('fp_subtitle'),
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 14,
@@ -120,9 +124,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
             if (!_emailSent) ...[
               // ── Email field ──────────────────────────────────────────
-              const Text(
-                'Email Address',
-                style: TextStyle(
+              Text(
+                tr('fp_email_label'),
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                   color: Colors.black54,
@@ -138,7 +142,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    hintText: 'Enter your email',
+                    hintText: tr('fp_email_hint'),
                     hintStyle:
                         TextStyle(color: Colors.grey[500], fontSize: 14),
                     prefixIcon: Icon(Icons.email_outlined,
@@ -178,9 +182,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             strokeWidth: 2.5,
                           ),
                         )
-                      : const Text(
-                          'Send Reset Link',
-                          style: TextStyle(
+                      : Text(
+                          tr('fp_send_reset_link'),
+                          style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
@@ -189,7 +193,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               const SizedBox(height: 16),
 
-              // ── Back to login ────────────────────────────────────────
+              // ── Back button ──────────────────────────────────────────
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -202,10 +206,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  child: const Text(
-                    'Back',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  child: Text(
+                    tr('fp_back'),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ),
               ),
@@ -235,9 +239,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'Check your inbox for the reset link.',
-                        style: TextStyle(fontSize: 13, color: Colors.grey),
+                      Text(
+                        tr('fp_check_inbox'),
+                        style: const TextStyle(
+                            fontSize: 13, color: Colors.grey),
                       ),
                     ],
                   ),
@@ -257,10 +262,10 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                     ),
                     elevation: 0,
                   ),
-                  child: const Text(
-                    'Back to Dashboard',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  child: Text(
+                    tr('fp_back_to_dashboard'),
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
