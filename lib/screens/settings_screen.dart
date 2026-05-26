@@ -87,10 +87,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         return InkWell(
                           onTap: () async {
                             setState(() => _selectedLanguage = lang);
-                            await TranslationService.setLanguage(
-                              _langCodeMap[lang]!,
-                            );
-                            if (mounted) setState(() {});
+                            await _changeLanguage(_langCodeMap[lang]!);
                             _removeOverlay();
                           },
                           borderRadius: BorderRadius.circular(10),
@@ -152,51 +149,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Text(tr('language_changed')),
         duration: const Duration(seconds: 2),
       ),
-    );
-  }
-
-  void _showLanguageDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          tr('select_language'),
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildLanguageOption('en', 'English', '🇬🇧'),
-            _buildLanguageOption('te', 'Telugu', '🇮🇳'),
-            _buildLanguageOption('hi', 'Hindi', '🇮🇳'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLanguageOption(String code, String name, String flag) {
-    final isSelected = TranslationService.currentLanguage == code;
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      leading: Text(flag, style: const TextStyle(fontSize: 24)),
-      title: Text(
-        name,
-        style: TextStyle(
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          color: isSelected ? const Color(0xFF1B6B3A) : Colors.black87,
-        ),
-      ),
-      trailing: isSelected
-          ? const Icon(Icons.check_circle, color: Color(0xFF1B6B3A))
-          : null,
-      onTap: () {
-        Navigator.pop(context);
-        _changeLanguage(code);
-      },
     );
   }
 
