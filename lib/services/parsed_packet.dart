@@ -20,6 +20,8 @@ class BMSParsedPacket {
   final double? totalCurrent;
   final int?    soc;
   final double? remainingCapacity;
+  final double? totalPower;
+ final String? totalPowerDisplay;
 
   const BMSParsedPacket({
     required this.startByte,
@@ -34,6 +36,8 @@ class BMSParsedPacket {
     this.totalCurrent,
     this.soc,
     this.remainingCapacity,
+    this.totalPower,
+    this.totalPowerDisplay,
   });
 
   // ── Convenience flags ─────────────────────────────────────────────────────
@@ -66,6 +70,7 @@ class BMSParsedPacket {
   String get currentDisplay         => totalCurrent      != null ? '${totalCurrent!.toStringAsFixed(1)} A'       : '– A';
   String get socDisplay             => soc               != null ? '$soc %'                                       : '– %';
   String get capacityDisplay        => remainingCapacity != null ? '${remainingCapacity!.toStringAsFixed(1)} Ah' : '– Ah';
+  String get powerDisplay           => totalPower        != null ? '${totalPower!.toStringAsFixed(1)} W'         : '– W';
 
   // ── Human-readable type name for logs ─────────────────────────────────────
   // FIX: split 0x90 / 0x50 into separate cases — 0x90 = HANDSHAKE, 0x50 = ACK
@@ -116,6 +121,6 @@ class BMSParsedPacket {
       'BMSParsedPacket('
       'type=$typeName, '
       'dir=$directionLabel'
-      '${isPacket4 ? ", $voltageDisplay, $currentDisplay, $socDisplay, $capacityDisplay" : ""}'
+      '${isPacket4 ? ", $voltageDisplay, $currentDisplay, $socDisplay, $capacityDisplay, $powerDisplay": ""}'
       ')';
 }

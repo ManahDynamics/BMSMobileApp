@@ -250,11 +250,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final String voltageText  = p4?.voltageDisplay  ?? '– V';
           final String currentText  = p4?.currentDisplay  ?? '– A';
           final String capacityText = p4?.capacityDisplay ?? '– Ah';
-          final String powerText    = (p4 != null)
-              ? '${(p4.totalVoltage! * p4.totalCurrent!).toStringAsFixed(0)} W'
-              : '– W';
+          final String powerText    = p4?.totalPowerDisplay ?? '– KW';
 
-          return SingleChildScrollView(
+          return SingleChildScrollView( 
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
