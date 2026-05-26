@@ -29,8 +29,175 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int shortCircuitDelay = 100;
   double cellBalancingVoltage = 0.03;
 
+  String _selectedLanguage = 'English';
+  final Map<String, String> _langCodeMap = {
+    'English': 'en',
+    'Telugu': 'te',
+    'Hindi': 'hi',
+  };
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
+
   String tr(String key) {
     return TranslationService.t(key);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedLanguage = _languageDisplayName(TranslationService.currentLanguage);
+  }
+
+  @override
+  void dispose() {
+    _removeOverlay();
+    super.dispose();
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  void _showLanguageOverlay() {
+    _removeOverlay();
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _removeOverlay,
+        child: Stack(
+          children: [
+            CompositedTransformFollower(
+              link: _layerLink,
+              showWhenUnlinked: false,
+              offset: const Offset(0, 44),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Material(
+                  elevation: 6,
+                  borderRadius: BorderRadius.circular(10),
+                  color: Colors.white,
+                  child: SizedBox(
+                    width: 150,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: _langCodeMap.keys.map((lang) {
+                        final isSelected = lang == _selectedLanguage;
+                        return InkWell(
+                          onTap: () async {
+                            setState(() => _selectedLanguage = lang);
+                            await TranslationService.setLanguage(
+                              _langCodeMap[lang]!,
+                            );
+                            if (mounted) setState(() {});
+                            _removeOverlay();
+                          },
+                          borderRadius: BorderRadius.circular(10),
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? Colors.grey.shade200
+                                  : Colors.white,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              lang,
+                              style: TextStyle(
+                                color: Colors.black87,
+                                fontSize: 14,
+                                fontWeight: isSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  String _languageDisplayName(String code) {
+    return code == 'hi'
+        ? 'Hindi'
+        : code == 'te'
+            ? 'Telugu'
+            : 'English';
+  }
+
+  // ── Change Language ───────────────────────────────────────────────────────
+  Future<void> _changeLanguage(String languageCode) async {
+    await TranslationService.setLanguage(languageCode);
+    if (!mounted) return;
+
+    setState(() {}); // Refresh UI with new language
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(tr('language_changed')),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _showLanguageDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          tr('select_language'),
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildLanguageOption('en', 'English', '🇬🇧'),
+            _buildLanguageOption('te', 'Telugu', '🇮🇳'),
+            _buildLanguageOption('hi', 'Hindi', '🇮🇳'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageOption(String code, String name, String flag) {
+    final isSelected = TranslationService.currentLanguage == code;
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      leading: Text(flag, style: const TextStyle(fontSize: 24)),
+      title: Text(
+        name,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          color: isSelected ? const Color(0xFF1B6B3A) : Colors.black87,
+        ),
+      ),
+      trailing: isSelected
+          ? const Icon(Icons.check_circle, color: Color(0xFF1B6B3A))
+          : null,
+      onTap: () {
+        Navigator.pop(context);
+        _changeLanguage(code);
+      },
+    );
   }
 
   // ── Disconnect ─────────────────────────────────────────────────────────────
@@ -49,23 +216,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          tr('disconnect'),
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          tr('disconnect_confirmation'),
-          textAlign: TextAlign.center,
-        ),
+        title: Text(tr('disconnect'), textAlign: TextAlign.center),
+        content: Text(tr('disconnect_confirmation'), textAlign: TextAlign.center),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              tr('cancel'),
-              style: const TextStyle(color: Colors.grey),
-            ),
+            child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -75,10 +232,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFD4621A),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              elevation: 0,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             child: Text(tr('disconnect')),
           ),
@@ -114,9 +268,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () {
               setState(() => isLocked = false);
               Navigator.pop(context);
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(tr('settings_unlocked'))));
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(tr('settings_unlocked'))),
+              );
             },
             child: Text(tr('unlock')),
           ),
@@ -272,9 +426,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildDeviceCard(),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+
+            // Language Selector
+            Row(
+              children: [
+                Text(
+                  tr('change_language'),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(width: 12),
+                CompositedTransformTarget(
+                  link: _layerLink,
+                  child: GestureDetector(
+                    onTap: _showLanguageOverlay,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey.shade400),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.language, size: 20, color: Colors.black87),
+                          const SizedBox(width: 8),
+                          Text(
+                            _selectedLanguage,
+                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                          ),
+                          const Icon(Icons.arrow_drop_down_rounded, size: 24),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
             if (isLocked) _buildLockBanner(),
             if (isLocked) const SizedBox(height: 16),
+
             Text(
               tr('protection_parameters'),
               style: const TextStyle(
@@ -284,6 +476,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 8),
+
             _buildParameterCard(
               icon: Icons.battery_charging_full_rounded,
               title: tr('charge_cutoff_voltage'),
@@ -375,6 +568,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       (v) => setState(() => cellBalancingVoltage = v),
                     ),
             ),
+
             const SizedBox(height: 20),
             Text(
               tr('reset_options'),
@@ -385,6 +579,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(height: 10),
+
             Row(
               children: [
                 Expanded(
@@ -446,6 +641,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             ),
+
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(12),
@@ -457,19 +653,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    Icons.info_outline_rounded,
-                    color: Colors.grey.shade600,
-                    size: 18,
-                  ),
+                  Icon(Icons.info_outline_rounded, color: Colors.grey.shade600, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       tr('settings_warning'),
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.black54,
-                      ),
+                      style: const TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                   ),
                 ],
@@ -483,7 +672,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ── Widget Builders ────────────────────────────────────────────────────────
-
   Widget _buildDeviceCard() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
@@ -521,9 +709,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: isConnected
-                              ? const Color(0xFF1B6B3A)
-                              : Colors.red,
+                          color: isConnected ? const Color(0xFF1B6B3A) : Colors.red,
                           fontWeight: FontWeight.w500,
                           fontSize: 13,
                         ),
@@ -546,9 +732,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               backgroundColor: const Color(0xFFD4621A),
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
               elevation: 0,
             ),
             onPressed: _showDisconnectDialog,
@@ -575,11 +759,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.verified_user_rounded,
-                color: Colors.white,
-                size: 22,
-              ),
+              const Icon(Icons.verified_user_rounded, color: Colors.white, size: 22),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -607,9 +787,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               foregroundColor: Colors.white,
               side: const BorderSide(color: Colors.white, width: 1),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6),
-              ),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             ),
             onPressed: _showUnlockDialog,
             icon: const Icon(Icons.lock_open_rounded, size: 16),
@@ -665,18 +843,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13.5,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: Colors.black45,
-                      fontSize: 11.5,
-                    ),
+                    style: const TextStyle(color: Colors.black45, fontSize: 11.5),
                   ),
                 ],
               ),
@@ -690,10 +862,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               child: Text(
                 value,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               ),
             ),
             const SizedBox(width: 4),
