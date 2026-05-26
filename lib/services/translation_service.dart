@@ -7,9 +7,11 @@ class TranslationService {
       FirebaseRemoteConfig.instance;
 
   static Map<String, dynamic> translations = {};
+  static String currentLanguage = 'en';
 
   /// Load translations from Firebase
   static Future<void> loadTranslations(String lang) async {
+    currentLanguage = lang;
 
     await remoteConfig.setConfigSettings(
       RemoteConfigSettings(
@@ -28,7 +30,12 @@ class TranslationService {
         remoteConfig.getString('translations_$lang');
 
     translations = json.decode(jsonString);
+  }
 
+  /// Set a new language and reload translations
+  static Future<void> setLanguage(String lang) async {
+    if (currentLanguage == lang) return;
+    await loadTranslations(lang);
   }
 
   /// Get translation value
