@@ -6,7 +6,6 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/login_screen.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
-
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 
@@ -15,71 +14,55 @@ class ConnectScreen extends StatelessWidget {
 
   String tr(String key) => TranslationService.t(key);
 
+  static const _primary = Color(0xFF1B6B3A);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1B6B3A),
-        elevation: 0,
+        backgroundColor: _primary,
         centerTitle: true,
         automaticallyImplyLeading: false,
-        title: Text(
-          tr('connect.title'),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+        title: Text(tr('connect.title'),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Colors.white),
-            onPressed: () {
-              Navigator.pushAndRemoveUntil(
-                context,
-                SlideRoute(page: const LoginScreen()),
-                (route) => false,
-              );
-            },
-          ),
+            icon: const Icon(Icons.logout_rounded),
+            onPressed: () => Navigator.pushAndRemoveUntil(
+              context,
+              SlideRoute(page: const LoginScreen()),
+              (_) => false,
+            ),
+          )
         ],
       ),
-
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 36),
-            Text(
-              tr('connect.choose_device'),
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w400,
-                color: Colors.black54,
-              ),
-            ),
+            Text(tr('connect.choose_device'),
+                style: const TextStyle(color: Colors.black54)),
             const SizedBox(height: 10),
 
-            // LOCAL
-            _buildConnectionCard(
+            _card(
               context,
               title: tr('connect.local_monitoring'),
               subtitle: tr('connect.bluetooth_device'),
               icon: Icons.bluetooth_rounded,
-              onTap: () => _handleLocalMonitoring(context),
+              onTap: () => _localFlow(context),
             ),
 
             const SizedBox(height: 20),
 
-            // REMOTE
-            _buildConnectionCard(
+            _card(
               context,
               title: tr('connect.remote_monitoring'),
               subtitle: tr('connect.wifi_devices'),
               icon: Icons.router_rounded,
-              onTap: () => _handleRemoteMonitoring(context),
+              onTap: () => _remoteFlow(context),
             ),
           ],
         ),
@@ -87,8 +70,8 @@ class ConnectScreen extends StatelessWidget {
     );
   }
 
-  // UI CARD
-  Widget _buildConnectionCard(
+  // ================= UI CARD =================
+  Widget _card(
     BuildContext context, {
     required String title,
     required String subtitle,
@@ -101,113 +84,93 @@ class ConnectScreen extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
         decoration: BoxDecoration(
-          color: const Color(0xFF1B6B3A),
+          color: _primary,
           borderRadius: BorderRadius.circular(15),
         ),
         child: Row(
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon,
-                  color: const Color(0xFF1B6B3A), size: 26),
-            ),
+            _icon(icon),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: Colors.white70,
-                  ),
-                ),
-              ],
-            ),
+            _text(title, subtitle),
             const Spacer(),
-            const Icon(
-              Icons.arrow_forward_ios_rounded,
-              color: Colors.white,
-              size: 18,
-            ),
+            const Icon(Icons.arrow_forward_ios_rounded,
+                color: Colors.white, size: 18),
           ],
         ),
       ),
     );
   }
 
-  // ============================
-  // 🔵 LOCAL MONITORING FLOW
-  // ============================
-  void _handleLocalMonitoring(BuildContext context) async {
+  Widget _icon(IconData icon) => Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: _primary, size: 26),
+      );
+
+  Widget _text(String title, String subtitle) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white)),
+          Text(subtitle,
+              style: const TextStyle(fontSize: 13, color: Colors.white70)),
+        ],
+      );
+
+  // ================= LOCAL FLOW =================
+  Future<void> _localFlow(BuildContext context) async {
     if (!await FlutterBluePlus.isSupported) {
-      _showBluetoothNotSupportedDialog(context);
+      _dialog(context,
+          title: tr('connect.bluetooth_not_supported'),
+          msg: tr('connect.device_no_bluetooth'));
       return;
     }
 
-    final state = await FlutterBluePlus.adapterState.first;
+    final state = await FlutterBluePlus.adapterState.first; 
 
     if (state == BluetoothAdapterState.off) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(tr('connect.bluetooth_off')),
-          content: Text(tr('connect.enable_bluetooth')),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(tr('connect.ok')),
-            )
-          ],
-        ),
-      );
+      _dialog(context,
+          title: tr('connect.bluetooth_off'),
+          msg: tr('connect.enable_bluetooth'));
       return;
     }
 
-    // 🔥 IMPORTANT: CREATE SERVICE HERE OR USE PROVIDER
-    final BMSBluetoothService service = BMSBluetoothService();
-
-    // 🚀 GO TO SCAN SCREEN (ONLY SCREEN YOU NEED)
     Navigator.push(
       context,
       SlideRoute(
-        page: BluetoothDeviceScanPage(service: service),
+        page: BluetoothDeviceScanPage(
+          service: BMSBluetoothService(),
+        ),
       ),
     );
   }
 
-  // ============================
-  void _handleRemoteMonitoring(BuildContext context) {
+  // ================= REMOTE FLOW =================
+  void _remoteFlow(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(tr('connect.remote_coming_soon')),
-        backgroundColor: const Color(0xFF1B6B3A),
+        backgroundColor: _primary,
       ),
     );
   }
-
-  // ============================
-  void _showBluetoothNotSupportedDialog(BuildContext context) {
+  // ================= DIALOG =================
+  void _dialog(BuildContext context,
+      {required String title, required String msg}) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text(tr('connect.bluetooth_not_supported')),
-        content: Text(tr('connect.device_no_bluetooth')),
+        title: Text(title),
+        content: Text(msg),
         actions: [
-          TextButton(
+         TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(tr('connect.ok')),
           )

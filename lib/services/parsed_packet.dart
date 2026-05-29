@@ -21,7 +21,7 @@ class BMSParsedPacket {
   final int?    soc;
   final double? remainingCapacity;
   final double? totalPower;
- final String? totalPowerDisplay;
+  final String? totalPowerDisplay;
 
   const BMSParsedPacket({
     required this.startByte,

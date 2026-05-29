@@ -1,6 +1,5 @@
 // lib/screens/bluetooth_device_scan_screen.dart
-// ignore_for_file: deprecated_member_use, use_build_context_synchronously
-
+              // ignore_for_file: deprecated_member_use
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -12,16 +11,13 @@ import 'package:bmsmobileapp/services/protocol.dart';
 import 'package:bmsmobileapp/screens/dashboard.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
-
 class BluetoothDeviceScanPage extends StatefulWidget {
   final BMSBluetoothService service;
   const BluetoothDeviceScanPage({super.key, required this.service});
-
   @override
   State<BluetoothDeviceScanPage> createState() =>
       _BluetoothDeviceScanPageState();
 }
-
 class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
@@ -30,9 +26,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
   StreamSubscription? _scanSub;
   StreamSubscription? _scanStateSub;
   String? _connectingDeviceId;
-
   String tr(String key) => TranslationService.t(key);
-
   @override
   void initState() {
     super.initState();
@@ -40,58 +34,76 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     widget.service.addListener(_onServiceChanged);
     _listenScan();
   }
-
-  // FIX: wrap navigation and snackbar in addPostFrameCallback so they
-  // fire after the current build frame — prevents "navigator called
-  // during build" silent failures.
   void _onServiceChanged() {
     if (!mounted) return;
     setState(() {});
-
     if (widget.service.state == BMSConnectionState.ready) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _navigateToDashboard();
       });
     }
-
     if (widget.service.state == BMSConnectionState.error &&
         widget.service.errorMessage != null) {
       _connectingDeviceId = null;
+      final errorMessage = widget.service.errorMessage!;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showSnackBar(widget.service.errorMessage!, isError: true);
+        if (mounted) _showSnackBar(errorMessage, isError: true);
       });
     }
   }
-
   void _listenScan() {
+    // Cancel existing subscriptions if called multiple times safely
+    _scanSub?.cancel();
+    _scanStateSub?.cancel();
+
     _scanSub = FlutterBluePlus.scanResults.listen((results) {
+      if (!mounted) return;
       setState(() {
         _devices = results
-            .where((r) => r.device.name.isNotEmpty)
+            .where((r) => r.device.platformName.isNotEmpty) // Use platformName instead of deprecated name
             .map((r) => r.device)
             .toList();
       });
     });
 
     _scanStateSub = FlutterBluePlus.isScanning.listen((s) {
+      if (!mounted) return;
       setState(() => _isScanning = s);
     });
   }
 
   Future<void> _startScan() async {
-    await [
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.location,
-    ].request();
+    try {
+      final statuses = await [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+        Permission.location,
+      ].request();
 
-    setState(() => _devices = []);
-    await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+      // Verify that permissions were actually granted before triggering hardware
+      if (statuses.values.any((status) => !status.isGranted)) {
+        _showSnackBar(tr('scan.permissions_denied'), isError: true);
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() => _devices = []);
+      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 10));
+    } catch (e) {
+      _showSnackBar(e.toString(), isError: true);
+    }
   }
 
   Future<void> _onConnect(BluetoothDevice d) async {
-    setState(() => _connectingDeviceId = d.remoteId.str);
-    await widget.service.connect(d);
+    try {
+      setState(() => _connectingDeviceId = d.remoteId.str);
+      await widget.service.connect(d);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _connectingDeviceId = null);
+        _showSnackBar(e.toString(), isError: true);
+      }
+    }
   }
 
   void _navigateToDashboard() {
@@ -114,6 +126,8 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
 
   @override
   void dispose() {
+    // 1. Terminate ongoing BLE hardware scans to save battery life
+    FlutterBluePlus.stopScan(); 
     _tabController.dispose();
     _scanSub?.cancel();
     _scanStateSub?.cancel();
@@ -233,7 +247,7 @@ class _ScanTab extends StatelessWidget {
                     return ListTile(
                       leading: const Icon(Icons.bluetooth),
                       title: Text(
-                        d.name.isEmpty ? tr('scan.unknown_device') : d.name,
+                        d.platformName.isEmpty ? tr('scan.unknown_device') : d.platformName,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       subtitle: Text(d.remoteId.str,
@@ -441,9 +455,7 @@ class _PacketCard extends StatelessWidget {
 class _ConnectionStateBanner extends StatelessWidget {
   final BMSConnectionState state;
   const _ConnectionStateBanner({required this.state});
-
   String tr(String key) => TranslationService.t(key);
-
   @override
   Widget build(BuildContext context) {
     final (String msg, Color bg, IconData icon) = switch (state) {
@@ -488,7 +500,6 @@ class _ConnectionStateBanner extends StatelessWidget {
         Icons.bluetooth_disabled
       ),
     };
-
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -509,7 +520,6 @@ class _ConnectionStateBanner extends StatelessWidget {
     );
   }
 }
-
 class _StatusChip extends StatelessWidget {
   final String label;
   final Color color;
@@ -520,7 +530,6 @@ class _StatusChip extends StatelessWidget {
     required this.color,
     this.loading = false,
   });
-
   @override
   Widget build(BuildContext context) {
     return Container(

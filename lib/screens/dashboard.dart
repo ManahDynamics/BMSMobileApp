@@ -1,8 +1,3 @@
-// lib/screens/dashboard_screen.dart
-//
-// Uses ListenableBuilder instead of Consumer<> so provider package
-// is NOT required. widget.service is a ChangeNotifier — ListenableBuilder
-// rebuilds the body automatically whenever notifyListeners() is called.
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 import 'package:flutter/material.dart';
@@ -27,360 +22,282 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  // ── Static / mock fields (replace when other packets are added) ───────────
-  final String deviceName    = 'BMS_001';
-  final String batteryStatus = 'Discharging';
-  final String remainingTime = '04h 35m';
-  final String health        = 'Good';
-  final double temperature   = 32.0;
-  final double minCell       = 3.215;
-  final double maxCell       = 3.298;
-  final List<double> cellValues = [
-    3.24, 3.28, 3.22, 3.29, 3.25, 3.27, 3.21, 3.30, 3.26, 3.23
+  static const green = Color(0xFF1B6B3A);
+  static const blue = Color(0xFF3A6EAC);
+  static const orange = Color(0xFFD4621A);
+
+  static const gap12 = SizedBox(height: 12);
+  static const gap16 = SizedBox(height: 16);
+
+  final deviceName = 'BMS_001';
+  final batteryStatus = 'Discharging';
+  final remainingTime = '04h 35m';
+  final temperature = 32.0;
+  final minCell = 3.215;
+  final maxCell = 3.298;
+
+  final cellValues = [
+    3.24,
+    3.28,
+    3.22,
+    3.29,
+    3.25,
+    3.27,
+    3.21,
+    3.30,
+    3.26,
+    3.23
   ];
 
-  String tr(String key) {
-    return TranslationService.t(key);
-  }
+  String tr(String key) => TranslationService.t(key);
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // DISCONNECT
-  // ─────────────────────────────────────────────────────────────────────────
-  Future<void> _handleDisconnect() async {
+  Future<void> _disconnect() async {
     await widget.service.disconnect();
+
     if (!mounted) return;
+
     Navigator.pushAndRemoveUntil(
       context,
       SlideRoute(page: BluetoothDeviceScanPage(service: widget.service)),
-      (route) => false,
+      (_) => false,
     );
   }
 
-  void _showDisconnectDialog() {
+  void _showDialogBox({
+    required String title,
+    required String content,
+    required String buttonText,
+    required Color color,
+    required VoidCallback onConfirm,
+  }) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        title: Text(tr('disconnect'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
-        content: Text(tr('disconnect_confirmation'),
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey[700], fontSize: 16)),
+        title: Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          content,
+          textAlign: TextAlign.center,
+        ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey)),
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              tr('cancel'),
+              style: const TextStyle(color: Colors.grey),
+            ),
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.of(ctx).pop();
-              _handleDisconnect();
+              Navigator.pop(ctx);
+              onConfirm();
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFD4621A),
+              backgroundColor: color,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
-            child: Text(tr('disconnect')),
+            child: Text(buttonText),
           ),
         ],
       ),
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // LOGOUT
-  // ─────────────────────────────────────────────────────────────────────────
-  void _showLogoutDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        title: Text(tr('logout'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontWeight: FontWeight.bold)),
-        content: Text(tr('logout_confirmation'),
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.black87, fontSize: 16)),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(ctx).pop();
-              Navigator.pushAndRemoveUntil(
-                context,
-                SlideRoute(page: const LoginScreen()),
-                (route) => false,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF3A6EAC),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              elevation: 0,
-            ),
-            child: Text(tr('logout')),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // KEBAB MENU
-  // ─────────────────────────────────────────────────────────────────────────
-  void _showKebabMenu(BuildContext context) async {
-    final RenderBox button = context.findRenderObject() as RenderBox;
-    final RenderBox overlay =
+  void _showMenu(BuildContext context) async {
+    final button = context.findRenderObject() as RenderBox;
+    final overlay =
         Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
-    final Offset buttonOffset =
-        button.localToGlobal(Offset.zero, ancestor: overlay);
-    final Size buttonSize = button.size;
-    final RelativeRect position = RelativeRect.fromLTRB(
-      overlay.size.width,
-      buttonOffset.dy + buttonSize.height + 1,
-      8,
-      0,
+
+    final offset = button.localToGlobal(
+      Offset.zero,
+      ancestor: overlay,
     );
 
     final result = await showMenu<String>(
       context: context,
-      position: position,
-      elevation: 8,
+      position: RelativeRect.fromLTRB(
+        overlay.size.width,
+        offset.dy + button.size.height,
+        8,
+        0,
+      ),
       color: Colors.white,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
       items: [
-        PopupMenuItem<String>(
-          value: 'edit_profile',
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
-          child: _menuItem(Icons.person_outline_rounded, tr('edit_profile'), Colors.black87),
+        _popupItem(
+          'edit_profile',
+          Icons.person_outline_rounded,
+          tr('edit_profile'),
         ),
-        const PopupMenuDivider(height: 0.5, color: Color(0xFFEEEEEE)),
-        PopupMenuItem<String>(
-          value: 'forgot_password',
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
-          child: _menuItem(Icons.lock_reset_rounded, tr('forget_password'), Colors.black87),
+        const PopupMenuDivider(height: 1),
+        _popupItem(
+          'forgot_password',
+          Icons.lock_reset_rounded,
+          tr('forget_password'),
         ),
-        const PopupMenuDivider(height: 0.5, color: Color(0xFFEEEEEE)),
-        PopupMenuItem<String>(
-          value: 'logout',
-          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 2),
-          child: _menuItem(Icons.logout_rounded, tr('logout'), Colors.red),
+        const PopupMenuDivider(height: 1),
+        _popupItem(
+          'logout',
+          Icons.logout_rounded,
+          tr('logout'),
+          color: Colors.red,
         ),
       ],
     );
 
-    if (result == 'edit_profile') {
-      Navigator.push(context, SlideRoute(page: const EditProfileScreen()));
-    } else if (result == 'forgot_password') {
-      Navigator.push(context, SlideRoute(page: const ForgotPasswordScreen()));
-    } else if (result == 'logout') {
-      _showLogoutDialog();
+    final routes = {
+      'edit_profile': const EditProfileScreen(),
+      'forgot_password': const ForgotPasswordScreen(),
+    };
+
+    if (routes.containsKey(result)) {
+      Navigator.push(
+        context,
+        SlideRoute(page: routes[result]!),
+      );
+    }
+
+    if (result == 'logout') {
+      _showDialogBox(
+        title: tr('logout'),
+        content: tr('logout_confirmation'),
+        buttonText: tr('logout'),
+        color: blue,
+        onConfirm: () {
+          Navigator.pushAndRemoveUntil(
+            context,
+            SlideRoute(page: const LoginScreen()),
+            (_) => false,
+          );
+        },
+      );
     }
   }
 
-  Widget _menuItem(IconData icon, String label, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: color),
-        const SizedBox(width: 14),
-        Text(label,
-            style: TextStyle(fontSize: 15, color: color, fontWeight: FontWeight.w400)),
+  PopupMenuItem<String> _popupItem(
+    String value,
+    IconData icon,
+    String text, {
+    Color color = Colors.black87,
+  }) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 12),
+          Text(text, style: TextStyle(color: color)),
+        ],
+      ),
+    );
+  }
+
+  Widget _metricRow(Widget a, Widget b) {
+    return IntrinsicHeight(
+      child: Row(
+        children: [
+          Expanded(child: a),
+          const SizedBox(width: 12),
+          Expanded(child: b),
+        ],
+      ),
+    );
+  }
+
+  PreferredSizeWidget _appBar() {
+    return AppBar(
+      backgroundColor: green,
+      elevation: 0,
+      centerTitle: true,
+      leading: Builder(
+        builder: (ctx) => IconButton(
+          icon: const Icon(Icons.menu_rounded, color: Colors.white),
+          onPressed: () => Scaffold.of(ctx).openDrawer(),
+        ),
+      ),
+      title: Text(
+        tr('dashboard'),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      actions: [
+        Builder(
+          builder: (ctx) => IconButton(
+            onPressed: () => _showMenu(ctx),
+            icon: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.more_vert, color: Colors.white),
+            ),
+          ),
+        ),
       ],
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // BUILD
-  // ─────────────────────────────────────────────────────────────────────────
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      drawer: AppDrawer(activeRoute: '/dashboard', service: widget.service),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1B6B3A),
-        elevation: 0,
-        centerTitle: true,
-        leading: Builder(
-          builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
-            onPressed: () => Scaffold.of(ctx).openDrawer(),
-          ),
-        ),
-        title: Text(tr('dashboard'),
-            style: const TextStyle(
-                color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
-        actions: [
-          Builder(
-            builder: (ctx) => IconButton(
-              icon: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.more_vert, color: Colors.white, size: 22),
-              ),
-              onPressed: () => _showKebabMenu(ctx),
-            ),
-          ),
-        ],
-      ),
-
-      // ── ListenableBuilder — no provider package needed ────────────────────
-      // Rebuilds automatically whenever service.notifyListeners() is called
-      // (i.e. every time a new BLE packet arrives including Packet 4)
-      body: ListenableBuilder(
-        listenable: widget.service,
-        builder: (context, _) {
-          // Read live Packet 4 values
-          final BMSParsedPacket? p4 = widget.service.latestPacket4;
-
-          final double socValue     = p4?.soc?.toDouble() ?? 0.0;
-          final String socText      = p4?.soc != null ? '${p4!.soc}' : '–';
-          final String voltageText  = p4?.voltageDisplay  ?? '– V';
-          final String currentText  = p4?.currentDisplay  ?? '– A';
-          final String capacityText = p4?.capacityDisplay ?? '– Ah';
-          final String powerText    = p4?.totalPowerDisplay ?? '– KW';
-
-          return SingleChildScrollView( 
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildDeviceHeader(),
-                const SizedBox(height: 16),
-                _buildBatteryStatusCard(
-                  socValue:     socValue,
-                  socText:      socText,
-                  capacityText: capacityText,
-                ),
-                const SizedBox(height: 16),
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: _buildMetricCard(
-                          icon: Icons.circle_outlined,
-                          iconLabel: 'V',
-                          label: tr('voltage'),
-                          value: voltageText,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildMetricCard(
-                          icon: Icons.circle_outlined,
-                          iconLabel: 'A',
-                          label: tr('current'),
-                          value: currentText,
-                          subtitle: tr('discharging'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: _buildMetricCard(
-                          icon: Icons.thermostat_rounded,
-                          label: tr('temperature'),
-                          value: '$temperature °C',
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildMetricCard(
-                          icon: Icons.power_outlined,
-                          label: tr('power'),
-                          value: powerText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                _buildCellSummary(),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  height: 45,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        SlideRoute(page: CellsScreen(service: widget.service)),
-                      );
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.black87,
-                      side: const BorderSide(color: Color(0xFFCCCCCC)),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                    ),
-                    child: Text(tr('view_cell_details'),
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildAlertsCard(),
-                const SizedBox(height: 16),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  // ── Device header ──────────────────────────────────────────────────────────
-  Widget _buildDeviceHeader() {
+  Widget _deviceHeader() {
     return Row(
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
-              color: Colors.grey[200], borderRadius: BorderRadius.circular(8)),
-          child: const Icon(Icons.battery_4_bar_rounded,
-              color: Colors.black54, size: 32),
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(
+            Icons.battery_4_bar_rounded,
+            color: Colors.black54,
+            size: 32,
+          ),
         ),
         const SizedBox(width: 12),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(deviceName,
-                style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87)),
+            Text(
+              deviceName,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 3),
             Row(
               children: [
-                Text(tr('connected'),
-                    style: const TextStyle(
-                        fontSize: 13,
-                        color: Color(0xFF1B6B3A),
-                        fontWeight: FontWeight.w500)),
+                Text(
+                  tr('connected'),
+                  style: const TextStyle(
+                    color: green,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 const SizedBox(width: 6),
                 Container(
                   width: 8,
                   height: 8,
                   decoration: const BoxDecoration(
-                      color: Color(0xFF1B6B3A), shape: BoxShape.circle),
+                    color: green,
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ],
             ),
@@ -388,33 +305,153 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const Spacer(),
         ElevatedButton(
-          onPressed: _showDisconnectDialog,
+          onPressed: () {
+            _showDialogBox(
+              title: tr('disconnect'),
+              content: tr('disconnect_confirmation'),
+              buttonText: tr('disconnect'),
+              color: orange,
+              onConfirm: _disconnect,
+            );
+          },
           style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFD4621A),
+            backgroundColor: orange,
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            elevation: 1,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            elevation: 0,
           ),
-          child: Text(tr('disconnect'),
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          child: Text(tr('disconnect')),
         ),
       ],
     );
   }
 
-  // ── Battery status card ────────────────────────────────────────────────────
-  Widget _buildBatteryStatusCard({
-    required double socValue,
-    required String socText,
-    required String capacityText,
-  }) {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      drawer: AppDrawer(
+        activeRoute: '/dashboard',
+        service: widget.service,
+      ),
+      appBar: _appBar(),
+      body: ListenableBuilder(
+        listenable: widget.service,
+        builder: (_, _) {
+          final BMSParsedPacket? p4 = widget.service.latestPacket4;
+
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _deviceHeader(),
+                gap16,
+
+                _BatteryStatusCard(
+                  soc: p4?.soc ?? 0,
+                  capacity: p4?.capacityDisplay ?? '– Ah',
+                  batteryStatus: batteryStatus,
+                  remainingTime: remainingTime,
+                ),
+
+                gap16,
+
+                _metricRow(
+                  _MetricCard(
+                    label: tr('voltage'),
+                    value: p4?.voltageDisplay ?? '– V',
+                    iconLabel: 'V',
+                  ),
+                  _MetricCard(
+                    label: tr('current'),
+                    value: p4?.currentDisplay ?? '– A',
+                    subtitle: tr('discharging'),
+                    iconLabel: 'A',
+                  ),
+                ),
+
+                gap12,
+
+                _metricRow(
+                  _MetricCard(
+                    label: tr('temperature'),
+                    value: '$temperature °C',
+                    icon: Icons.thermostat_rounded,
+                  ),
+                  _MetricCard(
+                    label: tr('power'),
+                    value: p4?.totalPowerDisplay ?? '– KW',
+                    icon: Icons.power_outlined,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                _CellSummaryChart(
+                  values: cellValues,
+                  minCell: minCell,
+                  maxCell: maxCell,
+                  title: tr('cell_summary'),
+                  minLabel: tr('min_cell'),
+                  maxLabel: tr('max_cell'),
+                ),
+
+                const SizedBox(height: 14),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 45,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        SlideRoute(
+                          page: CellsScreen(service: widget.service),
+                        ),
+                      );
+                    },
+                    child: Text(tr('view_cell_details')),
+                  ),
+                ),
+
+                gap16,
+
+                _AlertsCard(
+                  title: tr('active_alerts'),
+                  noAlerts: tr('no_active_alerts'),
+                  normalText: tr('all_systems_normal'),
+                ),
+
+                gap16,
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _BatteryStatusCard extends StatelessWidget {
+  final int soc;
+  final String capacity;
+  final String batteryStatus;
+  final String remainingTime;
+
+  const _BatteryStatusCard({
+    required this.soc,
+    required this.capacity,
+    required this.batteryStatus,
+    required this.remainingTime,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-          color: const Color(0xFF3A6EAC),
-          borderRadius: BorderRadius.circular(10)),
+        color: _DashboardScreenState.blue,
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Row(
         children: [
           SizedBox(
@@ -423,117 +460,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                SizedBox(
-                  width: 110,
-                  height: 110,
-                  child: CircularProgressIndicator(
-                    value: socValue / 100,
-                    strokeWidth: 10,
-                    backgroundColor: Colors.white.withOpacity(0.25),
-                    valueColor:
-                        const AlwaysStoppedAnimation<Color>(Colors.white),
-                    strokeCap: StrokeCap.round,
-                  ),
+                CircularProgressIndicator(
+                  value: soc / 100,
+                  strokeWidth: 10,
+                  backgroundColor: Colors.white24,
+                  valueColor:
+                      const AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
                 Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    RichText(
-                      text: TextSpan(
-                        children: [
-                          TextSpan(
-                            text: socText,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold),
-                          ),
-                          const TextSpan(
-                            text: '%',
-                            style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500),
-                          ),
-                        ],
+                    Text(
+                      '$soc%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const Text('SOC',
-                        style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500)),
+                    const Text(
+                      'SOC',
+                      style: TextStyle(color: Colors.white70),
+                    ),
                   ],
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 30),
+          const SizedBox(width: 20),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(tr('battery_status'),
-                            style: TextStyle(
-                                color: Colors.white.withOpacity(0.75),
-                                fontSize: 11)),
-                        const SizedBox(height: 2),
-                        Text(batteryStatus,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500)),
-                      ],
-                    ),
-                    const Icon(Icons.battery_3_bar_rounded,
-                        color: Colors.white, size: 30),
-                  ],
-                ),
-                const Divider(color: Colors.white24, height: 20),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(tr('remaining_time'),
-                        style: TextStyle(
-                            color: Colors.white.withOpacity(0.75),
-                            fontSize: 11)),
-                    const SizedBox(height: 2),
-                    Text(remainingTime,
-                        style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500)),
-                  ],
-                ),
-                const Divider(color: Colors.white24, height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(tr('remaining_capacity'),
-                            style: TextStyle(
-                                color: Colors.white.withOpacity(0.75),
-                                fontSize: 11)),
-                        const SizedBox(height: 2),
-                        Text(capacityText,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500)),
-                      ],
-                    ),
-                    const Icon(Icons.verified_user_outlined,
-                        color: Colors.white, size: 30),
-                  ],
-                ),
+                _info('Battery Status', batteryStatus),
+                const Divider(color: Colors.white24),
+                _info('Remaining Time', remainingTime),
+                const Divider(color: Colors.white24),
+                _info('Remaining Capacity', capacity),
               ],
             ),
           ),
@@ -542,142 +505,156 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ── Metric card ────────────────────────────────────────────────────────────
-  Widget _buildMetricCard({
-    required IconData icon,
-    String? iconLabel,
-    required String label,
-    required String value,
-    String? subtitle,
-  }) {
+  Widget _info(String title, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title,
+            style: const TextStyle(color: Colors.white70, fontSize: 11)),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MetricCard extends StatelessWidget {
+  final IconData? icon;
+  final String? iconLabel;
+  final String label;
+  final String value;
+  final String? subtitle;
+
+  const _MetricCard({
+    this.icon,
+    this.iconLabel,
+    required this.label,
+    required this.value,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-          color: const Color(0xFFF0F0F0),
-          borderRadius: BorderRadius.circular(10)),
+        color: const Color(0xFFF0F0F0),
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.grey.shade400, width: 1.5),
-            ),
-            child: Center(
-              child: iconLabel != null
-                  ? Text(iconLabel,
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[600]))
-                  : Icon(icon, size: 18, color: Colors.grey[600]),
-            ),
+          CircleAvatar(
+            backgroundColor: Colors.transparent,
+            child: iconLabel != null
+                ? Text(iconLabel!)
+                : Icon(icon, color: Colors.grey),
           ),
           const SizedBox(width: 10),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600])),
-              const SizedBox(height: 2),
-              Text(value,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label),
+                Text(
+                  value,
                   style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF575757))),
-              if (subtitle != null)
-                Text(subtitle,
-                    style: TextStyle(fontSize: 11, color: Colors.grey[500])),
-            ],
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (subtitle != null) Text(subtitle!),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
+}
 
-  // ── Cell Summary ───────────────────────────────────────────────────────────
-  Widget _buildCellSummary() {
-    final maxVal = cellValues.reduce((a, b) => a > b ? a : b);
-    final minVal = cellValues.reduce((a, b) => a < b ? a : b);
+class _CellSummaryChart extends StatelessWidget {
+  final List<double> values;
+  final double minCell;
+  final double maxCell;
+  final String title;
+  final String minLabel;
+  final String maxLabel;
+
+  const _CellSummaryChart({
+    required this.values,
+    required this.minCell,
+    required this.maxCell,
+    required this.title,
+    required this.minLabel,
+    required this.maxLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final max = values.reduce((a, b) => a > b ? a : b);
+    final min = values.reduce((a, b) => a < b ? a : b);
+    final diff = (max - min) == 0 ? 1 : (max - min);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(tr('cell_summary'),
-            style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-                color: Colors.black87)),
+        Text(title),
         const SizedBox(height: 14),
         Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(tr('min_cell'),
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-                const SizedBox(height: 2),
-                Text('$minCell v',
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black87)),
-              ],
-            ),
+            Text('$minLabel\n$minCell v'),
             const SizedBox(width: 12),
             Expanded(
-              child: SizedBox(
-                height: 60,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: cellValues.map((val) {
-                    final heightRatio = (val - minVal) /
-                        ((maxVal - minVal) == 0 ? 1 : (maxVal - minVal));
-                    final barHeight = 20 + (heightRatio * 40);
-                    return Container(
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (final v in values)
+                    Container(
                       width: 14,
-                      height: barHeight,
+                      height: 20 + (((v - min) / diff) * 40),
                       decoration: BoxDecoration(
-                          color: const Color(0xFF1B6B3A),
-                          borderRadius: BorderRadius.circular(3)),
-                    );
-                  }).toList(),
-                ),
+                        color: _DashboardScreenState.green,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                ],
               ),
             ),
             const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(tr('max_cell'),
-                    style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-                const SizedBox(height: 2),
-                Text('$maxCell v',
-                    style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black87)),
-              ],
-            ),
+            Text('$maxLabel\n$maxCell v'),
           ],
         ),
       ],
     );
   }
+}
 
-  // ── Active Alerts ──────────────────────────────────────────────────────────
-  Widget _buildAlertsCard() {
+class _AlertsCard extends StatelessWidget {
+  final String title;
+  final String noAlerts;
+  final String normalText;
+
+  const _AlertsCard({
+    required this.title,
+    required this.noAlerts,
+    required this.normalText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-          color: const Color(0xFFF2F2F2),
-          borderRadius: BorderRadius.circular(10)),
+        color: const Color(0xFFF2F2F2),
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Column(
         children: [
           Row(
@@ -685,31 +662,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.notifications_none_rounded,
-                      color: Colors.black87, size: 22),
+                  const Icon(Icons.notifications_none_rounded),
                   const SizedBox(width: 10),
-                  Text(tr('active_alerts'),
-                      style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF3A3939))),
+                  Text(title),
                 ],
               ),
-              Text(tr('no_active_alerts'),
-                  style: TextStyle(fontSize: 13, color: Colors.grey[500])),
+              Text(noAlerts),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              const Icon(Icons.check_circle_rounded,
-                  color: Color(0xFF1B6B3A), size: 20),
+              const Icon(
+                Icons.check_circle_rounded,
+                color: _DashboardScreenState.green,
+              ),
               const SizedBox(width: 10),
-              Text(tr('all_systems_normal'),
-                  style: const TextStyle(
-                      fontSize: 14,
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w500)),
+              Text(normalText),
             ],
           ),
         ],
