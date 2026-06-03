@@ -17,8 +17,21 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
   String tr(String key) => TranslationService.t(key);
 
+  // ── NEW: listen to TranslationService ─────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    TranslationService.instance.addListener(_onTranslationsChanged);
+  }
+
+  void _onTranslationsChanged() {
+    if (mounted) setState(() {});
+  }
+  // ── END NEW ────────────────────────────────────────────────────────────
+
   @override
   void dispose() {
+    TranslationService.instance.removeListener(_onTranslationsChanged); // ← NEW
     _emailController.dispose();
     super.dispose();
   }
@@ -37,7 +50,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     setState(() => _isLoading = true);
 
-    // Simulate API call
     await Future.delayed(const Duration(seconds: 2));
 
     if (mounted) {
@@ -76,7 +88,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           children: [
             const SizedBox(height: 32),
 
-            // ── Icon ───────────────────────────────────────────────────
             Center(
               child: Container(
                 width: 90,
@@ -94,7 +105,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             const SizedBox(height: 28),
 
-            // ── Title ──────────────────────────────────────────────────
             Center(
               child: Text(
                 tr('fp_reset_password'),
@@ -123,7 +133,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             const SizedBox(height: 36),
 
             if (!_emailSent) ...[
-              // ── Email field ──────────────────────────────────────────
               Text(
                 tr('fp_email_label'),
                 style: const TextStyle(
@@ -143,8 +152,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
                     hintText: tr('fp_email_hint'),
-                    hintStyle:
-                        TextStyle(color: Colors.grey[500], fontSize: 14),
+                    hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
                     prefixIcon: Icon(Icons.email_outlined,
                         color: Colors.grey[600], size: 20),
                     border: InputBorder.none,
@@ -157,7 +165,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               const SizedBox(height: 28),
 
-              // ── Send button ──────────────────────────────────────────
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -193,7 +200,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               const SizedBox(height: 16),
 
-              // ── Back button ──────────────────────────────────────────
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -214,7 +220,6 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 ),
               ),
             ] else ...[
-              // ── Success state ────────────────────────────────────────
               Center(
                 child: Container(
                   padding: const EdgeInsets.all(20),

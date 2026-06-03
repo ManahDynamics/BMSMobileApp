@@ -9,9 +9,8 @@ import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 
 import 'package:bmsmobileapp/screens/register_screen.dart';
-import 'package:bmsmobileapp/screens/forgotpassword_screen.dart'; // ← ADD
+import 'package:bmsmobileapp/screens/forgotpassword_screen.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
-
 import 'package:bmsmobileapp/services/translation_service.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -41,19 +40,27 @@ class _LoginScreenState extends State<LoginScreen> {
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
 
-  String tr(String key) {
-    return TranslationService.t(key);
+  // ── NEW: listen to TranslationService ─────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    // Rebuild this widget whenever TranslationService.notifyListeners() fires
+    TranslationService.instance.addListener(_onTranslationsChanged);
+  }
+
+  void _onTranslationsChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    TranslationService.instance.removeListener(_onTranslationsChanged);
     _removeOverlay();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
-
-  // ── Overlay helpers ────────────────────────────────────────────────────
+  // ── END NEW ────────────────────────────────────────────────────────────
 
   void _removeOverlay() {
     _overlayEntry?.remove();
@@ -88,10 +95,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         return InkWell(
                           onTap: () async {
                             setState(() => _selectedLanguage = lang);
+                            // loadTranslations triggers notifyListeners()
+                            // which calls _onTranslationsChanged → setState
                             await TranslationService.loadTranslations(
                               _langCodeMap[lang]!,
                             );
-                            if (mounted) setState(() {});
                             _removeOverlay();
                           },
                           borderRadius: BorderRadius.circular(10),
@@ -133,8 +141,6 @@ class _LoginScreenState extends State<LoginScreen> {
     Overlay.of(context).insert(_overlayEntry!);
   }
 
-  // ── Language dropdown widget ───────────────────────────────────────────
-
   Widget _buildLanguageDropdown() {
     return CompositedTransformTarget(
       link: _layerLink,
@@ -168,8 +174,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ── Device info ────────────────────────────────────────────────────────
-
   Future<Map<String, String>> _getDeviceInfo() async {
     final deviceInfo = DeviceInfoPlugin();
 
@@ -195,8 +199,6 @@ class _LoginScreenState extends State<LoginScreen> {
       'deviceToken'   : 'unknown',
     };
   }
-
-  // ── Login API ──────────────────────────────────────────────────────────
 
   Future<void> _handleLogin() async {
     setState(() {
@@ -264,8 +266,6 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ── Build ──────────────────────────────────────────────────────────────
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -274,7 +274,6 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Stack(
           children: [
 
-            // ── Background decorative circles ──────────────────────────
             Positioned(
               top: -60,
               right: -60,
@@ -300,14 +299,12 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
 
-            // ── Main content ───────────────────────────────────────────
             SingleChildScrollView(
               child: Column(
                 children: [
 
                   const SizedBox(height: 20),
 
-                  // ── Language dropdown (top-right) ──────────────────
                   Padding(
                     padding: const EdgeInsets.only(right: 20),
                     child: Align(
@@ -318,7 +315,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 28),
 
-                  // ── Logo ─────────────────────────────────────────
                   Container(
                     width: 110,
                     height: 110,
@@ -349,9 +345,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 22),
 
-                  // ── App title ────────────────────────────────────
                   Text(
-                    tr('login.app_title'),
+                    TranslationService.t('login.app_title'),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 26,
@@ -361,7 +356,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    tr('login.app_subtitle'),
+                    TranslationService.t('login.app_subtitle'),
                     style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 13.5,
@@ -371,7 +366,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 36),
 
-                  // ── White card ───────────────────────────────────
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -394,7 +388,6 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
 
-                        // ── Email field ──────────────────────────
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0F0F0),
@@ -404,7 +397,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
                             decoration: InputDecoration(
-                              hintText: tr('login.email_or_phone'),
+                              hintText: TranslationService.t('login.email_or_phone'),
                               hintStyle: TextStyle(
                                 color: Colors.grey[500],
                                 fontSize: 14,
@@ -425,7 +418,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 16),
 
-                        // ── Password field ───────────────────────
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0F0F0),
@@ -435,7 +427,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _passwordController,
                             obscureText: _obscurePassword,
                             decoration: InputDecoration(
-                              hintText: tr('login.password'),
+                              hintText: TranslationService.t('login.password'),
                               hintStyle: TextStyle(
                                 color: Colors.grey[500],
                                 fontSize: 14,
@@ -468,7 +460,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 8),
 
-                        // ── Forgot password ──────────────────────
                         Align(
                           alignment: Alignment.centerRight,
                           child: MouseRegion(
@@ -483,7 +474,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                       ),
                               child: Text(
-                                tr('login.forgot_password'),
+                                TranslationService.t('login.forgot_password'),
                                 style: const TextStyle(
                                   color: Color(0xFF3A6EAC),
                                   fontSize: 13,
@@ -496,7 +487,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 8),
 
-                        // ── Error banner ─────────────────────────
                         if (_errorMessage != null)
                           Container(
                             width: double.infinity,
@@ -531,7 +521,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
 
-                        // ── Login button ─────────────────────────
                         SizedBox(
                           width: double.infinity,
                           height: 50,
@@ -557,7 +546,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     ),
                                   )
                                 : Text(
-                                    tr('login.login'),
+                                    TranslationService.t('login.login'),
                                     style: const TextStyle(
                                       fontSize: 16,
                                       fontWeight: FontWeight.bold,
@@ -568,7 +557,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 20),
 
-                        // ── Divider ──────────────────────────────
                         Row(
                           children: [
                             Expanded(
@@ -594,13 +582,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 16),
 
-                        // ── Register link ────────────────────────
                         Center(
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                tr('login.no_account_prefix'),
+                                TranslationService.t('login.no_account_prefix'),
                                 style: TextStyle(
                                   color: Colors.grey[600],
                                   fontSize: 12,
@@ -618,7 +605,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                             ),
                                           ),
                                   child: Text(
-                                    tr('login.register_here'),
+                                    TranslationService.t('login.register_here'),
                                     style: const TextStyle(
                                       color: Color(0xFF3A6EAC),
                                       fontSize: 13,

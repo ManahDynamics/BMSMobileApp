@@ -45,7 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedLanguage = _languageDisplayName(TranslationService.currentLanguage);
+    _selectedLanguage = _languageDisplayName(TranslationService.language);
   }
 
   @override

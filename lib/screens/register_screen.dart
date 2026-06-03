@@ -22,12 +22,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscureConfirmPassword = true;
   bool _isLoading = false;
 
-  String tr(String key) {
-    return TranslationService.t(key);
+  String tr(String key) => TranslationService.t(key);
+
+  // ── NEW: listen to TranslationService ─────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    TranslationService.instance.addListener(_onTranslationsChanged);
   }
+
+  void _onTranslationsChanged() {
+    if (mounted) setState(() {});
+  }
+  // ── END NEW ────────────────────────────────────────────────────────────
 
   @override
   void dispose() {
+    TranslationService.instance.removeListener(_onTranslationsChanged); // ← NEW
     _fullNameController.dispose();
     _emailOrPhoneController.dispose();
     _passwordController.dispose();
@@ -52,7 +63,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // ================= ONLY FUNCTIONAL FIXED PART =================
   Future<void> _register() async {
     setState(() => _isLoading = true);
 
@@ -117,7 +127,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // ================= UI IS 100% SAME BELOW =================
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -243,19 +252,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: TextField(
-                          controller: _fullNameController,
-                          decoration: InputDecoration(
-                            hintText: tr('register.full_name'),
-                            hintStyle: const TextStyle(color: Color.fromARGB(255, 128, 128, 128), fontSize: 14),
-                              prefixIcon: const Icon(Icons.person_rounded, color: Color.fromARGB(255, 96, 96, 96), size: 20),
+                            controller: _fullNameController,
+                            decoration: InputDecoration(
+                              hintText: tr('register.full_name'),
+                              hintStyle: const TextStyle(
+                                color: Color.fromARGB(255, 128, 128, 128),
+                                fontSize: 14,
+                              ),
+                              prefixIcon: const Icon(
+                                Icons.person_rounded,
+                                color: Color.fromARGB(255, 96, 96, 96),
+                                size: 20,
+                              ),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
                             ),
                           ),
                         ),
                         const SizedBox(height: 14),
 
-// ── Email or Phone ─────────────────────────────────
+                        // ── Email or Phone ─────────────────────────────────
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0F0F0),
@@ -266,10 +285,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             keyboardType: TextInputType.emailAddress,
                             decoration: InputDecoration(
                               hintText: tr('register.email_or_phone'),
-                              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                              prefixIcon: Icon(Icons.email_rounded, color: Colors.grey[600], size: 20),
+                              hintStyle: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 14,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.email_rounded,
+                                color: Colors.grey[600],
+                                size: 20,
+                              ),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
                             ),
                           ),
                         ),
@@ -286,8 +315,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             obscureText: _obscurePassword,
                             decoration: InputDecoration(
                               hintText: tr('register.password'),
-                              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                              prefixIcon: Icon(Icons.lock_rounded, color: Colors.grey[600], size: 20),
+                              hintStyle: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 14,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.lock_rounded,
+                                color: Colors.grey[600],
+                                size: 20,
+                              ),
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscurePassword
@@ -296,11 +332,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   color: Colors.grey,
                                   size: 20,
                                 ),
-                                onPressed: () =>
-                                    setState(() => _obscurePassword = !_obscurePassword),
+                                onPressed: () => setState(
+                                  () => _obscurePassword = !_obscurePassword,
+                                ),
                               ),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
                             ),
                           ),
                         ),
@@ -317,8 +357,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             obscureText: _obscureConfirmPassword,
                             decoration: InputDecoration(
                               hintText: tr('register.confirm_password'),
-                              hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-                              prefixIcon: Icon(Icons.lock_rounded, color: Colors.grey[600], size: 20),
+                              hintStyle: TextStyle(
+                                color: Colors.grey[500],
+                                fontSize: 14,
+                              ),
+                              prefixIcon: Icon(
+                                Icons.lock_rounded,
+                                color: Colors.grey[600],
+                                size: 20,
+                              ),
                               suffixIcon: IconButton(
                                 icon: Icon(
                                   _obscureConfirmPassword
@@ -328,10 +375,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   size: 20,
                                 ),
                                 onPressed: () => setState(
-                                    () => _obscureConfirmPassword = !_obscureConfirmPassword),
+                                  () => _obscureConfirmPassword =
+                                      !_obscureConfirmPassword,
+                                ),
                               ),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 16,
+                              ),
                             ),
                           ),
                         ),
@@ -370,7 +422,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                     ),
                                   ),
                           ),
-                        ),                        const SizedBox(height: 20),
+                        ),
+                        const SizedBox(height: 20),
 
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
