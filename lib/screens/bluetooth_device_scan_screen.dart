@@ -382,20 +382,22 @@ class _PacketCard extends StatelessWidget {
   const _PacketCard({required this.packet});
 
   Color get _directionColor {
-    if (packet.direction == PacketDirection.send)
-      return const Color(0xFF1B6B3A);
-    if (packet.direction == PacketDirection.receive)
-      return Colors.blueAccent;
+    if (packet.direction == PacketDirection.send){
+      return const Color(0xFF1B6B3A);}
+    if (packet.direction == PacketDirection.receive){
+      return Colors.blueAccent;}
     return Colors.grey;
   }
 
   Color get _accentColor => _directionColor;
 
   IconData get _directionIcon {
-    if (packet.direction == PacketDirection.send)
+    if (packet.direction == PacketDirection.send){
       return Icons.arrow_upward;
-    if (packet.direction == PacketDirection.receive)
+    }
+    if (packet.direction == PacketDirection.receive){
       return Icons.arrow_downward;
+    }
     return Icons.swap_horiz;
   }
 

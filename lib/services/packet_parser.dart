@@ -3,6 +3,7 @@ import 'protocol.dart';
 import 'crc_service.dart';
 import 'parsed_packet.dart';
 import 'package:flutter/foundation.dart';
+
 enum BMSParseError { tooShort, invalidFraming, invalidLength, crcMismatch }
 
 class BMSParseResult {
@@ -31,6 +32,12 @@ class BMSPacketParser {
 
     if (!isBmsFrame && !isMobileFrame) {
       return const BMSParseResult.failure(BMSParseError.invalidFraming);
+    }
+
+    // ── 19-byte device-info packet (BMS → mobile) ─────────────────────────
+    // Structure: 0xAA 0x13 <dataId 0x59–0x5C> <14 ASCII bytes> <CRC> 0xBB
+    if (bytes.length == 19 && isBmsFrame) {
+      return _parseDeviceInfoPacket(bytes);
     }
 
     // ── 12-byte data packet (BMS → mobile) ───────────────────────────────
@@ -85,34 +92,20 @@ class BMSPacketParser {
       return const BMSParseResult.failure(BMSParseError.crcMismatch);
     }
 
-    // ── Decode Packet 4 (DataID 0x51) fields ─────────────────────────────
     double? totalVoltage;
     double? totalCurrent;
     int?    soc;
     double? remainingCapacity;
 
     if (dataId == 0x51) {
-      // ── Total Voltage (Byte 3–4) little-endian, always positive ──────────
-      // Range: 0 to 100.0V
-      final int rawVoltage = (bytes[3] & 0xFF) | ((bytes[4] & 0xFF) << 8);
+      final int rawVoltage  = (bytes[3] & 0xFF) | ((bytes[4] & 0xFF) << 8);
       totalVoltage = rawVoltage / 10.0;
 
-      // ── Total Current (Byte 5–6) little-endian, SIGNED 16-bit ────────────
-      // Range: -3276.8A to +3276.7A
-      // MSB (bit 15) = 1 → negative number (2's complement)
-      // MSB (bit 15) = 0 → positive number
-      //
-      // Example: FF97 → MSB=1 → negative
-      //   2's complement: 0xFFFF - 0xFF97 + 1 = 0x0069 = 105 → -10.5A
-      final int rawCurrent = (bytes[5] & 0xFF) | ((bytes[6] & 0xFF) << 8);
+      final int rawCurrent  = (bytes[5] & 0xFF) | ((bytes[6] & 0xFF) << 8);
       totalCurrent = _decodeSigned16(rawCurrent) / 10.0;
 
-      // ── SOC (Byte 7) ──────────────────────────────────────────────────────
-      // Range: 0 to 100%
       soc = bytes[7] & 0xFF;
 
-      // ── Remaining Capacity (Byte 8–9) little-endian, always positive ──────
-      // Range: 0 to 100.0Ah
       final int rawCapacity = (bytes[8] & 0xFF) | ((bytes[9] & 0xFF) << 8);
       remainingCapacity = rawCapacity / 10.0;
 
@@ -138,25 +131,53 @@ class BMSPacketParser {
     ));
   }
 
-  // ── Signed 16-bit decoder (2's complement) ────────────────────────────────
-  //
-  // Checks MSB (bit 15):
-  //   if (value & 0x8000) → negative → apply 2's complement
-  //   else                → positive → return as-is
-  //
-  // Examples:
-  //   0x0001 →  +1   →  +0.1A
-  //   0x7FFF → +32767 → +3276.7A
-  //   0xFFFF → -1    →  -0.1A
-  //   0xFF97 → -105  →  -10.5A
-  //   0x8000 → -32768 → -3276.8A
-  static int _decodeSigned16(int raw) {
-    if (raw & 0x8000 != 0) {
-      // Negative: apply 2's complement
-      // = -(0xFFFF - raw + 1)
-      return -(0xFFFF - raw + 1);
+  // ── 19-byte device-info packet ────────────────────────────────────────────
+  // Structure: 0xAA 0x13 <dataId> <14 ASCII bytes (Byte 3–16)> <CRC> 0xBB
+  // Supported dataIds: 0x59 (Battery Serial), 0x5A (SW Version),
+  //                    0x5B (HW Version),     0x5C (SN Code)
+  static BMSParseResult _parseDeviceInfoPacket(List<int> bytes) {
+    final int start  = bytes[0]  & 0xFF;
+    final int length = bytes[1]  & 0xFF;
+    final int dataId = bytes[2]  & 0xFF;
+    final int crc    = bytes[17] & 0xFF;
+    final int stop   = bytes[18] & 0xFF;
+
+    // Validate dataId is one of the four known device-info IDs
+    const validIds = {0x59, 0x5A, 0x5B, 0x5C};
+    if (!validIds.contains(dataId)) {
+      return const BMSParseResult.failure(BMSParseError.invalidLength);
     }
-    return raw; // Positive: return as-is
+
+    // CRC covers bytes[1..16] — Length + DataId + 14 ASCII bytes
+    if (!BMSCrcService.verifyCRC8(bytes.sublist(1, 17), crc)) {
+      return const BMSParseResult.failure(BMSParseError.crcMismatch);
+    }
+
+    // Decode bytes 3–16 as ASCII, stripping null padding
+    final asciiBytes = bytes.sublist(3, 17);
+    final value = String.fromCharCodes(asciiBytes.where((b) => b != 0)).trim();
+
+    debugPrint('📋 Device Info [0x${dataId.toRadixString(16).toUpperCase()}]: "$value"');
+
+    return BMSParseResult.success(BMSParsedPacket(
+      startByte:         start,
+      length:            length,
+      dataId:            dataId,
+      crc:               crc,
+      stopByte:          stop,
+      rawBytes:          Uint8List.fromList(bytes),
+      receivedAt:        DateTime.now(),
+      batterySerial:     dataId == 0x59 ? value : null,
+      softwareVersion:   dataId == 0x5A ? value : null,
+      hardwareVersion:   dataId == 0x5B ? value : null,
+      snCode:            dataId == 0x5C ? value : null,
+    ));
+  }
+
+  // ── Signed 16-bit decoder (2's complement) ────────────────────────────────
+  static int _decodeSigned16(int raw) {
+    if (raw & 0x8000 != 0) return -(0xFFFF - raw + 1);
+    return raw;
   }
 
   static BMSParsedPacket? tryParse(List<int> bytes) => parse(bytes).packet;

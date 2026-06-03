@@ -24,8 +24,16 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
   final List<BMSParsedPacket> packetLog = [];
 
-  // Latest Packet 4 — null until first packet received
+  // ── Latest parsed packets ──────────────────────────────────────────────────
+  // Packet 4 (0x51) — voltage / current / SOC / capacity
   BMSParsedPacket? latestPacket4;
+
+  // Device info — each field is updated independently as its response arrives.
+  // Null until the BMS responds to the corresponding request packet.
+  String? batterySerial;   // Packet 12 – dataId 0x59
+  String? softwareVersion; // Packet 13 – dataId 0x5A
+  String? hardwareVersion; // Packet 14 – dataId 0x5B
+  String? snCode;          // Packet 15 – dataId 0x5C
 
   BluetoothCharacteristic? _notifyChar;
   BluetoothCharacteristic? _writeChar;
@@ -36,12 +44,11 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   int _sessionId = 0;
 
   BMSBluetoothService() {
-    // Register to receive app lifecycle events
     WidgetsBinding.instance.addObserver(this);
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // APP LIFECYCLE — pause polling when minimized, resume when foregrounded
+  // APP LIFECYCLE
   // ─────────────────────────────────────────────────────────────────────────
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -49,21 +56,17 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
-        // App minimized or backgrounded — stop polling
         if (_pollTimer != null) {
-          debugPrint('📱 App backgrounded — pausing Packet 4 polling');
+          debugPrint('📱 App backgrounded — pausing polling');
           _stopPolling();
         }
         break;
-
       case AppLifecycleState.resumed:
-        // App brought back to foreground — resume polling if connected
         if (this.state == BMSConnectionState.ready) {
-          debugPrint('📱 App foregrounded — resuming Packet 4 polling');
+          debugPrint('📱 App foregrounded — resuming polling');
           _startPolling();
         }
         break;
-
       default:
         break;
     }
@@ -158,15 +161,10 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
     for (final s in services) {
       for (final c in s.characteristics) {
-        if (c.properties.notify && _notifyChar == null) {
-          _notifyChar = c;
-        }
+        if (c.properties.notify && _notifyChar == null) _notifyChar = c;
         if (_writeChar == null) {
-          if (c.properties.writeWithoutResponse) {
-            _writeChar = c;
-          } else if (c.properties.write) {
-            _writeChar = c;
-          }
+          if (c.properties.writeWithoutResponse) {_writeChar = c;}
+          else if (c.properties.write)          { _writeChar = c;}
         }
       }
     }
@@ -202,11 +200,13 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
         _addToLog(packet);
         debugPrint('✅ RX Parsed: ${packet.typeName}');
 
-        // Store latest Packet 4 for dashboard
+        // ── Route packet to the correct latest-value slot ──────────────────
         if (packet.isPacket4) {
           latestPacket4 = packet;
           debugPrint('📊 Packet4 received: $packet');
           notifyListeners();
+        } else if (packet.isDeviceInfo) {
+          _updateDeviceInfo(packet);
         }
 
         if (state == BMSConnectionState.waitingAck && packet.isAck) {
@@ -226,6 +226,25 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
         ));
       }
     });
+  }
+
+  // ── Device info routing ────────────────────────────────────────────────────
+  void _updateDeviceInfo(BMSParsedPacket packet) {
+    switch (packet.dataId) {
+      case 0x59:
+        batterySerial   = packet.batterySerial;
+        debugPrint('📋 Battery Serial: $batterySerial');
+      case 0x5A:
+        softwareVersion = packet.softwareVersion;
+        debugPrint('📋 Software Version: $softwareVersion');
+      case 0x5B:
+        hardwareVersion = packet.hardwareVersion;
+        debugPrint('📋 Hardware Version: $hardwareVersion');
+      case 0x5C:
+        snCode          = packet.snCode;
+        debugPrint('📋 SN Code: $snCode');
+    }
+    notifyListeners();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -295,10 +314,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     final List<int> receivedAck = packet.rawBytes.toList();
 
     final bool matches = receivedAck.length == expectedAck.length &&
-        List.generate(
-          expectedAck.length,
-          (i) => receivedAck[i] == expectedAck[i],
-        ).every((ok) => ok);
+        List.generate(expectedAck.length, (i) => receivedAck[i] == expectedAck[i])
+            .every((ok) => ok);
 
     debugPrint('══════════════════════════════════════════');
     debugPrint('🔐 ACK VALIDATION');
@@ -308,11 +325,16 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     debugPrint('══════════════════════════════════════════');
 
     if (matches) {
-      debugPrint('🎉 ACK VALID — Starting Packet 4 polling');
+      debugPrint('🎉 ACK VALID — Starting polling & requesting device info');
       state = BMSConnectionState.ready;
       isConnecting = false;
       notifyListeners();
       _startPolling();
+      // ── Request device info packets once connection is established ─────
+      //   sendCustom(0x59); // Battery Serial No
+      //   sendCustom(0x5A); // Software Version
+      //   sendCustom(0x5B); // Hardware Version
+      //   sendCustom(0x5C); // SN Code
     } else {
       debugPrint('🚫 ACK INVALID — Connection rejected');
       errorMessage =
@@ -328,10 +350,6 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   // ─────────────────────────────────────────────────────────────────────────
   // PACKET 4 POLLING
   // ─────────────────────────────────────────────────────────────────────────
-
-  /// Sends Auto Refresh Packet [0xCC, 0x05, 0x92, CRC, 0xDD] to BMS.
-  /// BMS responds with 12-byte Packet 4 [0xAA, 0x0C, 0x51, ...data..., CRC, 0xBB]
-  /// containing Total Voltage, Total Current, SOC, Remaining Capacity.
   Future<void> requestPacket4() async {
     if (_writeChar == null || state != BMSConnectionState.ready) return;
     final int crc = BMSCrcService.calculateCRC8([0x05, 0x92]);
@@ -344,9 +362,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     _stopPolling();
     debugPrint('⏱️  Starting Packet 4 poll every 2s');
     requestPacket4();
-    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      requestPacket4();
-    });
+    _pollTimer = Timer.periodic(const Duration(seconds: 2), (_) => requestPacket4());
   }
 
   void _stopPolling() {
@@ -383,7 +399,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CUSTOM PACKET SEND
+  // CUSTOM PACKET SEND (public — used by dashboard and other screens)
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> sendCustom(int dataId) async {
     if (_writeChar == null) return;
@@ -407,7 +423,11 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   void _newSession() {
     _sessionId++;
     packetLog.clear();
-    latestPacket4 = null;
+    latestPacket4   = null;
+    batterySerial   = null;
+    softwareVersion = null;
+    hardwareVersion = null;
+    snCode          = null;
     _ackTimer?.cancel();
     _stopPolling();
   }
