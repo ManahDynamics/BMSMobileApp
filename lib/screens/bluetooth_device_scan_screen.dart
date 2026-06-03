@@ -1,5 +1,5 @@
 // lib/screens/bluetooth_device_scan_screen.dart
-              // ignore_for_file: deprecated_member_use
+// ignore_for_file: deprecated_member_use
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -11,13 +11,16 @@ import 'package:bmsmobileapp/services/protocol.dart';
 import 'package:bmsmobileapp/screens/dashboard.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
+
 class BluetoothDeviceScanPage extends StatefulWidget {
   final BMSBluetoothService service;
   const BluetoothDeviceScanPage({super.key, required this.service});
+
   @override
   State<BluetoothDeviceScanPage> createState() =>
       _BluetoothDeviceScanPageState();
 }
+
 class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
@@ -26,14 +29,22 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
   StreamSubscription? _scanSub;
   StreamSubscription? _scanStateSub;
   String? _connectingDeviceId;
+
   String tr(String key) => TranslationService.t(key);
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     widget.service.addListener(_onServiceChanged);
+    TranslationService.instance.addListener(_onTranslationsChanged); // ← NEW
     _listenScan();
   }
+
+  void _onTranslationsChanged() { // ← NEW
+    if (mounted) setState(() {});
+  }
+
   void _onServiceChanged() {
     if (!mounted) return;
     setState(() {});
@@ -51,8 +62,8 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
       });
     }
   }
+
   void _listenScan() {
-    // Cancel existing subscriptions if called multiple times safely
     _scanSub?.cancel();
     _scanStateSub?.cancel();
 
@@ -60,7 +71,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
       if (!mounted) return;
       setState(() {
         _devices = results
-            .where((r) => r.device.platformName.isNotEmpty) // Use platformName instead of deprecated name
+            .where((r) => r.device.platformName.isNotEmpty)
             .map((r) => r.device)
             .toList();
       });
@@ -80,7 +91,6 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
         Permission.location,
       ].request();
 
-      // Verify that permissions were actually granted before triggering hardware
       if (statuses.values.any((status) => !status.isGranted)) {
         _showSnackBar(tr('scan.permissions_denied'), isError: true);
         return;
@@ -126,8 +136,8 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
 
   @override
   void dispose() {
-    // 1. Terminate ongoing BLE hardware scans to save battery life
-    FlutterBluePlus.stopScan(); 
+    TranslationService.instance.removeListener(_onTranslationsChanged); // ← NEW
+    FlutterBluePlus.stopScan();
     _tabController.dispose();
     _scanSub?.cancel();
     _scanStateSub?.cancel();
@@ -141,15 +151,20 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B6B3A),
-        title: Text(tr('scan.title'), style: const TextStyle(color: Colors.white)),
+        title: Text(tr('scan.title'),
+            style: const TextStyle(color: Colors.white)),
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicatorColor: Colors.white,
           tabs: [
-            Tab(icon: const Icon(Icons.bluetooth_searching), text: tr('scan.tab_scan')),
-            Tab(icon: const Icon(Icons.receipt_long), text: tr('scan.tab_packets')),
+            Tab(
+                icon: const Icon(Icons.bluetooth_searching),
+                text: tr('scan.tab_scan')),
+            Tab(
+                icon: const Icon(Icons.receipt_long),
+                text: tr('scan.tab_packets')),
           ],
         ),
       ),
@@ -210,7 +225,9 @@ class _ScanTab extends StatelessWidget {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.radar),
-              label: Text(isScanning ? tr('scan.scanning') : tr('scan.scan_button')),
+              label: Text(isScanning
+                  ? tr('scan.scanning')
+                  : tr('scan.scan_button')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF1B6B3A),
                 foregroundColor: Colors.white,
@@ -241,14 +258,19 @@ class _ScanTab extends StatelessWidget {
                   itemCount: devices.length,
                   itemBuilder: (_, i) {
                     final d = devices[i];
-                    final isThis = service.device?.remoteId == d.remoteId;
-                    final isBusy = connectingDeviceId == d.remoteId.str;
+                    final isThis =
+                        service.device?.remoteId == d.remoteId;
+                    final isBusy =
+                        connectingDeviceId == d.remoteId.str;
 
                     return ListTile(
                       leading: const Icon(Icons.bluetooth),
                       title: Text(
-                        d.platformName.isEmpty ? tr('scan.unknown_device') : d.platformName,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        d.platformName.isEmpty
+                            ? tr('scan.unknown_device')
+                            : d.platformName,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600),
                       ),
                       subtitle: Text(d.remoteId.str,
                           style: const TextStyle(fontSize: 12)),
@@ -258,7 +280,9 @@ class _ScanTab extends StatelessWidget {
                               color: _chipColor(service.state),
                               loading: true,
                             )
-                          : isThis && service.state == BMSConnectionState.ready
+                          : isThis &&
+                                  service.state ==
+                                      BMSConnectionState.ready
                               ? _StatusChip(
                                   label: tr('scan.authenticated'),
                                   color: Colors.green,
@@ -266,10 +290,12 @@ class _ScanTab extends StatelessWidget {
                               : ElevatedButton(
                                   onPressed: () => onConnect(d),
                                   style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF1B6B3A),
+                                    backgroundColor:
+                                        const Color(0xFF1B6B3A),
                                     foregroundColor: Colors.white,
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius:
+                                          BorderRadius.circular(8),
                                     ),
                                     elevation: 0,
                                   ),
@@ -329,7 +355,8 @@ class _PacketLogTab extends StatelessWidget {
                 Icon(Icons.inbox, size: 72, color: Colors.grey[300]),
                 const SizedBox(height: 16),
                 Text(tr('scan.no_packets'),
-                    style: TextStyle(fontSize: 18, color: Colors.grey[500])),
+                    style: TextStyle(
+                        fontSize: 18, color: Colors.grey[500])),
                 const SizedBox(height: 8),
                 Text(tr('scan.packets_hint'),
                     style: TextStyle(color: Colors.grey[400])),
@@ -342,7 +369,8 @@ class _PacketLogTab extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           reverse: true,
           itemCount: service.packetLog.length,
-          itemBuilder: (_, i) => _PacketCard(packet: service.packetLog[i]),
+          itemBuilder: (_, i) =>
+              _PacketCard(packet: service.packetLog[i]),
         );
       },
     );
@@ -354,16 +382,20 @@ class _PacketCard extends StatelessWidget {
   const _PacketCard({required this.packet});
 
   Color get _directionColor {
-    if (packet.direction == PacketDirection.send) return const Color(0xFF1B6B3A);
-    if (packet.direction == PacketDirection.receive) return Colors.blueAccent;
+    if (packet.direction == PacketDirection.send)
+      return const Color(0xFF1B6B3A);
+    if (packet.direction == PacketDirection.receive)
+      return Colors.blueAccent;
     return Colors.grey;
   }
 
   Color get _accentColor => _directionColor;
 
   IconData get _directionIcon {
-    if (packet.direction == PacketDirection.send) return Icons.arrow_upward;
-    if (packet.direction == PacketDirection.receive) return Icons.arrow_downward;
+    if (packet.direction == PacketDirection.send)
+      return Icons.arrow_upward;
+    if (packet.direction == PacketDirection.receive)
+      return Icons.arrow_downward;
     return Icons.swap_horiz;
   }
 
@@ -384,7 +416,8 @@ class _PacketCard extends StatelessWidget {
             Icon(_directionIcon, size: 14, color: _directionColor),
             const SizedBox(height: 2),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
               decoration: BoxDecoration(
                 color: _accentColor.withOpacity(0.12),
                 borderRadius: BorderRadius.circular(4),
@@ -424,7 +457,8 @@ class _PacketCard extends StatelessWidget {
             child: Column(
               children: fields.entries
                   .map((e) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 3),
                         child: Row(
                           children: [
                             SizedBox(
@@ -455,7 +489,9 @@ class _PacketCard extends StatelessWidget {
 class _ConnectionStateBanner extends StatelessWidget {
   final BMSConnectionState state;
   const _ConnectionStateBanner({required this.state});
+
   String tr(String key) => TranslationService.t(key);
+
   @override
   Widget build(BuildContext context) {
     final (String msg, Color bg, IconData icon) = switch (state) {
@@ -500,12 +536,14 @@ class _ConnectionStateBanner extends StatelessWidget {
         Icons.bluetooth_disabled
       ),
     };
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+      padding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(8)),
       child: Row(
         children: [
           Icon(icon, size: 18, color: Colors.black54),
@@ -520,6 +558,7 @@ class _ConnectionStateBanner extends StatelessWidget {
     );
   }
 }
+
 class _StatusChip extends StatelessWidget {
   final String label;
   final Color color;
@@ -530,6 +569,7 @@ class _StatusChip extends StatelessWidget {
     required this.color,
     this.loading = false,
   });
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -546,7 +586,8 @@ class _StatusChip extends StatelessWidget {
             SizedBox(
               width: 12,
               height: 12,
-              child: CircularProgressIndicator(strokeWidth: 2, color: color),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: color),
             )
           else
             Icon(Icons.check_circle, size: 13, color: color),

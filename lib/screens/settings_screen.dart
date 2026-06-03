@@ -42,17 +42,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return TranslationService.t(key);
   }
 
+  // ── Listen to TranslationService changes ─────────────────────────────────
   @override
   void initState() {
     super.initState();
+    TranslationService.instance.addListener(_onTranslationsChanged);
     _selectedLanguage = _languageDisplayName(TranslationService.language);
+  }
+
+  void _onTranslationsChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    TranslationService.instance.removeListener(_onTranslationsChanged);
     _removeOverlay();
     super.dispose();
   }
+  // ── END ───────────────────────────────────────────────────────────────────
 
   void _removeOverlay() {
     _overlayEntry?.remove();
@@ -141,8 +149,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _changeLanguage(String languageCode) async {
     await TranslationService.setLanguage(languageCode);
     if (!mounted) return;
-
-    setState(() {}); // Refresh UI with new language
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

@@ -18,13 +18,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     return TranslationService.t(key);
   }
 
+  // ── Listen to TranslationService changes ─────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    TranslationService.instance.addListener(_onTranslationsChanged);
+  }
+
+  void _onTranslationsChanged() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
+    TranslationService.instance.removeListener(_onTranslationsChanged);
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     super.dispose();
   }
+  // ── END ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {

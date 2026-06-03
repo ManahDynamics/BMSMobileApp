@@ -12,15 +12,15 @@ import 'package:bmsmobileapp/services/translation_service.dart';
 // Data model
 // ─────────────────────────────────────────────────────────────────────────────
 class AlertItem {
-  final String titleKey;       // translation key  e.g. 'alert_over_temperature'
-  final String descriptionKey; // translation key  e.g. 'alert_over_temperature_desc'
+  final String titleKey;
+  final String descriptionKey;
   final String time;
-  final String severityKey;    // translation key  e.g. 'severity_high'
-  final String severityRaw;    // raw value used for filtering logic ('High'/'Medium'/'Low')
-  final String statusKey;      // translation key  e.g. 'status_active'
-  final String statusRaw;      // raw value used for filtering logic ('Active'/'Warning'/'Cleared')
-  final String dateGroupKey;   // translation key  e.g. 'date_today'
-  final String dateGroupLabel; // raw label for grouping map key
+  final String severityKey;
+  final String severityRaw;
+  final String statusKey;
+  final String statusRaw;
+  final String dateGroupKey;
+  final String dateGroupLabel;
 
   const AlertItem({
     required this.titleKey,
@@ -36,6 +36,7 @@ class AlertItem {
 }
 
 const List<AlertItem> _allAlerts = [
+  // ... (your alert data remains unchanged)
   AlertItem(
     titleKey: 'alert_over_temperature',
     descriptionKey: 'alert_over_temperature_desc',
@@ -107,8 +108,6 @@ const List<AlertItem> _allAlerts = [
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
-String tr(String key) => TranslationService.t(key);
-
 Color _severityColor(String raw) {
   if (raw == 'High') return const Color(0xFF1B6B3A);
   if (raw == 'Medium') return const Color(0xFFB8860B);
@@ -130,10 +129,10 @@ IconData _statusIcon(String raw) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared alert card
 // ─────────────────────────────────────────────────────────────────────────────
-Widget buildAlertCard(AlertItem alert, {bool showStatus = false}) {
+Widget buildAlertCard(AlertItem alert, {bool showStatus = false, required String Function(String) tr}) {
   final severityColor = _severityColor(alert.severityRaw);
-  final statusColor   = _statusColor(alert.statusRaw);
-  final statusIcon    = _statusIcon(alert.statusRaw);
+  final statusColor = _statusColor(alert.statusRaw);
+  final statusIcon = _statusIcon(alert.statusRaw);
 
   return Container(
     margin: const EdgeInsets.only(bottom: 10),
@@ -178,8 +177,7 @@ Widget buildAlertCard(AlertItem alert, {bool showStatus = false}) {
                 Container(
                   width: 8,
                   height: 8,
-                  decoration:
-                      BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                  decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
                 ),
                 const SizedBox(width: 4),
                 Text(
@@ -219,12 +217,36 @@ Widget buildAlertCard(AlertItem alert, {bool showStatus = false}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ALERTS SCREEN
+// ALERTS SCREEN (Now Stateful)
 // ─────────────────────────────────────────────────────────────────────────────
-class AlertsScreen extends StatelessWidget {
+class AlertsScreen extends StatefulWidget {
   final BMSBluetoothService service;
 
   const AlertsScreen({super.key, required this.service});
+
+  @override
+  State<AlertsScreen> createState() => _AlertsScreenState();
+}
+
+class _AlertsScreenState extends State<AlertsScreen> {
+  String tr(String key) => TranslationService.t(key);
+
+  // Listen to translation changes
+  @override
+  void initState() {
+    super.initState();
+    TranslationService.instance.addListener(_onTranslationsChanged);
+  }
+
+  void _onTranslationsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    TranslationService.instance.removeListener(_onTranslationsChanged);
+    super.dispose();
+  }
 
   List<AlertItem> get _active =>
       _allAlerts.where((a) => a.statusRaw == 'Active').toList();
@@ -235,11 +257,11 @@ class AlertsScreen extends StatelessWidget {
 
   // ── Disconnect ─────────────────────────────────────────────────────────────
   Future<void> _handleDisconnect(BuildContext context) async {
-    await service.disconnect();
+    await widget.service.disconnect();
     if (!context.mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      SlideRoute(page: BluetoothDeviceScanPage(service: service)),
+      SlideRoute(page: BluetoothDeviceScanPage(service: widget.service)),
       (route) => false,
     );
   }
@@ -248,8 +270,7 @@ class AlertsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           tr('disconnect'),
           textAlign: TextAlign.center,
@@ -263,8 +284,7 @@ class AlertsScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(tr('cancel'),
-                style: const TextStyle(color: Colors.grey)),
+            child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -274,8 +294,7 @@ class AlertsScreen extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFD4621A),
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               elevation: 0,
             ),
             child: Text(tr('disconnect')),
@@ -294,8 +313,7 @@ class AlertsScreen extends StatelessWidget {
             color: Colors.grey[200],
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Icon(Icons.battery_4_bar_rounded,
-              color: Colors.black54, size: 32),
+          child: const Icon(Icons.battery_4_bar_rounded, color: Colors.black54, size: 32),
         ),
         const SizedBox(width: 12),
         Column(
@@ -330,11 +348,9 @@ class AlertsScreen extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFFD4621A),
             foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(6)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             elevation: 0,
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           ),
           child: Text(
             tr('disconnect').toUpperCase(),
@@ -349,7 +365,7 @@ class AlertsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      drawer: AppDrawer(activeRoute: '/alerts', service: service),
+      drawer: AppDrawer(activeRoute: '/alerts', service: widget.service),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B6B3A),
         elevation: 0,
@@ -363,8 +379,7 @@ class AlertsScreen extends StatelessWidget {
         ),
         leading: Builder(
           builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_rounded,
-                color: Colors.white, size: 26),
+            icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
@@ -384,16 +399,15 @@ class AlertsScreen extends StatelessWidget {
               context: context,
             ),
             const SizedBox(height: 10),
-            ..._active.map((a) => buildAlertCard(a)),
+            ..._active.map((a) => buildAlertCard(a, tr: tr)),
             const SizedBox(height: 10),
             _buildSectionHeader('${tr('warnings')} (${_warnings.length})'),
             const SizedBox(height: 10),
-            ..._warnings.map((a) => buildAlertCard(a)),
+            ..._warnings.map((a) => buildAlertCard(a, tr: tr)),
             const SizedBox(height: 10),
-            _buildSectionHeader(
-                '${tr('cleared_alerts')} (${_cleared.length})'),
+            _buildSectionHeader('${tr('cleared_alerts')} (${_cleared.length})'),
             const SizedBox(height: 10),
-            ..._cleared.map((a) => buildAlertCard(a)),
+            ..._cleared.map((a) => buildAlertCard(a, tr: tr)),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
@@ -401,19 +415,17 @@ class AlertsScreen extends StatelessWidget {
               child: OutlinedButton.icon(
                 onPressed: () => Navigator.push(
                   context,
-                  SlideRoute(page: AlertHistoryScreen(service: service)),
+                  SlideRoute(page: AlertHistoryScreen(service: widget.service)),
                 ),
                 icon: const Icon(Icons.calendar_month_outlined, size: 20),
                 label: Text(
                   tr('alert_history'),
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w500),
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                 ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.black87,
                   side: const BorderSide(color: Color(0xFFCCCCCC)),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
               ),
             ),
@@ -427,14 +439,12 @@ class AlertsScreen extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline_rounded,
-                      color: Colors.grey[500], size: 18),
+                  Icon(Icons.info_outline_rounded, color: Colors.grey[500], size: 18),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       tr('alerts_support_note'),
-                      style: const TextStyle(
-                          fontSize: 12, color: Colors.black54),
+                      style: const TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                   ),
                 ],
@@ -447,6 +457,7 @@ class AlertsScreen extends StatelessWidget {
     );
   }
 
+  // ... (_buildSummaryBar, _summaryItem, _divider, _buildSectionHeader remain same)
   Widget _buildSummaryBar() {
     return Container(
       width: double.infinity,
@@ -457,17 +468,13 @@ class AlertsScreen extends StatelessWidget {
       child: IntrinsicHeight(
         child: Row(
           children: [
-            _summaryItem(Icons.notifications_outlined, tr('alerts_label'),
-                _allAlerts.length.toString()),
+            _summaryItem(Icons.notifications_outlined, tr('alerts_label'), _allAlerts.length.toString()),
             _divider(),
-            _summaryItem(Icons.warning_amber_rounded, tr('status_active'),
-                _active.length.toString()),
+            _summaryItem(Icons.warning_amber_rounded, tr('status_active'), _active.length.toString()),
             _divider(),
-            _summaryItem(Icons.info_outline_rounded, tr('warnings'),
-                _warnings.length.toString()),
+            _summaryItem(Icons.info_outline_rounded, tr('warnings'), _warnings.length.toString()),
             _divider(),
-            _summaryItem(Icons.check_circle_outline_rounded, tr('status_cleared'),
-                _cleared.length.toString()),
+            _summaryItem(Icons.check_circle_outline_rounded, tr('status_cleared'), _cleared.length.toString()),
           ],
         ),
       ),
@@ -483,15 +490,9 @@ class AlertsScreen extends StatelessWidget {
           children: [
             Icon(icon, color: Colors.white, size: 22),
             const SizedBox(height: 4),
-            Text(label,
-                style:
-                    const TextStyle(color: Colors.white70, fontSize: 12)),
+            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
             const SizedBox(height: 2),
-            Text(count,
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w500)),
+            Text(count, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w500)),
           ],
         ),
       ),
@@ -506,8 +507,7 @@ class AlertsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSectionHeader(String title,
-      {bool showViewAll = false, BuildContext? context}) {
+  Widget _buildSectionHeader(String title, {bool showViewAll = false, BuildContext? context}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -520,7 +520,7 @@ class AlertsScreen extends StatelessWidget {
           GestureDetector(
             onTap: () => Navigator.push(
               context,
-              SlideRoute(page: AlertHistoryScreen(service: service)),
+              SlideRoute(page: AlertHistoryScreen(service: widget.service)),
             ),
             child: Row(children: [
               Text(tr('view_all'),
@@ -529,8 +529,7 @@ class AlertsScreen extends StatelessWidget {
                       color: Color(0xFF4F4F4F),
                       fontWeight: FontWeight.w500)),
               const SizedBox(width: 2),
-              const Icon(Icons.chevron_right_rounded,
-                  size: 18, color: Color(0xFF4F4F4F)),
+              const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFF4F4F4F)),
             ]),
           ),
       ],
@@ -539,7 +538,7 @@ class AlertsScreen extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ALERT HISTORY SCREEN
+// ALERT HISTORY SCREEN (Also Updated)
 // ─────────────────────────────────────────────────────────────────────────────
 class AlertHistoryScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -551,49 +550,63 @@ class AlertHistoryScreen extends StatefulWidget {
 }
 
 class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
-  // Tab raw keys (used for filtering logic)
-  static const String _tabAll      = 'All';
-  static const String _tabActive   = 'Active';
-  static const String _tabWarnings = 'Warnings';
-  static const String _tabCleared  = 'Cleared';
+  String tr(String key) => TranslationService.t(key);
 
-  String _selectedTabRaw    = _tabAll;
+  @override
+  void initState() {
+    super.initState();
+    TranslationService.instance.addListener(_onTranslationsChanged);
+  }
+
+  void _onTranslationsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    TranslationService.instance.removeListener(_onTranslationsChanged);
+    super.dispose();
+  }
+
+  // ... rest of your existing logic for tabs and filters remains the same
+  static const String _tabAll = 'All';
+  static const String _tabActive = 'Active';
+  static const String _tabWarnings = 'Warnings';
+  static const String _tabCleared = 'Cleared';
+
+  String _selectedTabRaw = _tabAll;
   String _selectedFilterRaw = 'All Severity';
 
-  // Map raw tab value → translated label
   Map<String, String> get _tabLabels => {
-    _tabAll:      tr('filter_all'),
-    _tabActive:   tr('status_active'),
-    _tabWarnings: tr('warnings'),
-    _tabCleared:  tr('status_cleared'),
-  };
+        _tabAll: tr('filter_all'),
+        _tabActive: tr('status_active'),
+        _tabWarnings: tr('warnings'),
+        _tabCleared: tr('status_cleared'),
+      };
 
-  // Filter options: raw value → translated label
   Map<String, String> get _filterLabels => {
-    'All Severity':   tr('filter_all_severity'),
-    'High':           tr('severity_high'),
-    'Medium':         tr('severity_medium'),
-    'Low':            tr('severity_low'),
-  };
+        'All Severity': tr('filter_all_severity'),
+        'High': tr('severity_high'),
+        'Medium': tr('severity_medium'),
+        'Low': tr('severity_low'),
+      };
 
   List<AlertItem> get _filtered {
     var list = List<AlertItem>.from(_allAlerts);
     if (_selectedTabRaw != _tabAll) {
       final map = {
-        _tabActive:   'Active',
+        _tabActive: 'Active',
         _tabWarnings: 'Warning',
-        _tabCleared:  'Cleared',
+        _tabCleared: 'Cleared',
       };
       list = list.where((a) => a.statusRaw == map[_selectedTabRaw]).toList();
     }
     if (_selectedFilterRaw != 'All Severity') {
-      list =
-          list.where((a) => a.severityRaw == _selectedFilterRaw).toList();
+      list = list.where((a) => a.severityRaw == _selectedFilterRaw).toList();
     }
     return list;
   }
 
-  // Group by dateGroupLabel (stable key), display dateGroupKey (translated)
   Map<String, List<AlertItem>> get _grouped {
     final map = <String, List<AlertItem>>{};
     for (final a in _filtered) {
@@ -783,8 +796,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -805,11 +817,9 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
                     builder: (ctx) => GestureDetector(
                       onTap: () => _showFilterMenu(ctx),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 7),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(
-                          border: Border.all(
-                              color: const Color(0xFFCCCCCC)),
+                          border: Border.all(color: const Color(0xFFCCCCCC)),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -822,16 +832,13 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
                               style: const TextStyle(fontSize: 13),
                             ),
                             const SizedBox(width: 4),
-                            const Icon(
-                                Icons.keyboard_arrow_down_rounded,
-                                size: 18),
+                            const Icon(Icons.keyboard_arrow_down_rounded, size: 18),
                           ],
                         ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 1),
               ],
             ),
           ),
@@ -839,14 +846,13 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
             child: Scrollbar(
               thumbVisibility: true,
               child: ListView.builder(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: dateKeys.length,
                 itemBuilder: (context, gi) {
                   final groupLabel = dateKeys[gi];
-                  final items      = grouped[groupLabel]!;
-                  // Use translated dateGroupKey from first item in group
+                  final items = grouped[groupLabel]!;
                   final translatedDate = tr(items.first.dateGroupKey);
+
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -858,8 +864,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
                             color: Colors.grey[600]),
                       ),
                       const SizedBox(height: 8),
-                      ...items.map(
-                          (a) => buildAlertCard(a, showStatus: true)),
+                      ...items.map((a) => buildAlertCard(a, showStatus: true, tr: tr)),
                       const SizedBox(height: 8),
                     ],
                   );

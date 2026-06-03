@@ -247,7 +247,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
 
-        Navigator.pushReplacementNamed(context, '/connect');
+        Navigator.pushReplacementNamed(context, '/dashboard');
       } else {
         final serverMessage =
             data['message']?.toString() ??
