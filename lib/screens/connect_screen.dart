@@ -9,12 +9,34 @@ import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 
-class ConnectScreen extends StatelessWidget {
+class ConnectScreen extends StatefulWidget {
   const ConnectScreen({super.key});
+
+  @override
+  State<ConnectScreen> createState() => _ConnectScreenState();
+}
+
+class _ConnectScreenState extends State<ConnectScreen> {
+
+  static const _primary = Color(0xFF1B6B3A);
 
   String tr(String key) => TranslationService.t(key);
 
-  static const _primary = Color(0xFF1B6B3A);
+  @override
+  void initState() {
+    super.initState();
+    TranslationService.instance.addListener(_onTranslationsChanged);
+  }
+
+  void _onTranslationsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    TranslationService.instance.removeListener(_onTranslationsChanged);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

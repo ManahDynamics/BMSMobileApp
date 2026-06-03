@@ -8,7 +8,7 @@ import 'package:bmsmobileapp/screens/settings_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 
-class AppDrawer extends StatelessWidget {
+class AppDrawer extends StatefulWidget {
   final String activeRoute;
   final BMSBluetoothService service;
 
@@ -18,9 +18,32 @@ class AppDrawer extends StatelessWidget {
     required this.service,
   });
 
+  @override
+  State<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends State<AppDrawer> {
   String tr(String key) {
     return TranslationService.t(key);
   }
+
+  // ── Listen to TranslationService changes ─────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    TranslationService.instance.addListener(_onTranslationsChanged);
+  }
+
+  void _onTranslationsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    TranslationService.instance.removeListener(_onTranslationsChanged);
+    super.dispose();
+  }
+  // ── END ───────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -106,28 +129,28 @@ class AppDrawer extends StatelessWidget {
                   icon: Icons.home_rounded,
                   label: tr('drawer.dashboard'),
                   route: '/dashboard',
-                  page: DashboardScreen(service: service),
+                  page: DashboardScreen(service: widget.service),
                 ),
                 _buildNavItem(
                   context,
                   icon: Icons.battery_full_rounded,
                   label: tr('drawer.cells'),
                   route: '/cells',
-                  page: CellsScreen(service: service),
+                  page: CellsScreen(service: widget.service),
                 ),
                 _buildNavItem(
                   context,
                   icon: Icons.notifications_rounded,
                   label: tr('drawer.alerts'),
                   route: '/alerts',
-                  page: AlertsScreen(service: service),
+                  page: AlertsScreen(service: widget.service),
                 ),
                 _buildNavItem(
                   context,
                   icon: Icons.settings_rounded,
                   label: tr('drawer.settings'),
                   route: '/settings',
-                  page: SettingsScreen(service: service),
+                  page: SettingsScreen(service: widget.service),
                 ),
               ],
             ),
@@ -144,7 +167,7 @@ class AppDrawer extends StatelessWidget {
     required String route,
     required Widget page,
   }) {
-    final bool isActive = activeRoute == route;
+    final bool isActive = widget.activeRoute == route;
 
     return GestureDetector(
       onTap: () {

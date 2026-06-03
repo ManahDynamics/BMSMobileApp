@@ -37,19 +37,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final maxCell = 3.298;
 
   final cellValues = [
-    3.24,
-    3.28,
-    3.22,
-    3.29,
-    3.25,
-    3.27,
-    3.21,
-    3.30,
-    3.26,
-    3.23
+    3.24, 3.28, 3.22, 3.29, 3.25,
+    3.27, 3.21, 3.30, 3.26, 3.23,
   ];
 
   String tr(String key) => TranslationService.t(key);
+
+  // ── NEW: listen to TranslationService ─────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    TranslationService.instance.addListener(_onTranslationsChanged);
+  }
+
+  void _onTranslationsChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    TranslationService.instance.removeListener(_onTranslationsChanged);
+    super.dispose();
+  }
+  // ── END NEW ────────────────────────────────────────────────────────────
 
   Future<void> _disconnect() async {
     await widget.service.disconnect();
@@ -73,7 +83,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         title: Text(
           title,
           textAlign: TextAlign.center,
@@ -336,7 +347,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: _appBar(),
       body: ListenableBuilder(
         listenable: widget.service,
-        builder: (_, _) {
+        builder: (_, __) {
           final BMSParsedPacket? p4 = widget.service.latestPacket4;
 
           return SingleChildScrollView(

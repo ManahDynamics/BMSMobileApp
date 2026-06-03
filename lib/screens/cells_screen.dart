@@ -61,7 +61,18 @@ class _CellsScreenState extends State<CellsScreen> {
   @override
   void initState() {
     super.initState();
+    TranslationService.instance.addListener(_onTranslationsChanged); // ← NEW
     _sortCells();
+  }
+
+  void _onTranslationsChanged() { // ← NEW
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    TranslationService.instance.removeListener(_onTranslationsChanged); // ← NEW
+    super.dispose();
   }
 
   void _sortCells() => _sortedCells = [..._cells]
@@ -229,7 +240,8 @@ class _CellsScreenState extends State<CellsScreen> {
             const SizedBox(height: 6),
             Text(label,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                style:
+                    const TextStyle(color: Colors.white70, fontSize: 10)),
             const SizedBox(height: 2),
             Text(
               value,
@@ -244,8 +256,8 @@ class _CellsScreenState extends State<CellsScreen> {
               const SizedBox(height: 2),
               Text(sub,
                   textAlign: TextAlign.center,
-                  style:
-                      const TextStyle(color: Colors.white70, fontSize: 10)),
+                  style: const TextStyle(
+                      color: Colors.white70, fontSize: 10)),
             ],
             if (bottom != null) ...[
               const SizedBox(height: 4),
@@ -287,8 +299,8 @@ class _CellsScreenState extends State<CellsScreen> {
             Row(
               children: [
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.grey[200],
                     borderRadius: BorderRadius.circular(8),
@@ -423,7 +435,8 @@ class _CellsScreenState extends State<CellsScreen> {
             ),
             const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
               decoration: const BoxDecoration(
                 color: lightBg,
                 borderRadius: BorderRadius.only(
@@ -453,15 +466,16 @@ class _CellsScreenState extends State<CellsScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(6),
-                            border:
-                                Border.all(color: const Color(0xFFCCCCCC)),
+                            border: Border.all(
+                                color: const Color(0xFFCCCCCC)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(_sortLabel),
                               const SizedBox(width: 4),
-                              const Icon(Icons.keyboard_arrow_down_rounded,
+                              const Icon(
+                                  Icons.keyboard_arrow_down_rounded,
                                   size: 18),
                             ],
                           ),
@@ -529,7 +543,8 @@ class _CellsScreenState extends State<CellsScreen> {
                                       color: i < s.bars
                                           ? s.color
                                           : Colors.grey.shade300,
-                                      borderRadius: BorderRadius.circular(2),
+                                      borderRadius:
+                                          BorderRadius.circular(2),
                                     ),
                                   ),
                                 ),
@@ -549,7 +564,8 @@ class _CellsScreenState extends State<CellsScreen> {
                           ),
                         ),
                         if (index != _sortedCells.length - 1)
-                          const Divider(height: 1, indent: 16, endIndent: 16),
+                          const Divider(
+                              height: 1, indent: 16, endIndent: 16),
                       ],
                     );
                   },
