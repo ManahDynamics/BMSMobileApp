@@ -316,10 +316,10 @@ class _CellsScreenState extends State<CellsScreen> {
         backgroundColor: primaryGreen,
         elevation: 0,
         centerTitle: true,
-        // Back arrow on the left
+        // Back arrow on the left — uses pop() to reliably go back
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
           _deviceName,
