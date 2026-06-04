@@ -426,7 +426,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     debugPrint('⏱️  Starting dashboard poll every 2s');
     requestDashboard(); // immediate first request
     _pollTimer = Timer.periodic(
-      const Duration(seconds: 2),
+      const Duration(seconds: 5),
       (_) => requestDashboard(),
     );
   }

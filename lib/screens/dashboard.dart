@@ -648,9 +648,7 @@ class _CellSummary extends StatelessWidget {
     // Build a simple 2-bar visual from min/max when data is available.
     // Full per-cell bars require the individual cell voltages from CellsScreen.
     final bool hasData = minVoltRaw != null && maxVoltRaw != null;
-    final double spread = hasData ? (maxVoltRaw! - minVoltRaw!) : 0;
-    final double baseH  = 24.0;
-    final double extraH = 32.0;
+  
 
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -680,32 +678,53 @@ class _CellSummary extends StatelessWidget {
         // Bytes 81–82 — Min Cell Voltage
         _cellLabel(minLabel, minVoltage),
         const SizedBox(width: 12),
-        Expanded(
-          child: hasData
-              ? Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    // Min bar
-                    _bar(baseH, _green.withOpacity(0.5)),
-                    // Interpolated mid bar
-                    _bar(baseH + (spread > 0 ? extraH * 0.5 : 0), _green.withOpacity(0.7)),
-                    // Max bar
-                    _bar(baseH + (spread > 0 ? extraH : 0), _green),
-                  ],
-                )
-              : Container(
-                  height: baseH,
+       Expanded(
+  child: hasData
+      ? LayoutBuilder(
+          builder: (context, constraints) {
+            const int barCount = 10;
+            const double maxBarHeight = 35;
+
+            final double range =
+                (maxVoltRaw! - minVoltRaw!).abs();
+
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: List.generate(barCount, (index) {
+                double value;
+
+                if (range == 0) {
+                  value = maxVoltRaw!;
+                } else {
+                  value = minVoltRaw! +
+                      ((maxVoltRaw! - minVoltRaw!) *
+                          index /
+                          (barCount - 1));
+                }
+
+                final double normalized =
+                    range == 0
+                        ? 1
+                        : (value - minVoltRaw!) / range;
+
+                final double height =
+                    12 + (normalized * maxBarHeight);
+
+                return Container(
+                  width: 8,
+                  height: height,
                   decoration: BoxDecoration(
-                    color: _green.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(6),
+                    color: _green,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  child: const Center(
-                    child: Text('Waiting for data…',
-                        style: TextStyle(fontSize: 10, color: Colors.black38)),
-                  ),
-                ),
-        ),
+                );
+              }),
+            );
+          },
+        )
+      : const SizedBox.shrink(),
+),
         const SizedBox(width: 12),
         // Bytes 79–80 — Max Cell Voltage
         _cellLabel(maxLabel, maxVoltage, align: CrossAxisAlignment.end),
@@ -713,12 +732,6 @@ class _CellSummary extends StatelessWidget {
     ]);
   }
 
-  Widget _bar(double height, Color color) => Container(
-        width: 16,
-        height: height,
-        decoration: BoxDecoration(
-            color: color, borderRadius: BorderRadius.circular(4)),
-      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
