@@ -13,12 +13,14 @@ class BMSProtocol {
   static const int idHandshake        = 0x90;
   static const int idDisconnect       = 0x91;
   static const int idAutoRefresh      = 0x92; // Old Packet4 request (SOC/V/A only)
-  static const int idDashboardRequest = 0x93; // NEW: Dashboard full data request
+  static const int idDashboardRequest = 0x93; // Dashboard full data request
+  static const int idCellVoltageRequest = 0x94; // Cell Voltages request
 
   // ── Data IDs (BMS → Mobile responses) ────────────────────────────────────
   static const int idAck               = 0x50; // ACK to handshake
   static const int idPacket4           = 0x51; // Old Packet4 response (12 bytes)
-  static const int idDashboardResponse = 0x52; // NEW: Dashboard full response (86 bytes)
+  static const int idDashboardResponse = 0x52; // Dashboard full response (86 bytes)
+  static const int idCellVoltageResponse = 0x53; // Cell Voltage response (88 bytes)
 
   // ── Device Info IDs (both directions) ────────────────────────────────────
   static const int idBatterySerial   = 0x59;
@@ -96,6 +98,53 @@ class BMSProtocol {
   static const int dashCrcLow            = 84;
   static const int dashStopByte           = 85;
 
+  // ── Cell Voltage Response Packet (88 bytes) byte positions ────────────────
+  // Request : [0xCC][0x05][0x94][CRC][0xDD]
+  // Response: [0xAA][0x57][0x53][ … ][CRC_H][CRC_L][0xBB]
+  //
+  // Byte 0        : Start byte (0xAA)
+  // Byte 1        : Length (0x57)
+  // Byte 2        : Data ID (0x53)
+  // Bytes 3–4     : Max Voltage (×0.001 V, big-endian)
+  // Byte 5        : Max Voltage Cell No (1–24)
+  // Bytes 6–7     : Min Voltage (×0.001 V, big-endian)
+  // Byte 8        : Min Voltage Cell No (1–24)  — Note: spec says 1 to 24
+  // Bytes 9–10    : Avg Voltage (×0.001 V, big-endian)
+  // Byte 11       : Balancing status (0x01=Active, 0x02=Inactive)
+  // Byte 12       : Total Cells (min 6, max 24)
+  // Bytes 13–14   : Cell Voltage 1 (×0.001 V, big-endian)
+  // Byte 15       : Balancing for Cell 1 (0x01=Active, 0x02=Inactive)
+  // Bytes 16–17   : Cell Voltage 2
+  // Byte 18       : Balancing for Cell 2
+  // … pattern continues for cells 3–24 (each cell = 3 bytes: volt_H, volt_L, balance)
+  // Cell N starts at byte: 13 + (N-1)*3  (voltage high byte)
+  //                        13 + (N-1)*3 + 1 (voltage low byte)
+  //                        15 + (N-1)*3 (balancing byte)
+  // Bytes 85–86   : CRC (big-endian)
+  // Byte 87       : Stop byte (0xBB)
+  static const int cellVoltageResponseLength = 88;
+
+  static const int cellMaxVoltageHigh    = 3;
+  static const int cellMaxVoltageLow     = 4;
+  static const int cellMaxVoltageCellNo  = 5;
+  static const int cellMinVoltageHigh    = 6;
+  static const int cellMinVoltageLow     = 7;
+  static const int cellMinVoltageCellNo  = 8;
+  static const int cellAvgVoltageHigh    = 9;
+  static const int cellAvgVoltageLow     = 10;
+  static const int cellBalancingByte     = 11;
+  static const int cellTotalCellsByte    = 12;
+  static const int cellDataStart         = 13; // first cell voltage high byte
+  // Each cell occupies 3 bytes: [volt_H][volt_L][balance]
+  static const int cellDataStride        = 3;
+  static const int cellCrcHigh           = 85;
+  static const int cellCrcLow            = 86;
+  static const int cellStopByte          = 87;
+
+  // ── Balancing values ──────────────────────────────────────────────────────
+  static const int balancingActive   = 0x01;
+  static const int balancingInactive = 0x02;
+
   // ── Battery Status values ─────────────────────────────────────────────────
   static const int batteryStatusCharging       = 0x01;
   static const int batteryStatusIdle           = 0x02;
@@ -108,17 +157,19 @@ class BMSProtocol {
   // ── Helpers ───────────────────────────────────────────────────────────────
   static String dataIdName(int id) {
     switch (id) {
-      case idHandshake:         return 'Handshake';
-      case idAck:               return 'ACK';
-      case idDisconnect:        return 'Disconnect';
-      case idAutoRefresh:       return 'Auto Refresh (legacy)';
-      case idDashboardRequest:  return 'Dashboard Request';
-      case idPacket4:           return 'Packet4 (SOC/V/A) legacy';
-      case idDashboardResponse: return 'Dashboard Response (full)';
-      case idBatterySerial:     return 'Battery Serial No';
-      case idSoftwareVersion:   return 'Software Version';
-      case idHardwareVersion:   return 'Hardware Version';
-      case idSnCode:            return 'SN Code';
+      case idHandshake:            return 'Handshake';
+      case idAck:                  return 'ACK';
+      case idDisconnect:           return 'Disconnect';
+      case idAutoRefresh:          return 'Auto Refresh (legacy)';
+      case idDashboardRequest:     return 'Dashboard Request';
+      case idCellVoltageRequest:   return 'Cell Voltage Request';
+      case idPacket4:              return 'Packet4 (SOC/V/A) legacy';
+      case idDashboardResponse:    return 'Dashboard Response (full)';
+      case idCellVoltageResponse:  return 'Cell Voltage Response';
+      case idBatterySerial:        return 'Battery Serial No';
+      case idSoftwareVersion:      return 'Software Version';
+      case idHardwareVersion:      return 'Hardware Version';
+      case idSnCode:               return 'SN Code';
       default:
         return 'Unknown (0x${id.toRadixString(16).toUpperCase().padLeft(2, '0')})';
     }
@@ -138,6 +189,14 @@ class BMSProtocol {
       case healthGood: return 'Good';
       case healthPoor: return 'Poor';
       default:         return 'Unknown';
+    }
+  }
+
+  static String balancingLabel(int code) {
+    switch (code) {
+      case balancingActive:   return 'Active';
+      case balancingInactive: return 'Inactive';
+      default:                return 'Unknown';
     }
   }
 }

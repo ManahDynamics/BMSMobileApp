@@ -35,6 +35,19 @@ class BMSParsedPacket {
   final double? maxCellVoltage;     // V (×0.001)
   final double? minCellVoltage;     // V (×0.001)
 
+  // ── Cell Voltage Response fields (dataId == 0x53, 88-byte response) ───────
+  // cellVoltages[i]  → voltage of cell (i+1) in Volts (×0.001)
+  // cellBalancing[i] → true if cell (i+1) balancing is Active (0x01)
+  final List<double>? cellVoltages;   // up to 24 cells
+  final List<bool>?   cellBalancing;  // up to 24 cells
+  final double? cellMaxVoltage;       // max cell voltage from response
+  final int?    cellMaxVoltageNo;     // cell number with max voltage (1-based)
+  final double? cellMinVoltage;       // min cell voltage from response
+  final int?    cellMinVoltageNo;     // cell number with min voltage (1-based)
+  final double? cellAvgVoltage;       // average cell voltage from response
+  final bool?   cellBalancingActive;  // overall balancing status (Byte 11)
+  final int?    cellTotalCells;       // total cells from cell response (Byte 12)
+
   // ── Device info fields (dataId 0x59–0x5C) ────────────────────────────────
   final String? batterySerial;
   final String? softwareVersion;
@@ -67,6 +80,16 @@ class BMSParsedPacket {
     this.voltageDiff,
     this.maxCellVoltage,
     this.minCellVoltage,
+    // Cell voltage response
+    this.cellVoltages,
+    this.cellBalancing,
+    this.cellMaxVoltage,
+    this.cellMaxVoltageNo,
+    this.cellMinVoltage,
+    this.cellMinVoltageNo,
+    this.cellAvgVoltage,
+    this.cellBalancingActive,
+    this.cellTotalCells,
     // Device info
     this.batterySerial,
     this.softwareVersion,
@@ -88,6 +111,9 @@ class BMSParsedPacket {
 
   /// New 86-byte full dashboard response (0x52)
   bool get isDashboardResponse => dataId == 0x52 && totalVoltage != null;
+
+  /// Cell voltage response (0x53)
+  bool get isCellVoltageResponse => dataId == 0x53 && cellVoltages != null;
 
   bool get isDeviceInfo =>
       dataId == 0x59 || dataId == 0x5A || dataId == 0x5B || dataId == 0x5C;
@@ -158,6 +184,7 @@ class BMSParsedPacket {
       case 0x91: return 'DISCONNECT';
       case 0x51: return 'Packet4 legacy (SOC/V/A)';
       case 0x52: return 'Dashboard Response (full 86-byte)';
+      case 0x53: return 'Cell Voltage Response (88-byte)';
       case 0x59: return 'Battery Serial No';
       case 0x5A: return 'Software Version';
       case 0x5B: return 'Hardware Version';
@@ -200,39 +227,57 @@ class BMSParsedPacket {
     double?          voltageDiff,
     double?          maxCellVoltage,
     double?          minCellVoltage,
+    List<double>?    cellVoltages,
+    List<bool>?      cellBalancing,
+    double?          cellMaxVoltage,
+    int?             cellMaxVoltageNo,
+    double?          cellMinVoltage,
+    int?             cellMinVoltageNo,
+    double?          cellAvgVoltage,
+    bool?            cellBalancingActive,
+    int?             cellTotalCells,
     String?          batterySerial,
     String?          softwareVersion,
     String?          hardwareVersion,
     String?          snCode,
   }) {
     return BMSParsedPacket(
-      startByte:         startByte         ?? this.startByte,
-      length:            length            ?? this.length,
-      dataId:            dataId            ?? this.dataId,
-      crc:               crc               ?? this.crc,
-      stopByte:          stopByte          ?? this.stopByte,
-      rawBytes:          rawBytes          ?? this.rawBytes,
-      receivedAt:        receivedAt        ?? this.receivedAt,
-      direction:         direction         ?? this.direction,
-      soc:               soc               ?? this.soc,
-      totalVoltage:      totalVoltage      ?? this.totalVoltage,
-      totalCurrent:      totalCurrent      ?? this.totalCurrent,
-      remainingCapacity: remainingCapacity ?? this.remainingCapacity,
-      totalPower:        totalPower        ?? this.totalPower,
-      totalPowerDisplay: totalPowerDisplay ?? this.totalPowerDisplay,
-      batteryStatusCode: batteryStatusCode ?? this.batteryStatusCode,
-      healthCode:        healthCode        ?? this.healthCode,
-      temperature:       temperature       ?? this.temperature,
-      totalCells:        totalCells        ?? this.totalCells,
-      chargeCycles:      chargeCycles      ?? this.chargeCycles,
-      avgCellVoltage:    avgCellVoltage    ?? this.avgCellVoltage,
-      voltageDiff:       voltageDiff       ?? this.voltageDiff,
-      maxCellVoltage:    maxCellVoltage    ?? this.maxCellVoltage,
-      minCellVoltage:    minCellVoltage    ?? this.minCellVoltage,
-      batterySerial:     batterySerial     ?? this.batterySerial,
-      softwareVersion:   softwareVersion   ?? this.softwareVersion,
-      hardwareVersion:   hardwareVersion   ?? this.hardwareVersion,
-      snCode:            snCode            ?? this.snCode,
+      startByte:          startByte          ?? this.startByte,
+      length:             length             ?? this.length,
+      dataId:             dataId             ?? this.dataId,
+      crc:                crc                ?? this.crc,
+      stopByte:           stopByte           ?? this.stopByte,
+      rawBytes:           rawBytes           ?? this.rawBytes,
+      receivedAt:         receivedAt         ?? this.receivedAt,
+      direction:          direction          ?? this.direction,
+      soc:                soc                ?? this.soc,
+      totalVoltage:       totalVoltage       ?? this.totalVoltage,
+      totalCurrent:       totalCurrent       ?? this.totalCurrent,
+      remainingCapacity:  remainingCapacity  ?? this.remainingCapacity,
+      totalPower:         totalPower         ?? this.totalPower,
+      totalPowerDisplay:  totalPowerDisplay  ?? this.totalPowerDisplay,
+      batteryStatusCode:  batteryStatusCode  ?? this.batteryStatusCode,
+      healthCode:         healthCode         ?? this.healthCode,
+      temperature:        temperature        ?? this.temperature,
+      totalCells:         totalCells         ?? this.totalCells,
+      chargeCycles:       chargeCycles       ?? this.chargeCycles,
+      avgCellVoltage:     avgCellVoltage     ?? this.avgCellVoltage,
+      voltageDiff:        voltageDiff        ?? this.voltageDiff,
+      maxCellVoltage:     maxCellVoltage     ?? this.maxCellVoltage,
+      minCellVoltage:     minCellVoltage     ?? this.minCellVoltage,
+      cellVoltages:       cellVoltages       ?? this.cellVoltages,
+      cellBalancing:      cellBalancing      ?? this.cellBalancing,
+      cellMaxVoltage:     cellMaxVoltage     ?? this.cellMaxVoltage,
+      cellMaxVoltageNo:   cellMaxVoltageNo   ?? this.cellMaxVoltageNo,
+      cellMinVoltage:     cellMinVoltage     ?? this.cellMinVoltage,
+      cellMinVoltageNo:   cellMinVoltageNo   ?? this.cellMinVoltageNo,
+      cellAvgVoltage:     cellAvgVoltage     ?? this.cellAvgVoltage,
+      cellBalancingActive: cellBalancingActive ?? this.cellBalancingActive,
+      cellTotalCells:     cellTotalCells     ?? this.cellTotalCells,
+      batterySerial:      batterySerial      ?? this.batterySerial,
+      softwareVersion:    softwareVersion    ?? this.softwareVersion,
+      hardwareVersion:    hardwareVersion    ?? this.hardwareVersion,
+      snCode:             snCode             ?? this.snCode,
     );
   }
 
@@ -248,6 +293,13 @@ class BMSParsedPacket {
           ', cycles=$chargeCyclesDisplay, avg=$avgCellVoltageDisplay'
           ', diff=$voltageDiffDisplay, max=$maxCellVoltageDisplay'
           ', min=$minCellVoltageDisplay');
+    }
+    if (isCellVoltageResponse) {
+      sb.write(', cells=${cellVoltages?.length ?? 0}'
+          ', max=${cellMaxVoltage?.toStringAsFixed(3)}V(#$cellMaxVoltageNo)'
+          ', min=${cellMinVoltage?.toStringAsFixed(3)}V(#$cellMinVoltageNo)'
+          ', avg=${cellAvgVoltage?.toStringAsFixed(3)}V'
+          ', balancing=${cellBalancingActive == true ? "Active" : "Inactive"}');
     }
     if (isDeviceInfo) {
       sb.write(', value=${batterySerial ?? softwareVersion ?? hardwareVersion ?? snCode}');
