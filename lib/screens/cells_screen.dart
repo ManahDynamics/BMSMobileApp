@@ -1,12 +1,11 @@
 // ignore_for_file: deprecated_member_use, use_build_context_synchronously
 
 import 'package:flutter/material.dart';
-import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
-
+  
 enum SortType { cellNo, voltage }
 
 class CellData {
@@ -37,7 +36,8 @@ class _CellsScreenState extends State<CellsScreen> {
   static const lightBg       = Color(0xFFF5F5F5);
 
   SortType _sortBy = SortType.cellNo;
-List<CellData> _sortedCells = [];
+  List<CellData> _sortedCells = [];
+
   String tr(String key) => TranslationService.t(key);
 
   @override
@@ -46,7 +46,6 @@ List<CellData> _sortedCells = [];
     TranslationService.instance.addListener(_onChanged);
     widget.service.addListener(_onChanged);
     _sortCells();
-    // Start polling cell voltages every 5s — stops automatically in dispose()
     widget.service.startCellVoltagePolling();
   }
 
@@ -58,25 +57,19 @@ List<CellData> _sortedCells = [];
 
   @override
   void dispose() {
-    // Stop cell voltage polling when leaving the screen
     widget.service.stopCellVoltagePolling();
     TranslationService.instance.removeListener(_onChanged);
     widget.service.removeListener(_onChanged);
     super.dispose();
   }
 
-  // ── Build cell list from latest BLE packet ─────────────────────────────────
   List<CellData> _buildCells() {
     final cv = widget.service.latestCellVoltage;
-    if (cv == null ||
-        cv.cellVoltages == null ||
-        cv.cellVoltages!.isEmpty) {
+    if (cv == null || cv.cellVoltages == null || cv.cellVoltages!.isEmpty) {
       return [];
     }
-
-   final voltages = List<double>.from(cv.cellVoltages!);
+    final voltages  = List<double>.from(cv.cellVoltages!);
     final balancing = cv.cellBalancing ?? [];
-
     return List.generate(voltages.length, (i) {
       return CellData(
         no: i + 1,
@@ -94,14 +87,13 @@ List<CellData> _sortedCells = [];
           : a.no.compareTo(b.no));
   }
 
-  // ── Summary values from cell voltage packet ────────────────────────────────
   String get _deviceName =>
-    widget.service.batterySerial ?? 'BMS_001';
+      widget.service.batterySerial ?? 'BMS-001';
 
   int get _totalCells =>
-    widget.service.latestCellVoltage?.cellTotalCells ??
-    widget.service.latestDashboard?.totalCells ??
-    _sortedCells.length;
+      widget.service.latestCellVoltage?.cellTotalCells ??
+      widget.service.latestDashboard?.totalCells ??
+      _sortedCells.length;
 
   double? get _maxVoltage =>
       widget.service.latestCellVoltage?.cellMaxVoltage;
@@ -130,7 +122,7 @@ List<CellData> _sortedCells = [];
   ({String text, Color color, IconData icon, int bars}) _cellStatus(double v) {
     if (v >= 3.2) {
       return (
-        text: tr('healthy'),
+        text: 'Good',
         color: primaryGreen,
         icon: Icons.verified_user_outlined,
         bars: _bars(v),
@@ -138,14 +130,14 @@ List<CellData> _sortedCells = [];
     }
     if (v >= 3.1) {
       return (
-        text: tr('medium'),
+        text: 'Poor',
         color: mediumYellow,
         icon: Icons.info_outline_rounded,
         bars: _bars(v),
       );
     }
     return (
-      text: tr('low'),
+      text: 'Poor',
       color: Colors.grey.shade400,
       icon: Icons.warning_amber_rounded,
       bars: _bars(v),
@@ -257,55 +249,57 @@ List<CellData> _sortedCells = [];
   }
 
   String get _sortLabel =>
-      tr(_sortBy == SortType.cellNo ? 'cell_no' : 'voltage');
+      _sortBy == SortType.cellNo ? 'Cell No.' : tr('voltage');
 
   // ─────────────────────────────────────────────────────────────────────────
   // SUMMARY CARD WIDGET
   // ─────────────────────────────────────────────────────────────────────────
   Widget _summaryCard({
-    required Widget top,
+    required Widget icon,
     required String label,
     required String value,
     String? sub,
-    Widget? bottom,
-    double size = 13,
+    double valueFontSize = 14,
   }) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 12),
-        decoration: BoxDecoration(
-          color: cardBlue,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            top,
-            const SizedBox(height: 6),
-            Text(label,
+      Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+          decoration: BoxDecoration(
+            color: cardBlue,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              icon,
+              const SizedBox(height: 5),
+              Text(
+                label,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white70, fontSize: 10)),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: size,
-                fontWeight: FontWeight.bold,
+                style: const TextStyle(
+                    color: Colors.white70, fontSize: 10, height: 1.2),
               ),
-            ),
-            if (sub != null) ...[
-              const SizedBox(height: 2),
-              Text(sub,
+              const SizedBox(height: 3),
+              Text(
+                value,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: valueFontSize,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (sub != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  sub,
                   textAlign: TextAlign.center,
-                  style:
-                      const TextStyle(color: Colors.white70, fontSize: 10)),
+                  style: const TextStyle(
+                      color: Colors.white70, fontSize: 10),
+                ),
+              ],
             ],
-            if (bottom != null) ...[
-              const SizedBox(height: 4),
-              bottom,
-            ],
-          ],
+          ),
         ),
       );
 
@@ -318,177 +312,104 @@ List<CellData> _sortedCells = [];
 
     return Scaffold(
       backgroundColor: Colors.white,
-      drawer: AppDrawer(activeRoute: '/cells', service: widget.service),
       appBar: AppBar(
         backgroundColor: primaryGreen,
         elevation: 0,
         centerTitle: true,
+        // Back arrow on the left
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
         title: Text(
-          tr('cell_details'),
+          _deviceName,
           style: const TextStyle(
-              color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold),
         ),
-        leading: Builder(
-          builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
-            onPressed: () => Scaffold.of(ctx).openDrawer(),
+        // Three-dot menu on the right
+        actions: [
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onSelected: (value) {
+              if (value == 'disconnect') _showDisconnectDialog();
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: 'disconnect',
+                child: Text(tr('disconnect')),
+              ),
+            ],
           ),
-        ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Device header row ───────────────────────────────────────────
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.battery_4_bar_rounded,
-                      color: Colors.black54, size: 32),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_deviceName,
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 3),
-                    Row(
-                      children: [
-                        Text(
-                          tr('connected'),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: primaryGreen,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Container(
-                          width: 8, height: 8,
-                          decoration: const BoxDecoration(
-                              color: primaryGreen, shape: BoxShape.circle),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const Spacer(),
-                ElevatedButton(
-                  onPressed: _showDisconnectDialog,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: warningOrange,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6)),
-                  ),
-                  child: Text(tr('disconnect'),
-                      style: const TextStyle(
-                          fontSize: 12, fontWeight: FontWeight.bold)),
-                ),
-              ],
+            // ── "Cell Details (N Cells)" subtitle ──────────────────────────
+            Text(
+              'Cell Details${_totalCells > 0 ? ' ($_totalCells Cells)' : ''}',
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            // ── Summary cards ───────────────────────────────────────────────
+            // ── Summary cards (4 cards matching screenshot) ─────────────────
             IntrinsicHeight(
               child: Row(
                 children: [
-                  // Total cells
-                  Expanded(
-                    child: _summaryCard(
-                      top: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: const [
-                          Wrap(spacing: 2, children: [
-                            Icon(Icons.battery_full,
-                                color: Colors.white, size: 16),
-                            Icon(Icons.battery_full,
-                                color: Colors.white, size: 16),
-                            Icon(Icons.battery_full,
-                                color: Colors.white, size: 16),
-                          ]),
-                          SizedBox(height: 2),
-                          Wrap(spacing: 2, children: [
-                            Icon(Icons.battery_full,
-                                color: Colors.white, size: 16),
-                            Icon(Icons.battery_full,
-                                color: Colors.white, size: 16),
-                            Icon(Icons.battery_full,
-                                color: Colors.white, size: 16),
-                          ]),
-                        ],
-                      ),
-                      label: tr('total_cells'),
-                      value: _totalCells > 0 ? '$_totalCells' : '–',
-                    ),
+                  // Max Volt
+                  _summaryCard(
+                    icon: _vIcon(),
+                    label: 'Max. Volt',
+                    value: _maxVoltage != null
+                        ? '${_maxVoltage!.toStringAsFixed(3)} V'
+                        : '– V',
+                    sub: _maxVoltageNo != null
+                        ? 'Cell ${_maxVoltageNo.toString().padLeft(2, '0')}'
+                        : null,
                   ),
                   const SizedBox(width: 4),
-                  // Max voltage
-                  Expanded(
-                    child: _summaryCard(
-                      top: _vIcon(),
-                      label: tr('max_cell'),
-                      value: _maxVoltage != null
-                          ? '${_maxVoltage!.toStringAsFixed(3)} V'
-                          : '– V',
-                      sub: _maxVoltageNo != null
-                          ? 'Cell ${_maxVoltageNo.toString().padLeft(2, '0')}'
-                          : '–',
-                    ),
+                  // Min Volt
+                  _summaryCard(
+                    icon: _vIcon(),
+                    label: 'Min. Volt',
+                    value: _minVoltage != null
+                        ? '${_minVoltage!.toStringAsFixed(3)} V'
+                        : '– V',
+                    sub: _minVoltageNo != null
+                        ? 'Cell ${_minVoltageNo.toString().padLeft(2, '0')}'
+                        : null,
                   ),
                   const SizedBox(width: 4),
-                  // Min voltage
-                  Expanded(
-                    child: _summaryCard(
-                      top: _vIcon(),
-                      label: tr('min_cell'),
-                      value: _minVoltage != null
-                          ? '${_minVoltage!.toStringAsFixed(3)} V'
-                          : '– V',
-                      sub: _minVoltageNo != null
-                          ? 'Cell ${_minVoltageNo.toString().padLeft(2, '0')}'
-                          : '–',
-                    ),
+                  // Average Voltage
+                  _summaryCard(
+                    icon: _vIcon(),
+                    label: 'Average\nVoltage',
+                    value: _avgVoltage != null
+                        ? '${_avgVoltage!.toStringAsFixed(1)} V'
+                        : '– V',
                   ),
                   const SizedBox(width: 4),
-                  // Avg voltage
-                  Expanded(
-                    child: _summaryCard(
-                      top: _vIcon(),
-                      label: tr('avg_voltage'),
-                      value: _avgVoltage != null
-                          ? '${_avgVoltage!.toStringAsFixed(3)} V'
-                          : '– V',
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  // Balancing status
-                  Expanded(
-                    child: _summaryCard(
-                      top: const Icon(Icons.balance_rounded,
-                          color: Colors.white, size: 26),
-                      label: tr('balancing'),
-                     value: widget.service.latestCellVoltage != null
-                      ? (_balancingActive
-                          ? tr('active')
-                          : tr('inactive'))
-                      : '–',
-                      size: 13,
-                      bottom: const Icon(Icons.bar_chart_rounded,
-                          color: Colors.white70, size: 18),
-                    ),
+                  // Balancing
+                  _summaryCard(
+                    icon: const Icon(Icons.balance_rounded,
+                        color: Colors.white, size: 24),
+                    label: 'Balancing',
+                    value: widget.service.latestCellVoltage != null
+                        ? (_balancingActive ? 'Active' : 'Active/')
+                        : '–',
+                    sub: widget.service.latestCellVoltage != null
+                        ? 'Inactive'
+                        : null,
+                    valueFontSize: 12,
                   ),
                 ],
               ),
@@ -496,7 +417,7 @@ List<CellData> _sortedCells = [];
 
             const SizedBox(height: 16),
 
-            // ── Cell voltages header ────────────────────────────────────────
+            // ── Cell Voltages header ────────────────────────────────────────
             Container(
               padding: const EdgeInsets.symmetric(
                   horizontal: 16, vertical: 12),
@@ -510,36 +431,44 @@ List<CellData> _sortedCells = [];
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    tr('cell_voltages'),
-                    style: const TextStyle(
+                  const Text(
+                    'Cell Voltages',
+                    style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
                         color: Colors.black54),
                   ),
                   Row(
                     children: [
-                      Text('${tr('sort_by')}: '),
-                      GestureDetector(
-                        onTap: () => _showSortMenu(context),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                                color: const Color(0xFFCCCCCC)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(_sortLabel),
-                              const SizedBox(width: 4),
-                              const Icon(
-                                  Icons.keyboard_arrow_down_rounded,
-                                  size: 18),
-                            ],
+                      const Text(
+                        'Sort by: ',
+                        style: TextStyle(fontSize: 13, color: Colors.black54),
+                      ),
+                      Builder(
+                        builder: (ctx) => GestureDetector(
+                          onTap: () => _showSortMenu(ctx),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(6),
+                              border:
+                                  Border.all(color: const Color(0xFFCCCCCC)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _sortLabel,
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                                const SizedBox(width: 4),
+                                const Icon(
+                                    Icons.keyboard_arrow_down_rounded,
+                                    size: 18),
+                              ],
+                            ),
                           ),
                         ),
                       ),
@@ -617,9 +546,7 @@ List<CellData> _sortedCells = [];
                                       ),
                                     ),
                                     const Spacer(),
-                                    // Status icon + label
-                                    Icon(s.icon, color: s.color, size: 17),
-                                    const SizedBox(width: 4),
+                                    // Status label
                                     Text(
                                       s.text,
                                       style: TextStyle(
@@ -627,7 +554,7 @@ List<CellData> _sortedCells = [];
                                           color: s.color,
                                           fontWeight: FontWeight.w500),
                                     ),
-                                    // ── Balancing badge "B" ─────────────
+                                    // Balancing badge "B" shown right after status
                                     if (cell.balancingActive) ...[
                                       const SizedBox(width: 6),
                                       Container(
@@ -650,7 +577,6 @@ List<CellData> _sortedCells = [];
                                         ),
                                       ),
                                     ] else ...[
-                                      // Reserve same space so rows don't shift
                                       const SizedBox(width: 26),
                                     ],
                                   ],
@@ -658,12 +584,13 @@ List<CellData> _sortedCells = [];
                               ),
                               if (index != _sortedCells.length - 1)
                                 const Divider(
-                                    height: 1, indent: 16, endIndent: 16),
+                                    height: 1,
+                                    indent: 16,
+                                    endIndent: 16),
                             ],
                           );
                         },
                       )
-                    // ── Empty / loading state ─────────────────────────────
                     : Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -688,8 +615,8 @@ List<CellData> _sortedCells = [];
   }
 
   static Widget _vIcon() => Container(
-        width: 32,
-        height: 32,
+        width: 28,
+        height: 28,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(color: Colors.white, width: 1.5),
@@ -699,7 +626,7 @@ List<CellData> _sortedCells = [];
             'V',
             style: TextStyle(
               color: Colors.white,
-              fontSize: 14,
+              fontSize: 13,
               fontWeight: FontWeight.bold,
             ),
           ),
