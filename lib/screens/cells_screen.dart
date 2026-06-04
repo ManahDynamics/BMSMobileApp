@@ -37,8 +37,7 @@ class _CellsScreenState extends State<CellsScreen> {
   static const lightBg       = Color(0xFFF5F5F5);
 
   SortType _sortBy = SortType.cellNo;
-  late List<CellData> _sortedCells;
-
+List<CellData> _sortedCells = [];
   String tr(String key) => TranslationService.t(key);
 
   @override
@@ -75,7 +74,7 @@ class _CellsScreenState extends State<CellsScreen> {
       return [];
     }
 
-    final voltages  = cv.cellVoltages!;
+   final voltages = List<double>.from(cv.cellVoltages!);
     final balancing = cv.cellBalancing ?? [];
 
     return List.generate(voltages.length, (i) {
@@ -96,15 +95,13 @@ class _CellsScreenState extends State<CellsScreen> {
   }
 
   // ── Summary values from cell voltage packet ────────────────────────────────
-  String get _deviceName {
-    return widget.service.batterySerial ?? 'BMS_001';
-  }
+  String get _deviceName =>
+    widget.service.batterySerial ?? 'BMS_001';
 
-  int get _totalCells {
-    return widget.service.latestCellVoltage?.cellTotalCells ??
-        widget.service.latestDashboard?.totalCells ??
-        0;
-  }
+  int get _totalCells =>
+    widget.service.latestCellVoltage?.cellTotalCells ??
+    widget.service.latestDashboard?.totalCells ??
+    _sortedCells.length;
 
   double? get _maxVoltage =>
       widget.service.latestCellVoltage?.cellMaxVoltage;
@@ -483,9 +480,11 @@ class _CellsScreenState extends State<CellsScreen> {
                       top: const Icon(Icons.balance_rounded,
                           color: Colors.white, size: 26),
                       label: tr('balancing'),
-                      value: widget.service.latestCellVoltage != null
-                          ? (_balancingActive ? 'Active' : 'Inactive')
-                          : '–',
+                     value: widget.service.latestCellVoltage != null
+                      ? (_balancingActive
+                          ? tr('active')
+                          : tr('inactive'))
+                      : '–',
                       size: 13,
                       bottom: const Icon(Icons.bar_chart_rounded,
                           color: Colors.white70, size: 18),
