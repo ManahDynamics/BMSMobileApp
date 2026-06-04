@@ -1,6 +1,7 @@
 // lib/services/parsed_packet.dart
 
 import 'dart:typed_data';
+import 'protocol.dart';
 
 enum PacketDirection { send, receive, unknown }
 
@@ -15,21 +16,30 @@ class BMSParsedPacket {
   final DateTime receivedAt;
   final PacketDirection direction;
 
-  // ── Packet 4 fields (dataId == 0x51) ─────────────────────────────────────
+  // ── Dashboard / Packet4 shared fields ────────────────────────────────────
+  final int?    soc;
   final double? totalVoltage;
   final double? totalCurrent;
-  final int?    soc;
   final double? remainingCapacity;
-  final double? totalPower;
+  final double? totalPower;         // in Watts
   final String? totalPowerDisplay;
 
-  // ── Device info fields (dataId 0x59–0x5C) ─────────────────────────────────
-  // Populated when the BMS responds to a device-info request packet.
-  // Each field holds the decoded ASCII string from bytes 3–16 of the response.
-  final String? batterySerial;   // Packet 12 – dataId 0x59
-  final String? softwareVersion; // Packet 13 – dataId 0x5A
-  final String? hardwareVersion; // Packet 14 – dataId 0x5B
-  final String? snCode;          // Packet 15 – dataId 0x5C
+  // ── Dashboard-only fields (dataId == 0x52, 86-byte response) ─────────────
+  final int?    batteryStatusCode;  // raw byte: 0x01/0x02/0x03
+  final int?    healthCode;         // raw byte: 0x01/0x02
+  final double? temperature;        // °C
+  final int?    totalCells;
+  final int?    chargeCycles;
+  final double? avgCellVoltage;     // V (×0.001)
+  final double? voltageDiff;        // V (×0.001)
+  final double? maxCellVoltage;     // V (×0.001)
+  final double? minCellVoltage;     // V (×0.001)
+
+  // ── Device info fields (dataId 0x59–0x5C) ────────────────────────────────
+  final String? batterySerial;
+  final String? softwareVersion;
+  final String? hardwareVersion;
+  final String? snCode;
 
   const BMSParsedPacket({
     required this.startByte,
@@ -40,13 +50,23 @@ class BMSParsedPacket {
     required this.rawBytes,
     required this.receivedAt,
     this.direction = PacketDirection.unknown,
-    // Packet 4
+    // Shared
+    this.soc,
     this.totalVoltage,
     this.totalCurrent,
-    this.soc,
     this.remainingCapacity,
     this.totalPower,
     this.totalPowerDisplay,
+    // Dashboard-only
+    this.batteryStatusCode,
+    this.healthCode,
+    this.temperature,
+    this.totalCells,
+    this.chargeCycles,
+    this.avgCellVoltage,
+    this.voltageDiff,
+    this.maxCellVoltage,
+    this.minCellVoltage,
     // Device info
     this.batterySerial,
     this.softwareVersion,
@@ -59,34 +79,76 @@ class BMSParsedPacket {
   bool get isAck =>
       startByte == 0xAA && stopByte == 0xBB && dataId == 0x50;
 
-  bool get isDisconnect =>
-      dataId == 0x91;
+  bool get isDisconnect => dataId == 0x91;
 
-  bool get isHandshake =>
-      dataId == 0x90 && startByte == 0xCC;
+  bool get isHandshake => dataId == 0x90 && startByte == 0xCC;
 
-  bool get isPacket4 =>
-      dataId == 0x51 && totalVoltage != null;
+  /// Legacy 12-byte packet (0x51)
+  bool get isPacket4 => dataId == 0x51 && totalVoltage != null;
 
-  /// True when this packet carries one of the four device-info ASCII strings.
+  /// New 86-byte full dashboard response (0x52)
+  bool get isDashboardResponse => dataId == 0x52 && totalVoltage != null;
+
   bool get isDeviceInfo =>
       dataId == 0x59 || dataId == 0x5A || dataId == 0x5B || dataId == 0x5C;
 
-  // ── Direction label for UI/log display ───────────────────────────────────
-  String get directionLabel {
-    switch (direction) {
-      case PacketDirection.send:    return 'TX';
-      case PacketDirection.receive: return 'RX';
-      case PacketDirection.unknown: return '??';
-    }
-  }
+  // ── Decoded label fields ──────────────────────────────────────────────────
+
+  String get batteryStatusLabel =>
+      batteryStatusCode != null
+          ? BMSProtocol.batteryStatusLabel(batteryStatusCode!)
+          : '–';
+
+  String get healthLabel =>
+      healthCode != null ? BMSProtocol.healthLabel(healthCode!) : '–';
 
   // ── Formatted display strings ─────────────────────────────────────────────
-  String get voltageDisplay    => totalVoltage      != null ? '${totalVoltage!.toStringAsFixed(1)} V'       : '– V';
-  String get currentDisplay    => totalCurrent      != null ? '${totalCurrent!.toStringAsFixed(1)} A'       : '– A';
-  String get socDisplay        => soc               != null ? '$soc %'                                       : '– %';
-  String get capacityDisplay   => remainingCapacity != null ? '${remainingCapacity!.toStringAsFixed(1)} Ah' : '– Ah';
-  String get powerDisplay      => totalPower        != null ? '${totalPower!.toStringAsFixed(1)} W'         : '– W';
+
+  String get voltageDisplay =>
+      totalVoltage != null ? '${totalVoltage!.toStringAsFixed(1)} V' : '– V';
+
+  String get currentDisplay =>
+      totalCurrent != null ? '${totalCurrent!.toStringAsFixed(1)} A' : '– A';
+
+  String get socDisplay =>
+      soc != null ? '$soc %' : '– %';
+
+  String get capacityDisplay =>
+      remainingCapacity != null
+          ? '${remainingCapacity!.toStringAsFixed(1)} Ah'
+          : '– Ah';
+
+  String get powerDisplay =>
+      totalPower != null ? '${totalPower!.toStringAsFixed(0)} W' : '– W';
+
+  String get temperatureDisplay =>
+      temperature != null ? '${temperature!.toStringAsFixed(1)} °C' : '– °C';
+
+  String get avgCellVoltageDisplay =>
+      avgCellVoltage != null
+          ? '${avgCellVoltage!.toStringAsFixed(3)} V'
+          : '– V';
+
+  String get voltageDiffDisplay =>
+      voltageDiff != null
+          ? '${voltageDiff!.toStringAsFixed(3)} V'
+          : '– V';
+
+  String get maxCellVoltageDisplay =>
+      maxCellVoltage != null
+          ? '${maxCellVoltage!.toStringAsFixed(3)} V'
+          : '– V';
+
+  String get minCellVoltageDisplay =>
+      minCellVoltage != null
+          ? '${minCellVoltage!.toStringAsFixed(3)} V'
+          : '– V';
+
+  String get chargeCyclesDisplay =>
+      chargeCycles != null ? '$chargeCycles' : '–';
+
+  String get totalCellsDisplay =>
+      totalCells != null ? '$totalCells' : '–';
 
   // ── Human-readable type name for logs ─────────────────────────────────────
   String get typeName {
@@ -94,13 +156,22 @@ class BMSParsedPacket {
       case 0x90: return 'HANDSHAKE';
       case 0x50: return 'ACK';
       case 0x91: return 'DISCONNECT';
-      case 0x51: return 'Packet4 (SOC/Voltage/Current)';
+      case 0x51: return 'Packet4 legacy (SOC/V/A)';
+      case 0x52: return 'Dashboard Response (full 86-byte)';
       case 0x59: return 'Battery Serial No';
       case 0x5A: return 'Software Version';
       case 0x5B: return 'Hardware Version';
       case 0x5C: return 'SN Code';
       default:
         return 'Unknown (0x${dataId.toRadixString(16).toUpperCase().padLeft(2, "0")})';
+    }
+  }
+
+  String get directionLabel {
+    switch (direction) {
+      case PacketDirection.send:    return 'TX';
+      case PacketDirection.receive: return 'RX';
+      case PacketDirection.unknown: return '??';
     }
   }
 
@@ -114,10 +185,21 @@ class BMSParsedPacket {
     Uint8List?       rawBytes,
     DateTime?        receivedAt,
     PacketDirection? direction,
+    int?             soc,
     double?          totalVoltage,
     double?          totalCurrent,
-    int?             soc,
     double?          remainingCapacity,
+    double?          totalPower,
+    String?          totalPowerDisplay,
+    int?             batteryStatusCode,
+    int?             healthCode,
+    double?          temperature,
+    int?             totalCells,
+    int?             chargeCycles,
+    double?          avgCellVoltage,
+    double?          voltageDiff,
+    double?          maxCellVoltage,
+    double?          minCellVoltage,
     String?          batterySerial,
     String?          softwareVersion,
     String?          hardwareVersion,
@@ -132,10 +214,21 @@ class BMSParsedPacket {
       rawBytes:          rawBytes          ?? this.rawBytes,
       receivedAt:        receivedAt        ?? this.receivedAt,
       direction:         direction         ?? this.direction,
+      soc:               soc               ?? this.soc,
       totalVoltage:      totalVoltage      ?? this.totalVoltage,
       totalCurrent:      totalCurrent      ?? this.totalCurrent,
-      soc:               soc               ?? this.soc,
       remainingCapacity: remainingCapacity ?? this.remainingCapacity,
+      totalPower:        totalPower        ?? this.totalPower,
+      totalPowerDisplay: totalPowerDisplay ?? this.totalPowerDisplay,
+      batteryStatusCode: batteryStatusCode ?? this.batteryStatusCode,
+      healthCode:        healthCode        ?? this.healthCode,
+      temperature:       temperature       ?? this.temperature,
+      totalCells:        totalCells        ?? this.totalCells,
+      chargeCycles:      chargeCycles      ?? this.chargeCycles,
+      avgCellVoltage:    avgCellVoltage    ?? this.avgCellVoltage,
+      voltageDiff:       voltageDiff       ?? this.voltageDiff,
+      maxCellVoltage:    maxCellVoltage    ?? this.maxCellVoltage,
+      minCellVoltage:    minCellVoltage    ?? this.minCellVoltage,
       batterySerial:     batterySerial     ?? this.batterySerial,
       softwareVersion:   softwareVersion   ?? this.softwareVersion,
       hardwareVersion:   hardwareVersion   ?? this.hardwareVersion,
@@ -144,11 +237,22 @@ class BMSParsedPacket {
   }
 
   @override
-  String toString() =>
-      'BMSParsedPacket('
-      'type=$typeName, '
-      'dir=$directionLabel'
-      '${isPacket4 ? ", $voltageDisplay, $currentDisplay, $socDisplay, $capacityDisplay, $powerDisplay" : ""}'
-      '${isDeviceInfo ? ", value=${batterySerial ?? softwareVersion ?? hardwareVersion ?? snCode}" : ""}'
-      ')';
+  String toString() {
+    final sb = StringBuffer('BMSParsedPacket(type=$typeName, dir=$directionLabel');
+    if (isPacket4 || isDashboardResponse) {
+      sb.write(', $voltageDisplay, $currentDisplay, $socDisplay, $capacityDisplay');
+    }
+    if (isDashboardResponse) {
+      sb.write(', status=$batteryStatusLabel, health=$healthLabel'
+          ', temp=$temperatureDisplay, cells=$totalCellsDisplay'
+          ', cycles=$chargeCyclesDisplay, avg=$avgCellVoltageDisplay'
+          ', diff=$voltageDiffDisplay, max=$maxCellVoltageDisplay'
+          ', min=$minCellVoltageDisplay');
+    }
+    if (isDeviceInfo) {
+      sb.write(', value=${batterySerial ?? softwareVersion ?? hardwareVersion ?? snCode}');
+    }
+    sb.write(')');
+    return sb.toString();
+  }
 }

@@ -74,6 +74,8 @@ class BMSPacketFormatter {
         return 'Length field mismatch.';
       case BMSParseError.crcMismatch:
         return 'CRC-8 mismatch — packet may be corrupted.';
+        default:
+         return 'Unknown Error';
     }
   }
 
