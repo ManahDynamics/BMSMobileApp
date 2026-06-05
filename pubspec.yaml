@@ -32,12 +32,12 @@ dev_dependencies:
 
 flutter_native_splash:
   color: "#FFFFFF"
-  image: assets/images/splash_logo.png
+  image: assets/images/splash_logo.svg
   fullscreen: true
 
   android_12:
     color: "#FFFFFF"
-    image: assets/images/splash_logo.png
+    image: assets/images/splash_logo.svg
     icon_background_color: "#FFFFFF"
 
 flutter:
