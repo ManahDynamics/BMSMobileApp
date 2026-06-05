@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:flutter_svg/flutter_svg.dart';
 
 import 'package:bmsmobileapp/services/translation_service.dart';
 
@@ -182,9 +183,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(22),
                       child: Padding(
                         padding: const EdgeInsets.all(12),
-                        child: Image.asset(
+                        child: SvgPicture.asset(
                           'assets/images/logo.svg',
-                          fit: BoxFit.contain,
+                          width: 120,
                         ),
                       ),
                     ),

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-
+import 'package:flutter_svg/flutter_svg.dart';
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -55,10 +55,9 @@ class _SplashScreenState extends State<SplashScreen>
           opacity: _fadeAnimation,
           child: ScaleTransition(
             scale: _scaleAnimation,
-            child: Image.asset(
+            child: SvgPicture.asset(
               'assets/images/splash_logo.svg',
-              width: 300, 
-              fit: BoxFit.contain,
+              width: 120, 
             ),
           ),
         ),

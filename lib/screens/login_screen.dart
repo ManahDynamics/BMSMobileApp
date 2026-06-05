@@ -7,7 +7,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
-
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:bmsmobileapp/screens/register_screen.dart';
 import 'package:bmsmobileapp/screens/forgotpassword_screen.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
@@ -333,11 +333,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius: BorderRadius.circular(22),
                       child: Padding(
                         padding: const EdgeInsets.all(12),
-                        child: Image.asset(
+                        child: SvgPicture.asset(
                           'assets/images/logo.svg',
-                          width: 110,
-                          height: 110,
-                          fit: BoxFit.cover,
+                          width: 120,
                         ),
                       ),
                     ),
