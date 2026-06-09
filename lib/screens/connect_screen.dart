@@ -155,12 +155,10 @@ class _ConnectScreenState extends State<ConnectScreen> {
       return;
     }
 
-    final state = await FlutterBluePlus.adapterState.first; 
+    final state = await FlutterBluePlus.adapterState.first;
 
     if (state == BluetoothAdapterState.off) {
-      _dialog(context,
-          title: tr('connect.bluetooth_off'),
-          msg: tr('connect.enable_bluetooth'));
+      _bluetoothOffDialog(context); // <-- new dialog with Enable button
       return;
     }
 
@@ -183,7 +181,88 @@ class _ConnectScreenState extends State<ConnectScreen> {
       ),
     );
   }
-  // ================= DIALOG =================
+
+  // ================= BLUETOOTH OFF DIALOG (with Enable button) =================
+  void _bluetoothOffDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.bluetooth_disabled_rounded, color: Colors.red),
+            const SizedBox(width: 8),
+            Text(tr('connect.bluetooth_off')),
+          ],
+        ),
+        content: Text(tr('connect.enable_bluetooth')),
+        actions: [
+          // Cancel button
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              tr('connect.cancel'),
+              style: const TextStyle(color: Colors.black54),
+            ),
+          ),
+          // Enable button
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            icon: const Icon(Icons.bluetooth_rounded, size: 18),
+            label: Text(tr('connect.enable')),
+            onPressed: () async {
+              Navigator.pop(context); // close dialog first
+              try {
+                await FlutterBluePlus.turnOn(); // request BT turn-on (Android)
+
+                // Wait until adapter is on (timeout 10s)
+                final newState = await FlutterBluePlus.adapterState
+                    .firstWhere(
+                      (s) => s == BluetoothAdapterState.on,
+                    )
+                    .timeout(
+                      const Duration(seconds: 10),
+                      onTimeout: () => BluetoothAdapterState.off,
+                    );
+
+                if (newState == BluetoothAdapterState.on) {
+                  // BT turned on — proceed to scan page
+                  Navigator.push(
+                    context,
+                    SlideRoute(
+                      page: BluetoothDeviceScanPage(
+                        service: BMSBluetoothService(),
+                      ),
+                    ),
+                  );
+                } else {
+                  // User denied or timed out
+                  _dialog(context,
+                      title: tr('connect.bluetooth_off'),
+                      msg: tr('connect.enable_bluetooth'));
+                }
+              } catch (e) {
+                // FlutterBluePlus.turnOn() is Android-only;
+                // on iOS it will throw — show a manual instruction dialog
+                _dialog(
+                  context,
+                  title: tr('connect.bluetooth_off'),
+                  msg: tr('connect.enable_bluetooth_ios'),
+                );
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ================= GENERIC INFO DIALOG =================
   void _dialog(BuildContext context,
       {required String title, required String msg}) {
     showDialog(
@@ -192,7 +271,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
         title: Text(title),
         content: Text(msg),
         actions: [
-         TextButton(
+          TextButton(
             onPressed: () => Navigator.pop(context),
             child: Text(tr('connect.ok')),
           )

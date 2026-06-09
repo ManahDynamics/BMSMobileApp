@@ -263,13 +263,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             fontSize: 15, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 2),
                     // Software Version — Bytes 17–30
-                    Text('Software Version: $swVersion',
+                    Text('${tr('software_version')}: $swVersion',
                         style: const TextStyle(fontSize: 11, color: Colors.black54)),
                     // Hardware Version — Bytes 31–44
-                    Text('Hardware Version: $hwVersion',
+                    Text('${tr('hardware_version')}: $hwVersion',
                         style: const TextStyle(fontSize: 11, color: Colors.black54)),
                     // SN Code — Bytes 45–58
-                    Text('SN Code: $snCode',
+                    Text('${tr('sn_code')}: $snCode',
                         style: const TextStyle(fontSize: 11, color: Colors.black54)),
                     const SizedBox(height: 4),
                     Row(children: [
@@ -322,20 +322,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _metricRow(
                 _MetricCard(
                   label: tr('voltage'),
-                  value: voltageDisplay,        // Bytes 64–65
+                  value: voltageDisplay,
                   iconLabel: 'V',
                 ),
                 _MetricCard(
                   label: tr('current'),
-                  value: currentDisplay,        // Bytes 66–67
+                  value: currentDisplay,
                   iconLabel: 'A',
-                  // Badge shown only when battery status is Charging or Load Connected
                   chargingBadgeText: isCharging
-                      ? 'Charging'
+                      ? tr('charging')
                       : isLoadConnected
-                          ? 'Load'
+                          ? tr('load')
                           : null,
-                  // Red dot only when discharging (positive current = drain)
                   showRedDot: isDischarging,
                 ),
               ),
