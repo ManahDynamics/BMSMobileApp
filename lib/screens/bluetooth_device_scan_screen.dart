@@ -71,7 +71,10 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
       if (!mounted) return;
       setState(() {
         _devices = results
-            .where((r) => r.device.platformName.isNotEmpty)
+            .where((r) {
+              final name = r.device.platformName.toLowerCase();
+              return name.isNotEmpty && name.startsWith('mch');
+            })
             .map((r) => r.device)
             .toList();
       });
