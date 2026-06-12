@@ -3,21 +3,17 @@
 
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
-import 'package:bmsmobileapp/screens/login_screen.dart';
-import 'package:bmsmobileapp/screens/editprofile_screen.dart';
-import 'package:bmsmobileapp/screens/forgotpassword_screen.dart';
-import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 import 'package:bmsmobileapp/screens/cells_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
+import 'package:bmsmobileapp/widgets/app_drawer.dart';
 
-// ── Theme constants ───────────────────────────────────────────────────────────
-const _green  = Color(0xFF1B6B3A);
-const _blue   = Color(0xFF3A6EAC);
+const _green = Color(0xFF1B6B3A);
+const _blue = Color(0xFF3A6EAC);
 const _orange = Color(0xFFD4621A);
-const _gap12  = SizedBox(height: 12);
-const _gap16  = SizedBox(height: 16);
+const _gap12 = SizedBox(height: 12);
+const _gap16 = SizedBox(height: 16);
 
 class DashboardScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -40,105 +36,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _showDialog({
-    required String title,
-    required String content,
-    required String btnText,
-    required Color color,
-    required VoidCallback onConfirm,
-  }) =>
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          title: Text(title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.bold)),
-          content: Text(content, textAlign: TextAlign.center),
-          actionsAlignment: MainAxisAlignment.center,
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text(tr('cancel'),
-                  style: const TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () { Navigator.pop(ctx); onConfirm(); },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: color,
-                foregroundColor: Colors.white,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
-              ),
-              child: Text(btnText),
-            ),
-          ],
-        ),
-      );
-
-  Future<void> _showMenu(BuildContext ctx) async {
-    final btn     = ctx.findRenderObject() as RenderBox;
-    final overlay = Navigator.of(ctx).overlay!.context.findRenderObject() as RenderBox;
-    final off     = btn.localToGlobal(Offset.zero, ancestor: overlay);
-
-    final result = await showMenu<String>(
-      context: ctx,
-      position: RelativeRect.fromLTRB(
-          overlay.size.width, off.dy + btn.size.height, 8, 0),
-      color: Colors.white,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      items: [
-        _menuItem('edit_profile',    Icons.person_outline_rounded, tr('edit_profile')),
-        const PopupMenuDivider(height: 1),
-        _menuItem('forgot_password', Icons.lock_reset_rounded,     tr('forget_password')),
-        const PopupMenuDivider(height: 1),
-        _menuItem('logout',          Icons.logout_rounded,         tr('logout'), color: Colors.red),
-      ],
+  void _showDisconnectDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        title: const Text('Disconnect', textAlign: TextAlign.center),
+        content: const Text('Are you sure you want to disconnect?', textAlign: TextAlign.center),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _disconnect();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: _orange),
+            child: const Text('Disconnect'),
+          ),
+        ],
+      ),
     );
-
-    final routes = {
-      'edit_profile':    const EditProfileScreen(),
-      'forgot_password': const ForgotPasswordScreen(),
-    };
-    if (routes.containsKey(result)) {
-      Navigator.push(ctx, SlideRoute(page: routes[result]!));
-    } else if (result == 'logout') {
-      _showDialog(
-        title: tr('logout'),
-        content: tr('logout_confirmation'),
-        btnText: tr('logout'),
-        color: _blue,
-        onConfirm: () => Navigator.pushAndRemoveUntil(
-            ctx, SlideRoute(page: const LoginScreen()), (_) => false),
-      );
-    }
   }
-
-  PopupMenuItem<String> _menuItem(
-    String value, IconData icon, String text, {
-    Color color = Colors.black87,
-  }) =>
-      PopupMenuItem(
-        value: value,
-        child: Row(children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(width: 12),
-          Text(text, style: TextStyle(color: color)),
-        ]),
-      );
-
-  Widget _metricRow(Widget a, Widget b) => IntrinsicHeight(
-        child: Row(children: [
-          Expanded(child: a),
-          const SizedBox(width: 12),
-          Expanded(child: b),
-        ]),
-      );
 
   @override
   Widget build(BuildContext context) {
+    final svc = widget.service;
+    final dash = svc.latestDashboard;
+    final cell = svc.latestCellVoltage;
+
+    // Device Info
+    final String deviceName = svc.bleName ?? svc.device?.name ?? 'BMS Device';
+    final String swVersion = svc.softwareVersion ?? dash?.softwareVersion ?? '-';
+    final String hwVersion = svc.hardwareVersion ?? dash?.hardwareVersion ?? '-';
+    final String serialNo = svc.batterySerial ?? dash?.batterySerial ?? '-';
+    const String batteryType = 'LiPo';
+
+    // Dashboard Data
+    final int soc = dash?.soc ?? 9;
+    final String batteryStatus = dash?.batteryStatusLabel ?? 'N/A';
+    final bool isCharging = dash?.batteryStatusCode == 0x01;
+    final String capacityDisplay = dash?.capacityDisplay ?? '0.0 Ah';
+    final String health = dash?.healthLabel ?? 'N/A';
+
+    final String voltageDisplay = dash?.voltageDisplay ?? '0.0 V';
+    final String currentDisplay = dash?.currentDisplay ?? '0.0 A';
+    final String tempDisplay = dash?.temperatureDisplay ?? '0.0 °C';
+    final String powerDisplay = dash?.powerDisplay ?? '0 W';
+
+    final int cellCount = dash?.totalCells ?? cell?.cellTotalCells ?? 0;
+    final String cellCountLabel = cellCount.toString();
+    final String cyclesDisplay = dash?.chargeCyclesDisplay ?? '0';
+    final String avgVoltage = dash?.avgCellVoltageDisplay ?? '0.00 V';
+    final String voltDiff = dash?.voltageDiffDisplay ?? '0.00 V';
+    final String minVoltage = dash?.minCellVoltageDisplay ?? '0.00 V';
+    final String maxVoltage = dash?.maxCellVoltageDisplay ?? '0.00 V';
+
+    final List<double> cellVoltages = cell?.cellVoltages ?? [];
+    final int? maxVoltageNo = cell?.cellMaxVoltageNo;
+    final int? minVoltageNo = cell?.cellMinVoltageNo;
+
     return Scaffold(
       backgroundColor: Colors.white,
       drawer: AppDrawer(activeRoute: '/dashboard', service: widget.service),
@@ -146,260 +103,142 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: _green,
         elevation: 0,
         centerTitle: true,
-        leading: Builder(builder: (ctx) => IconButton(
-          icon: const Icon(Icons.menu_rounded, color: Colors.white),
-          onPressed: () => Scaffold.of(ctx).openDrawer(),
-        )),
-        title: Text(tr('dashboard'),
-            style: const TextStyle(
-                color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
+        leading: Builder(
+          builder: (ctx) => IconButton(
+            icon: const Icon(Icons.menu_rounded, color: Colors.white),
+            onPressed: () => Scaffold.of(ctx).openDrawer(),
+          ),
+        ),
+        title: Text(deviceName,
+            style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600)),
         actions: [
-          Builder(builder: (ctx) => IconButton(
-            onPressed: () => _showMenu(ctx),
-            icon: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Icon(Icons.more_vert, color: Colors.white),
-            ),
-          )),
+          IconButton(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            onPressed: () {},
+          ),
         ],
       ),
-
-      body: ListenableBuilder(
-        listenable: widget.service,
-        builder: (_, _) {
-          final svc  = widget.service;
-          // Primary source: 86-byte dashboard (0x52).
-          // Falls back to legacy packet4 (0x51) if dashboard not yet received.
-          final dash = svc.latestDashboard ?? svc.latestPacket4;
-
-          // ── Byte 3–16  : Battery Serial (device header) ───────────────────
-          // ── Byte 17–30 : Software Version ────────────────────────────────
-          // ── Byte 31–44 : Hardware Version ────────────────────────────────
-          // ── Byte 45–58 : SN Code ─────────────────────────────────────────
-          final String deviceName = svc.batterySerial   ?? '–';
-          final String swVersion  = svc.softwareVersion ?? '–';
-          final String hwVersion  = svc.hardwareVersion ?? '–';
-          final String snCode     = svc.snCode          ?? '–';
-
-          // ── Byte 59  : SOC ────────────────────────────────────────────────
-          final int soc = dash?.soc ?? 0;
-
-          // ── Byte 60  : Battery Status ─────────────────────────────────────
-          // 0x01 = Charging | 0x02 = Idle | 0x03 = Load Connected
-          final String batteryStatus    = dash?.batteryStatusLabel ?? '–';
-          final bool   isCharging       = dash?.batteryStatusCode == 0x01;
-          final bool   isLoadConnected  = dash?.batteryStatusCode == 0x03;
-
-          // ── Bytes 61–62 : Remaining Capacity ──────────────────────────────
-          final String capacityDisplay = dash?.capacityDisplay ?? '– Ah';
-
-          // ── Byte 63  : Health ─────────────────────────────────────────────
-          // 0x01 = Good | 0x02 = Poor
-          final String health     = dash?.healthLabel ?? '–';
-          final bool   healthGood = dash?.healthCode == 0x01;
-
-          // ── Bytes 64–65 : Total Voltage ───────────────────────────────────
-          final String voltageDisplay = dash?.voltageDisplay ?? '– V';
-
-          // ── Bytes 66–67 : Total Current ───────────────────────────────────
-          // Positive = discharging, negative = charging
-          final String currentDisplay = dash?.currentDisplay ?? '– A';
-          // Show red dot only when discharging (positive current)
-          final bool isDischarging = (dash?.totalCurrent ?? 0) > 0;
-
-          // ── Bytes 68–69 : Temperature ─────────────────────────────────────
-          final String tempDisplay = dash?.temperatureDisplay ?? '– °C';
-
-          // ── Bytes 70–71 : Power in KW (stored as W internally) ────────────
-          final String powerDisplay = dash?.powerDisplay ?? '– W';
-
-          // ── Byte 72 : Total Cells ─────────────────────────────────────────
-          final String cellCountLabel =
-              dash?.totalCells != null ? '${dash!.totalCells}' : '–';
-
-          // ── Bytes 73–74 : Charge/Discharge Cycles ─────────────────────────
-          final String cyclesDisplay = dash?.chargeCyclesDisplay ?? '–';
-
-          // ── Bytes 75–76 : Avg Cell Voltage ────────────────────────────────
-          final String avgVoltage = dash?.avgCellVoltageDisplay ?? '– V';
-
-          // ── Bytes 77–78 : Voltage Difference ─────────────────────────────
-          final String voltDiff = dash?.voltageDiffDisplay ?? '– V';
-
-          // ── Bytes 79–80 : Max Cell Voltage ────────────────────────────────
-          final String maxVoltage    = dash?.maxCellVoltageDisplay ?? '– V';
-          final double? maxVoltRaw   = dash?.maxCellVoltage;
-
-          // ── Bytes 81–82 : Min Cell Voltage ────────────────────────────────
-          final String minVoltage    = dash?.minCellVoltageDisplay ?? '– V';
-          final double? minVoltRaw   = dash?.minCellVoltage;
-
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: [
-
-              // ── Device Header (Bytes 3–58) ────────────────────────────────
-              Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Icons.battery_4_bar_rounded,
-                      color: Colors.black54, size: 32),
-                ),
-                const SizedBox(width: 12),
-                Expanded(child: Column(
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        children: [
+          // Device Header
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Battery Serial No — Bytes 3–16
-                    Text(deviceName,
-                        style: const TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 2),
-                    // Software Version — Bytes 17–30
-                    Text('${tr('software_version')}: $swVersion',
-                        style: const TextStyle(fontSize: 11, color: Colors.black54)),
-                    // Hardware Version — Bytes 31–44
-                    Text('${tr('hardware_version')}: $hwVersion',
-                        style: const TextStyle(fontSize: 11, color: Colors.black54)),
-                    // SN Code — Bytes 45–58
-                    Text('${tr('sn_code')}: $snCode',
-                        style: const TextStyle(fontSize: 11, color: Colors.black54)),
-                    const SizedBox(height: 4),
-                    Row(children: [
-                      Text(tr('connected'),
-                          style: const TextStyle(
-                              color: _green,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500)),
-                      const SizedBox(width: 6),
-                      Container(width: 8, height: 8,
-                          decoration: const BoxDecoration(
-                              color: _green, shape: BoxShape.circle)),
-                    ]),
+                    Text('Software Version', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                    Text(swVersion, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 8),
+                    Text('Hardware Version', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                    Text(hwVersion, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
                   ],
-                )),
-                ElevatedButton(
-                  onPressed: () => _showDialog(
-                    title: tr('disconnect'),
-                    content: tr('disconnect_confirmation'),
-                    btnText: tr('disconnect'),
-                    color: _orange,
-                    onConfirm: _disconnect,
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text('Battery Serial No.', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  Text(serialNo, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  RichText(
+                    text: TextSpan(
+                      style: const TextStyle(fontSize: 12),
+                      children: [
+                        const TextSpan(text: 'Battery Type: ', style: TextStyle(color: Colors.grey)),
+                        TextSpan(text: batteryType, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
+                      ],
+                    ),
                   ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _orange,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    textStyle: const TextStyle(fontSize: 13),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    onPressed: _showDisconnectDialog,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _orange,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                    ),
+                    child: const Text('DISCONNECT', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
-                  child: Text(tr('disconnect')),
-                ),
-              ]),
-
-              _gap16,
-
-              // ── Battery Card (Bytes 59, 60, 61–62, 63) ───────────────────
-              _BatteryCard(
-                soc: soc,                     // Byte 59
-                capacity: capacityDisplay,    // Bytes 61–62
-                status: batteryStatus,        // Byte 60 decoded
-                isCharging: isCharging,       // Byte 60 == 0x01
-                health: health,               // Byte 63 decoded
-                healthGood: healthGood,       // Byte 63 == 0x01
+                ],
               ),
+            ],
+          ),
 
-              _gap16,
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Text('Connected', style: TextStyle(color: _green, fontWeight: FontWeight.w600, fontSize: 14)),
+              const SizedBox(width: 8),
+              Container(width: 9, height: 9, decoration: const BoxDecoration(color: _green, shape: BoxShape.circle)),
+            ],
+          ),
 
-              // ── Row 1: Voltage (64–65) / Current (66–67) ─────────────────
-              _metricRow(
-                _MetricCard(
-                  label: tr('voltage'),
-                  value: voltageDisplay,
-                  iconLabel: 'V',
-                ),
-                _MetricCard(
-                  label: tr('current'),
-                  value: currentDisplay,
-                  iconLabel: 'A',
-                  chargingBadgeText: isCharging
-                      ? tr('charging')
-                      : isLoadConnected
-                          ? tr('load')
-                          : null,
-                  showRedDot: isDischarging,
-                ),
-              ),
+          _gap16,
 
-              _gap12,
+          _BatteryCard(
+            soc: soc,
+            capacity: capacityDisplay,
+            status: batteryStatus,
+            isCharging: isCharging,
+            health: health,
+            healthGood: true,
+          ),
 
-              // ── Row 2: Temperature (68–69) / Power (70–71) ───────────────
-              _metricRow(
-                _MetricCard(
-                  label: tr('temperature'),
-                  value: tempDisplay,           // Bytes 68–69
-                  icon: Icons.thermostat_rounded,
-                ),
-                _MetricCard(
-                  label: tr('power'),
-                  value: powerDisplay,          // Bytes 70–71
-                  icon: Icons.power_outlined,
-                ),
-              ),
+          _gap16,
 
-              const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(child: _MetricCard(label: 'Voltage', value: voltageDisplay, iconLabel: 'V')),
+              const SizedBox(width: 12),
+              Expanded(child: _MetricCard(label: 'Current', value: currentDisplay, iconLabel: 'A', badge: isCharging ? 'charging' : null)),
+            ],
+          ),
 
-              // ── Cell Summary (Bytes 72–82) ────────────────────────────────
-              _CellSummary(
-                cellCountLabel: cellCountLabel, // Byte 72
-                avgVoltage:     avgVoltage,     // Bytes 75–76
-                voltDiff:       voltDiff,       // Bytes 77–78
-                cyclesDisplay:  cyclesDisplay,  // Bytes 73–74
-                minVoltage:     minVoltage,     // Bytes 81–82
-                maxVoltage:     maxVoltage,     // Bytes 79–80
-                minVoltRaw:     minVoltRaw,
-                maxVoltRaw:     maxVoltRaw,
-                title:          tr('cell_summary'),
-                minLabel:       tr('min_cell'),
-                maxLabel:       tr('max_cell'),
-                onViewMore: () => Navigator.push(context,
-                    SlideRoute(page: CellsScreen(service: widget.service))),
-              ),
+          _gap12,
 
-              _gap16,
+          Row(
+            children: [
+              Expanded(child: _MetricCard(label: 'Temperature', value: tempDisplay, icon: Icons.thermostat_rounded)),
+              const SizedBox(width: 12),
+              Expanded(child: _MetricCard(label: 'Power', value: powerDisplay, icon: Icons.power_outlined)),
+            ],
+          ),
 
-              // ── Alerts ───────────────────────────────────────────────────
-              _AlertsCard(
-                title:      tr('active_alerts'),
-                normalText: tr('all_systems_normal'),
-              ),
+          const SizedBox(height: 24),
 
-              _gap16,
-            ]),
-          );
-        },
+          _CellSummary(
+            cellCount: cellCount,
+            cellCountLabel: cellCountLabel,
+            avgVoltage: avgVoltage,
+            voltDiff: voltDiff,
+            cyclesDisplay: cyclesDisplay,
+            minVoltage: minVoltage,
+            maxVoltage: maxVoltage,
+            cellVoltages: cellVoltages,
+            maxVoltageNo: maxVoltageNo,
+            minVoltageNo: minVoltageNo,
+            onViewMore: () => Navigator.push(context, SlideRoute(page: CellsScreen(service: widget.service))),
+          ),
+
+          _gap16,
+
+          _AlertsCard(title: 'Active Alerts', normalText: 'All Systems Normal'),
+        ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Battery Card — Byte 59 (SOC) | 60 (Status) | 61–62 (Capacity) | 63 (Health)
-// ─────────────────────────────────────────────────────────────────────────────
-class _BatteryCard extends StatelessWidget {
-  final int    soc;
-  final String capacity;
-  final String status;
-  final bool   isCharging;
-  final String health;
-  final bool   healthGood;
+// ==================== BATTERY CARD WITH BLINKING SOC ====================
+class _BatteryCard extends StatefulWidget {
+  final int soc;
+  final String capacity, status, health;
+  final bool isCharging, healthGood;
 
   const _BatteryCard({
     required this.soc,
@@ -410,331 +249,277 @@ class _BatteryCard extends StatelessWidget {
     required this.healthGood,
   });
 
-  Color get _socColor {
-    if (soc <= 10) return Colors.red;
-    if (soc <= 20) return Colors.orange;
-    return Colors.green;
+  @override
+  State<_BatteryCard> createState() => _BatteryCardState();
+}
+
+class _BatteryCardState extends State<_BatteryCard> with SingleTickerProviderStateMixin {
+  late AnimationController _blinkController;
+  late Animation<double> _blinkAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _blinkController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+    _blinkAnimation = Tween<double>(begin: 1.0, end: 0.2).animate(CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut));
+    _updateBlink();
   }
 
-  // Health shield color: green = Good (0x01), red = Poor (0x02)
-  Color get _healthColor => healthGood ? Colors.green : Colors.red;
+  void _updateBlink() {
+    if (widget.soc <= 10) {
+      _blinkController.repeat(reverse: true);
+    } else {
+      _blinkController.stop();
+      _blinkController.value = 1.0;
+    }
+  }
 
-  Widget _infoRow(String label, String value) =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label,
-            style: const TextStyle(color: Colors.white70, fontSize: 11)),
-        Text(value,
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w500, fontSize: 13)),
-      ]);
+  @override
+  void didUpdateWidget(covariant _BatteryCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.soc != widget.soc) _updateBlink();
+  }
+
+  @override
+  void dispose() {
+    _blinkController.dispose();
+    super.dispose();
+  }
+
+  Color get _socColor => widget.soc > 20 ? Colors.green : Colors.red;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-          color: _blue, borderRadius: BorderRadius.circular(10)),
-      child: Row(children: [
-        // SOC ring — Byte 59
-        SizedBox(width: 100, height: 100,
-          child: Stack(alignment: Alignment.center, children: [
-            CircularProgressIndicator(
-              value: soc / 100,
-              strokeWidth: 10,
-              backgroundColor: Colors.white24,
-              valueColor: AlwaysStoppedAnimation<Color>(_socColor),
+      decoration: BoxDecoration(color: _blue, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 120,
+            height: 120,
+            child: AnimatedBuilder(
+              animation: _blinkAnimation,
+              builder: (_, child) => Opacity(
+                opacity: widget.soc <= 10 ? _blinkAnimation.value : 1.0,
+                child: child,
+              ),
+              child: CustomPaint(
+                painter: _SocRingPainter(soc: widget.soc, ringColor: _socColor),
+                child: Center(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text('${widget.soc}%', style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: Colors.white)),
+                    const Text('SOC', style: TextStyle(fontSize: 13, color: Colors.white70)),
+                  ]),
+                ),
+              ),
             ),
-            Column(mainAxisSize: MainAxisSize.min, children: [
-              Text('$soc%',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold)),
-              const Text('SOC',
-                  style: TextStyle(color: Colors.white70, fontSize: 12)),
-            ]),
-          ]),
-        ),
-        const SizedBox(width: 20),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Battery Status — Byte 60
-            Row(children: [
-              Expanded(child: _infoRow('Battery Status', status)),
-              // Icon changes with charge state
-              Icon(
-                isCharging
-                    ? Icons.battery_charging_full_rounded
-                    : Icons.battery_full_rounded,
-                color: Colors.greenAccent,
-                size: 20,
-              ),
-            ]),
-            const Divider(color: Colors.white24, height: 12),
-            // Remaining Capacity — Bytes 61–62
-            _infoRow('Remaining Capacity', capacity),
-            const Divider(color: Colors.white24, height: 12),
-            // Health — Byte 63
-            Row(children: [
-              Expanded(child: _infoRow('Health', health)),
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                    color: _healthColor, shape: BoxShape.circle),
-                child: const Icon(Icons.verified_user_rounded,
-                    color: Colors.white, size: 14),
-              ),
-            ]),
-          ],
-        )),
-      ]),
+          ),
+          const SizedBox(width: 20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [const Text('Battery Status', style: TextStyle(color: Colors.white70, fontSize: 13)), const Spacer(), Icon(widget.isCharging ? Icons.battery_charging_full : Icons.battery_full, color: Colors.greenAccent)]),
+                Text(widget.status, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                const Divider(color: Colors.white24, height: 20),
+                const Text('Remaining Capacity', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                Text(widget.capacity, style: const TextStyle(color: Colors.white, fontSize: 15)),
+                const Divider(color: Colors.white24, height: 20),
+                Row(
+                  children: [
+                    const Text('Health', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                    const Spacer(),
+                    Text(widget.health, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.verified_user_rounded, color: Colors.green, size: 18),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Metric Card  — generic card for Voltage / Current / Temp / Power
-// ─────────────────────────────────────────────────────────────────────────────
-class _MetricCard extends StatelessWidget {
-  final IconData? icon;
-  final String?   iconLabel;
-  final String    label;
-  final String    value;
-  /// Non-null → show a small pill badge with this text (e.g. "Charging", "Load")
-  final String?   chargingBadgeText;
-  /// True → show red dot next to value (discharging indicator)
-  final bool      showRedDot;
+class _SocRingPainter extends CustomPainter {
+  final int soc;
+  final Color ringColor;
+  _SocRingPainter({required this.soc, required this.ringColor});
 
-  const _MetricCard({
-    this.icon,
-    this.iconLabel,
-    required this.label,
-    required this.value,
-    this.chargingBadgeText,
-    this.showRedDot = false,
-  });
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final radius = (size.shortestSide - 14) / 2;
+
+    canvas.drawCircle(center, radius, Paint()..color = Colors.white24..style = PaintingStyle.stroke..strokeWidth = 12);
+    canvas.drawArc(Rect.fromCircle(center: center, radius: radius), -1.57, 6.28 * (soc / 100), false, Paint()..color = ringColor..style = PaintingStyle.stroke..strokeWidth = 12..strokeCap = StrokeCap.round);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// ==================== METRIC CARD ====================
+class _MetricCard extends StatelessWidget {
+  final String label, value;
+  final String? iconLabel;
+  final IconData? icon;
+  final String? badge;
+
+  const _MetricCard({required this.label, required this.value, this.iconLabel, this.icon, this.badge});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-          color: const Color(0xFFF0F0F0),
-          borderRadius: BorderRadius.circular(10)),
-      child: Row(children: [
-        CircleAvatar(
-          backgroundColor: Colors.transparent,
-          child: iconLabel != null
-              ? Text(iconLabel!,
-                  style: const TextStyle(
-                      color: Colors.grey, fontWeight: FontWeight.bold))
-              : Icon(icon, color: Colors.grey),
-        ),
-        const SizedBox(width: 10),
-        Expanded(child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Label row — with optional badge
-            Row(children: [
-              Text(label, style: const TextStyle(fontSize: 13)),
-              if (chargingBadgeText != null) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(20)),
-                  child: Text(chargingBadgeText!,
-                      style: const TextStyle(fontSize: 10, color: Colors.black54)),
-                ),
+      decoration: BoxDecoration(color: const Color(0xFFF0F0F0), borderRadius: BorderRadius.circular(10)),
+      child: Row(
+        children: [
+          CircleAvatar(backgroundColor: Colors.transparent, child: iconLabel != null ? Text(iconLabel!, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey)) : Icon(icon, color: Colors.grey)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(fontSize: 13)),
+                const SizedBox(height: 4),
+                Row(children: [Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600)), if (badge != null) Container(margin: const EdgeInsets.only(left: 8), padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(12)), child: Text(badge!, style: const TextStyle(fontSize: 11)))]),
               ],
-            ]),
-            // Value row — with optional red dot
-            Row(children: [
-              Text(value,
-                  style: const TextStyle(
-                      fontSize: 18, fontWeight: FontWeight.w600)),
-              if (showRedDot) ...[
-                const SizedBox(width: 6),
-                Container(width: 8, height: 8,
-                    decoration: const BoxDecoration(
-                        color: Colors.red, shape: BoxShape.circle)),
-              ],
-            ]),
-          ],
-        )),
-      ]),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Cell Summary — Bytes 72–82 all dynamic from packet
-// ─────────────────────────────────────────────────────────────────────────────
+// ==================== CELL SUMMARY (Red if < 3.01V + Border) ====================
 class _CellSummary extends StatelessWidget {
-  final String cellCountLabel; // Byte 72
-  final String avgVoltage;     // Bytes 75–76
-  final String voltDiff;       // Bytes 77–78
-  final String cyclesDisplay;  // Bytes 73–74
-  final String minVoltage;     // Bytes 81–82
-  final String maxVoltage;     // Bytes 79–80
-  final double? minVoltRaw;    // for bar chart scale
-  final double? maxVoltRaw;    // for bar chart scale
-  final String title, minLabel, maxLabel;
+  final int cellCount;
+  final String cellCountLabel, avgVoltage, voltDiff, cyclesDisplay, minVoltage, maxVoltage;
+  final List<double> cellVoltages;
+  final int? maxVoltageNo, minVoltageNo;
   final VoidCallback? onViewMore;
 
   const _CellSummary({
+    required this.cellCount,
     required this.cellCountLabel,
     required this.avgVoltage,
     required this.voltDiff,
     required this.cyclesDisplay,
     required this.minVoltage,
     required this.maxVoltage,
-    required this.minVoltRaw,
-    required this.maxVoltRaw,
-    required this.title,
-    required this.minLabel,
-    required this.maxLabel,
+    required this.cellVoltages,
+    this.maxVoltageNo,
+    this.minVoltageNo,
     this.onViewMore,
   });
 
-  Widget _statRow(
-    IconData icon,
-    String label,
-    String value, {
-    IconData? trailIcon,
-    String? trailLabel,
-    String? trailValue,
-  }) =>
-      Row(children: [
-        Icon(icon, size: 16, color: _green),
-        const SizedBox(width: 4),
-        Text(label,
-            style: const TextStyle(fontSize: 12, color: Colors.black54)),
-        const SizedBox(width: 6),
-        Text(value,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-        if (trailLabel != null && trailValue != null) ...[
-          const Spacer(),
-          Icon(trailIcon ?? Icons.refresh_rounded, size: 16, color: _green),
-          const SizedBox(width: 4),
-          Text(trailLabel,
-              style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          const SizedBox(width: 6),
-          Text(trailValue,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-        ],
-      ]);
-
-  Widget _cellLabel(String label, String v,
-      {CrossAxisAlignment align = CrossAxisAlignment.start}) =>
-      Column(
-        crossAxisAlignment: align,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          Text(label,
-              style: const TextStyle(fontSize: 11, color: Colors.black54)),
-          Text(v,
-              style: const TextStyle(
-                  fontSize: 12, fontWeight: FontWeight.w600)),
-        ],
-      );
-
   @override
   Widget build(BuildContext context) {
-    // Build a simple 2-bar visual from min/max when data is available.
-    // Full per-cell bars require the individual cell voltages from CellsScreen.
-    final bool hasData = minVoltRaw != null && maxVoltRaw != null;
-  
+    final bool isScrollable = cellCount > 12;
 
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        // Byte 72 — Total Cells count
-        Text('$title ($cellCountLabel Cells)',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        GestureDetector(
-          onTap: onViewMore,
-          child: const Text('View More >',
-              style: TextStyle(fontSize: 13, color: _blue)),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Cell Summary ($cellCountLabel Cells)', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            GestureDetector(onTap: onViewMore, child: Row(children: const [Text('View More', style: TextStyle(color: _blue, fontSize: 13)), Icon(Icons.chevron_right, color: _blue, size: 18)])),
+          ],
         ),
-      ]),
-      const SizedBox(height: 10),
-      // Bytes 75–76 — Average Voltage
-      _statRow(Icons.flash_on_rounded, 'Average Voltage', avgVoltage),
-      const SizedBox(height: 6),
-      // Bytes 77–78 — Voltage Difference  |  Bytes 73–74 — Cycles
-      _statRow(
-        Icons.flash_on_rounded, 'Voltage Difference', voltDiff,
-        trailIcon:  Icons.refresh_rounded,
-        trailLabel: 'No of Cycles',
-        trailValue: cyclesDisplay,
-      ),
-      const SizedBox(height: 14),
-      // Min / bar / Max row
-      Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        // Bytes 81–82 — Min Cell Voltage
-        _cellLabel(minLabel, minVoltage),
-        const SizedBox(width: 12),
-       Expanded(
-  child: hasData
-      ? LayoutBuilder(
-          builder: (context, constraints) {
-            const int barCount = 10;
-            const double maxBarHeight = 35;
+        const SizedBox(height: 12),
 
-            final double range =
-                (maxVoltRaw! - minVoltRaw!).abs();
+        Row(
+          children: [
+            Icon(Icons.flash_on_rounded, size: 18, color: _green),
+            const SizedBox(width: 6),
+            Text('Average Voltage $avgVoltage', style: const TextStyle(fontSize: 13)),
+            const Spacer(),
+            Icon(Icons.refresh_rounded, size: 18, color: _green),
+            const SizedBox(width: 6),
+            Text('No of Cycles $cyclesDisplay', style: const TextStyle(fontSize: 13)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text('Voltage Difference $voltDiff', style: const TextStyle(fontSize: 13)),
+        const SizedBox(height: 16),
 
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(barCount, (index) {
-                double value;
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey.shade300, width: 1.5),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Min. Cell $minVoltage', style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w500)),
+                  Text('Max. Cell $maxVoltage', style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w500)),
+                ],
+              ),
+              const SizedBox(height: 12),
 
-                if (range == 0) {
-                  value = maxVoltRaw!;
-                } else {
-                  value = minVoltRaw! +
-                      ((maxVoltRaw! - minVoltRaw!) *
-                          index /
-                          (barCount - 1));
-                }
-
-                final double normalized =
-                    range == 0
-                        ? 1
-                        : (value - minVoltRaw!) / range;
-
-                final double height =
-                    12 + (normalized * maxBarHeight);
-
-                return Container(
-                  width: 8,
-                  height: height,
-                  decoration: BoxDecoration(
-                    color: _green,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                );
-              }),
-            );
-          },
-        )
-      : const SizedBox.shrink(),
-),
-        const SizedBox(width: 12),
-        // Bytes 79–80 — Max Cell Voltage
-        _cellLabel(maxLabel, maxVoltage, align: CrossAxisAlignment.end),
-      ]),
-    ]);
+              SizedBox(
+                height: 110,
+                child: isScrollable
+                    ? SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: List.generate(cellVoltages.length, (i) => _buildBar(i, cellVoltages, maxVoltageNo, minVoltageNo)),
+                        ),
+                      )
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: List.generate(
+                          cellVoltages.length,
+                          (i) => Expanded(child: _buildBar(i, cellVoltages, maxVoltageNo, minVoltageNo, isExpanded: true)),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 
+  Widget _buildBar(int index, List<double> voltages, int? maxNo, int? minNo, {bool isExpanded = false}) {
+    final double v = voltages[index];
+    final bool isMax = (index + 1) == maxNo;
+    final bool isLow = v < 3.01;
+    final double height = 35 + ((v - 3.0) * 75).clamp(0.0, 80.0);
+
+    final Color barColor = isLow ? Colors.red.shade400 : isMax ? _green : _green.withOpacity(0.85);
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isExpanded ? 4 : 5),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Text(v.toStringAsFixed(2), style: const TextStyle(fontSize: 9, color: Colors.black54)),
+          const SizedBox(height: 4),
+          Container(
+            width: isExpanded ? null : 16,
+            height: height,
+            decoration: BoxDecoration(color: barColor, borderRadius: BorderRadius.circular(4)),
+          ),
+          const SizedBox(height: 4),
+          Text('C${(index + 1).toString().padLeft(2, '0')}', style: const TextStyle(fontSize: 9, color: Colors.black45)),
+        ],
+      ),
+    );
+  }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Alerts Card
-// ─────────────────────────────────────────────────────────────────────────────
+// ==================== ALERTS CARD ====================
 class _AlertsCard extends StatelessWidget {
   final String title, normalText;
   const _AlertsCard({required this.title, required this.normalText});
@@ -743,30 +528,20 @@ class _AlertsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-          color: const Color(0xFFF2F2F2),
-          borderRadius: BorderRadius.circular(10)),
-      child: Column(children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Row(children: [
-            const Icon(Icons.notifications_none_rounded),
-            const SizedBox(width: 10),
-            Text(title,
-                style: const TextStyle(fontWeight: FontWeight.w500)),
-          ]),
-          const Text('–',
-              style: TextStyle(
-                  fontSize: 20,
-                  color: Colors.black54,
-                  fontWeight: FontWeight.w300)),
-        ]),
-        const SizedBox(height: 12),
-        Row(children: [
-          const Icon(Icons.check_circle_rounded, color: _green),
-          const SizedBox(width: 10),
-          Text(normalText),
-        ]),
-      ]),
+      decoration: BoxDecoration(color: const Color(0xFFF2F2F2), borderRadius: BorderRadius.circular(10)),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(children: [const Icon(Icons.notifications_none_rounded), const SizedBox(width: 8), Text(title, style: const TextStyle(fontWeight: FontWeight.w500))]),
+              const Text('–', style: TextStyle(fontSize: 22, color: Colors.black54)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(children: [const Icon(Icons.check_circle_rounded, color: _green), const SizedBox(width: 10), Text(normalText)]),
+        ],
+      ),
     );
   }
 }

@@ -24,22 +24,20 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
   final List<BMSParsedPacket> packetLog = [];
 
-  // ── Latest valid dashboard packet (0x52 response) ─────────────────────────
+  // ── Latest valid packets ──────────────────────────────────────────────────
   BMSParsedPacket? latestDashboard;
-
-  // ── Latest valid cell voltage packet (0x53 response) ──────────────────────
   BMSParsedPacket? latestCellVoltage;
 
-  // ── Legacy Packet4 slot (kept for backward compat) ────────────────────────
-  BMSParsedPacket? latestPacket4;
-
   // ── Device info ───────────────────────────────────────────────────────────
+  // bleName   : from 0x51 BLE Name Response (sent once after ACK)
+  // batterySerial, softwareVersion, hardwareVersion : from 0x52 Dashboard
+  String? bleName;
   String? batterySerial;
   String? softwareVersion;
   String? hardwareVersion;
   String? snCode;
 
-  // ── Tracks the Data ID of the most recently sent request ─────────────────
+  // ── Tracks the Data ID of the most recently sent request ──────────────────
   int? _lastSentDataId;
 
   BluetoothCharacteristic? _notifyChar;
@@ -47,8 +45,11 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   StreamSubscription? _notifySub;
   StreamSubscription? _connectionStateSub;
   Timer? _ackTimer;
-  Timer? _pollTimer;         // dashboard polling (always running when connected)
-  Timer? _cellPollTimer;    // cell voltage polling (only when cell screen is open)
+
+  // Single combined poll timer — fires every 5s
+  // Each tick: send dashboard, wait 1s, send cell voltage
+  Timer? _pollTimer;
+
   int _sessionId = 0;
 
   BMSBluetoothService() {
@@ -64,10 +65,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
-        if (_pollTimer != null) {
-          debugPrint('📴 App backgrounded — pausing polling');
-          _stopPolling();
-        }
+        debugPrint('📴 App backgrounded — pausing polling');
+        _stopPolling();
         break;
       case AppLifecycleState.resumed:
         if (state == AppLifecycleState.resumed) {
@@ -212,24 +211,27 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
         debugPrint('✅ RX Parsed: ${packet.typeName}');
 
         if (packet.isCellVoltageResponse) {
-          // 88-byte cell voltage packet — update cell data
+          // 88-byte cell voltage packet (0x53)
           latestCellVoltage = packet;
-          debugPrint('🔋 Cell Voltage packet updated: $packet');
+          debugPrint('🔋 Cell Voltage updated: $packet');
           notifyListeners();
 
         } else if (packet.isDashboardResponse) {
-          // Full 86-byte dashboard packet — update all fields
+          // 86-byte dashboard packet (0x52)
           latestDashboard = packet;
           if (packet.batterySerial   != null) batterySerial   = packet.batterySerial;
           if (packet.softwareVersion != null) softwareVersion = packet.softwareVersion;
           if (packet.hardwareVersion != null) hardwareVersion = packet.hardwareVersion;
           if (packet.snCode          != null) snCode          = packet.snCode;
-          debugPrint('📊 Dashboard packet updated: $packet');
+          debugPrint('📊 Dashboard updated: $packet');
           notifyListeners();
 
-        } else if (packet.isPacket4) {
-          latestPacket4 = packet;
-          debugPrint('📊 Packet4 (legacy) received: $packet');
+        } else if (packet.isBleNameResponse) {
+          // 19-byte BLE Name packet (0x51)
+          if (packet.bleName != null) {
+            bleName = packet.bleName;
+            debugPrint('📋 BLE Name: $bleName');
+          }
           notifyListeners();
 
         } else if (packet.isDeviceInfo) {
@@ -308,7 +310,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // HANDSHAKE
+  // HANDSHAKE  →  CC 05 90 <crc> DD
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> sendHandshake() async {
     final int crc = BMSCrcService.calculateCRC8([0x05, BMSProtocol.idHandshake]);
@@ -348,6 +350,88 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // BLE NAME REQUEST  →  CC 05 92 <crc> DD
+  // Sent once immediately after ACK is validated.
+  // Response: AA 13 51 [14 bytes BLE name] <crc> BB
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<void> requestBleName() async {
+    if (_writeChar == null || state != BMSConnectionState.ready) return;
+
+    final int crc = BMSCrcService.calculateCRC8([
+      BMSProtocol.packetLength,
+      BMSProtocol.idBleNameRequest,
+    ]);
+    final List<int> packet = [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idBleNameRequest,
+      crc,
+      BMSProtocol.stopByte,
+    ];
+
+    debugPrint('📤 BLE NAME REQUEST (0x92) : ${_toHex(packet)}');
+    await _sendPacket(
+      packet,
+      logName: 'BLE_NAME_REQUEST',
+      sentDataId: BMSProtocol.idBleNameRequest,
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // DASHBOARD REQUEST  →  CC 05 93 <crc> DD
+  // Response: AA 55 52 [82 bytes data] <crc_h> <crc_l> BB  (86 bytes total)
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<void> requestDashboard() async {
+    if (_writeChar == null || state != BMSConnectionState.ready) return;
+
+    final int crc = BMSCrcService.calculateCRC8([
+      BMSProtocol.packetLength,
+      BMSProtocol.idDashboardRequest,
+    ]);
+    final List<int> packet = [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idDashboardRequest,
+      crc,
+      BMSProtocol.stopByte,
+    ];
+
+    debugPrint('📤 DASHBOARD REQUEST (0x93) : ${_toHex(packet)}');
+    await _sendPacket(
+      packet,
+      logName: 'DASHBOARD_REQUEST',
+      sentDataId: BMSProtocol.idDashboardRequest,
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // CELL VOLTAGE REQUEST  →  CC 05 94 <crc> DD
+  // Response: AA 57 53 [84 bytes data] <crc_h> <crc_l> BB  (88 bytes total)
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<void> requestCellVoltages() async {
+    if (_writeChar == null || state != BMSConnectionState.ready) return;
+
+    final int crc = BMSCrcService.calculateCRC8([
+      BMSProtocol.packetLength,
+      BMSProtocol.idCellVoltageRequest,
+    ]);
+    final List<int> packet = [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idCellVoltageRequest,
+      crc,
+      BMSProtocol.stopByte,
+    ];
+
+    debugPrint('📤 CELL VOLTAGE REQUEST (0x94) : ${_toHex(packet)}');
+    await _sendPacket(
+      packet,
+      logName: 'CELL_VOLTAGE_REQUEST',
+      sentDataId: BMSProtocol.idCellVoltageRequest,
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // ACK VALIDATION
   // ─────────────────────────────────────────────────────────────────────────
   void _onAckReceived(BMSParsedPacket packet) {
@@ -374,11 +458,14 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     debugPrint('══════════════════════════════════════════');
 
     if (matches) {
-      debugPrint('🎉 ACK VALID — Starting polling');
+      debugPrint('🎉 ACK VALID — Requesting BLE name, then starting polling');
       state = BMSConnectionState.ready;
       isConnecting = false;
       notifyListeners();
-      _startPolling();
+
+      // Step 1: request BLE name immediately after ACK
+      // Step 2: start the combined dashboard + cell polling
+      _requestBleNameThenStartPolling();
     } else {
       debugPrint('🚫 ACK INVALID — Connection rejected');
       errorMessage =
@@ -392,98 +479,62 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // DASHBOARD POLLING  (0x93 → 86-byte 0x52 response)
+  // POST-ACK SEQUENCE
+  //  1. Send BLE name request (0x92)
+  //  2. Wait 500ms for response
+  //  3. Start combined polling
   // ─────────────────────────────────────────────────────────────────────────
-  Future<void> requestDashboard() async {
-    if (_writeChar == null || state != BMSConnectionState.ready) return;
-
-    final int crc = BMSCrcService.calculateCRC8([
-      BMSProtocol.packetLength,
-      BMSProtocol.idDashboardRequest,
-    ]);
-    final List<int> packet = [
-      BMSProtocol.startByte,
-      BMSProtocol.packetLength,
-      BMSProtocol.idDashboardRequest,
-      crc,
-      BMSProtocol.stopByte,
-    ];
-
-    debugPrint('📤 DASHBOARD REQUEST (0x93) : ${_toHex(packet)}');
-    await _sendPacket(
-      packet,
-      logName: 'DASHBOARD_REQUEST',
-      sentDataId: BMSProtocol.idDashboardRequest,
-    );
+  Future<void> _requestBleNameThenStartPolling() async {
+    await requestBleName();
+    // Give the device 500ms to respond with BLE name before we start
+    // firing dashboard + cell requests
+    await Future.delayed(const Duration(milliseconds: 500));
+    _startPolling();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // CELL VOLTAGE REQUEST  (0x94 → 88-byte 0x53 response)
-  // ─────────────────────────────────────────────────────────────────────────
-  Future<void> requestCellVoltages() async {
-    if (_writeChar == null || state != BMSConnectionState.ready) return;
-
-    final int crc = BMSCrcService.calculateCRC8([
-      BMSProtocol.packetLength,
-      BMSProtocol.idCellVoltageRequest,
-    ]);
-    final List<int> packet = [
-      BMSProtocol.startByte,
-      BMSProtocol.packetLength,
-      BMSProtocol.idCellVoltageRequest,
-      crc,
-      BMSProtocol.stopByte,
-    ];
-
-    debugPrint('📤 CELL VOLTAGE REQUEST (0x94) : ${_toHex(packet)}');
-    await _sendPacket(
-      packet,
-      logName: 'CELL_VOLTAGE_REQUEST',
-      sentDataId: BMSProtocol.idCellVoltageRequest,
-    );
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // DASHBOARD POLLING — runs continuously while connected (every 5s)
+  // COMBINED POLLING
+  //
+  // Every 5 seconds:
+  //   t+0s : send Dashboard request  (0x93)
+  //   t+1s : send Cell Voltage request (0x94)
+  //
+  // This ensures both requests are always active (not just when
+  // CellsScreen is open) so cell data is ready for the graph.
   // ─────────────────────────────────────────────────────────────────────────
   void _startPolling() {
     _stopPolling();
-    debugPrint('⏱️  Starting dashboard poll every 5s');
-    requestDashboard(); // immediate first request
-    _pollTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => requestDashboard(),
-    );
+    debugPrint('⏱️  Starting combined poll (dashboard @ 0s, cells @ +1s, every 5s)');
+
+    // Fire immediately
+    _doPollCycle();
+
+    // Then every 5 seconds
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _doPollCycle());
+  }
+
+  Future<void> _doPollCycle() async {
+    // Dashboard first
+    await requestDashboard();
+    // Wait 1 second, then request cell voltages
+    await Future.delayed(const Duration(seconds: 1));
+    await requestCellVoltages();
   }
 
   void _stopPolling() {
     _pollTimer?.cancel();
     _pollTimer = null;
-    debugPrint('⏹️  Dashboard polling stopped');
+    debugPrint('⏹️  Polling stopped');
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // CELL VOLTAGE POLLING — controlled by CellsScreen lifecycle only
-  //
-  // CellsScreen calls startCellVoltagePolling() in initState and
-  // stopCellVoltagePolling() in dispose, so requests are sent only
-  // while the user is on the cell screen.
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── Legacy stubs kept so CellsScreen compile doesn't break ────────────────
+  // CellsScreen calls these in initState/dispose but polling is now always on.
   void startCellVoltagePolling() {
-    stopCellVoltagePolling(); // cancel any existing timer first
-    if (state != BMSConnectionState.ready) return;
-    debugPrint('🔋 Starting cell voltage poll every 5s');
-    requestCellVoltages(); // immediate request on screen open
-    _cellPollTimer = Timer.periodic(
-      const Duration(seconds: 5),
-      (_) => requestCellVoltages(),
-    );
+    debugPrint('ℹ️  startCellVoltagePolling() called — cell polling is always active');
   }
 
   void stopCellVoltagePolling() {
-    _cellPollTimer?.cancel();
-    _cellPollTimer = null;
-    debugPrint('⏹️  Cell voltage polling stopped');
+    debugPrint('ℹ️  stopCellVoltagePolling() called — cell polling continues in background');
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -496,7 +547,6 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
     _ackTimer?.cancel();
     _stopPolling();
-    stopCellVoltagePolling();
 
     if (_writeChar != null) {
       final int crc = BMSCrcService.calculateCRC8([
@@ -559,17 +609,16 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   void _newSession() {
     _sessionId++;
     packetLog.clear();
-    latestDashboard    = null;
-    latestCellVoltage  = null;
-    latestPacket4      = null;
-    batterySerial      = null;
-    softwareVersion    = null;
-    hardwareVersion    = null;
-    snCode             = null;
-    _lastSentDataId    = null;
+    latestDashboard   = null;
+    latestCellVoltage = null;
+    bleName           = null;
+    batterySerial     = null;
+    softwareVersion   = null;
+    hardwareVersion   = null;
+    snCode            = null;
+    _lastSentDataId   = null;
     _ackTimer?.cancel();
     _stopPolling();
-    stopCellVoltagePolling();
   }
 
   void _cleanup() {
@@ -588,7 +637,6 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stopPolling();
-    stopCellVoltagePolling();
     super.dispose();
   }
 

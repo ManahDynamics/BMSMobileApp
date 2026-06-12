@@ -12,6 +12,7 @@ import 'package:bmsmobileapp/screens/register_screen.dart';
 import 'package:bmsmobileapp/screens/forgotpassword_screen.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
+import 'package:bmsmobileapp/services/token_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -21,12 +22,11 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-
-  final _emailController    = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  bool    _obscurePassword = true;
-  bool    _isLoading       = false;
+  bool _obscurePassword = true;
+  bool _isLoading = false;
   String? _errorMessage;
 
   String _selectedLanguage = 'English';
@@ -40,16 +40,30 @@ class _LoginScreenState extends State<LoginScreen> {
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
 
-  // ── NEW: listen to TranslationService ─────────────────────────────────
+  final TokenService _tokenService = TokenService();
+
   @override
   void initState() {
     super.initState();
-    // Rebuild this widget whenever TranslationService.notifyListeners() fires
     TranslationService.instance.addListener(_onTranslationsChanged);
+    _checkAlreadyLoggedIn();
   }
 
   void _onTranslationsChanged() {
     if (mounted) setState(() {});
+  }
+
+  // Check if user is already logged in
+  Future<void> _checkAlreadyLoggedIn() async {
+    final isLoggedIn = await _tokenService.isLoggedIn();
+    if (isLoggedIn && mounted) {
+      // Navigate to connect screen if already logged in
+      Future.delayed(Duration.zero, () {
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/connect');
+        }
+      });
+    }
   }
 
   @override
@@ -60,7 +74,6 @@ class _LoginScreenState extends State<LoginScreen> {
     _passwordController.dispose();
     super.dispose();
   }
-  // ── END NEW ────────────────────────────────────────────────────────────
 
   void _removeOverlay() {
     _overlayEntry?.remove();
@@ -95,8 +108,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         return InkWell(
                           onTap: () async {
                             setState(() => _selectedLanguage = lang);
-                            // loadTranslations triggers notifyListeners()
-                            // which calls _onTranslationsChanged → setState
                             await TranslationService.loadTranslations(
                               _langCodeMap[lang]!,
                             );
@@ -166,7 +177,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(width: 4),
-              const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
+              const Icon(Icons.keyboard_arrow_down,
+                  color: Colors.white, size: 18),
             ],
           ),
         ),
@@ -180,62 +192,117 @@ class _LoginScreenState extends State<LoginScreen> {
     if (Platform.isAndroid) {
       final android = await deviceInfo.androidInfo;
       return {
-        'deviceId'      : android.id,
+        'deviceId': android.id,
         'devicePlatform': 'android',
-        'deviceToken'   : android.id,
+        'deviceToken': android.id,
       };
     } else if (Platform.isIOS) {
       final ios = await deviceInfo.iosInfo;
       return {
-        'deviceId'      : ios.identifierForVendor ?? 'unknown',
+        'deviceId': ios.identifierForVendor ?? 'unknown',
         'devicePlatform': 'ios',
-        'deviceToken'   : ios.identifierForVendor ?? 'unknown',
+        'deviceToken': ios.identifierForVendor ?? 'unknown',
       };
     }
 
     return {
-      'deviceId'      : 'unknown',
+      'deviceId': 'unknown',
       'devicePlatform': 'unknown',
-      'deviceToken'   : 'unknown',
+      'deviceToken': 'unknown',
     };
   }
 
   Future<void> _handleLogin() async {
+    // Validate input
+    if (_emailController.text.trim().isEmpty) {
+      setState(() => _errorMessage = 'Please enter your email');
+      return;
+    }
+    if (_passwordController.text.isEmpty) {
+      setState(() => _errorMessage = 'Please enter your password');
+      return;
+    }
+
     setState(() {
       _errorMessage = null;
-      _isLoading    = true;
+      _isLoading = true;
     });
 
     try {
       final deviceInfo = await _getDeviceInfo();
 
       final Map<String, String> body = {
-        'email'         : _emailController.text.trim(),
-        'password'      : _passwordController.text,
-        'deviceId'      : deviceInfo['deviceId']!,
+        'email': _emailController.text.trim(),
+        'password': _passwordController.text,
+        'deviceId': deviceInfo['deviceId']!,
         'devicePlatform': deviceInfo['devicePlatform']!,
-        'deviceToken'   : deviceInfo['deviceToken']!,
+        'deviceToken': deviceInfo['deviceToken']!,
       };
+
+      print('📡 Login request: $body');
 
       final response = await http.post(
         Uri.parse('http://15.207.26.224:3030/api/auth/login'),
         headers: {
           'Content-Type': 'application/json',
-          'Accept'      : 'application/json',
+          'Accept': 'application/json',
         },
         body: jsonEncode(body),
       ).timeout(
         const Duration(seconds: 30),
-        onTimeout: () =>
-            throw Exception('Request timed out. Please try again.'),
+        onTimeout: () => throw Exception('Request timed out. Please try again.'),
       );
 
-      final Map<String, dynamic> data =
-          jsonDecode(response.body) as Map<String, dynamic>;
+      print('📡 Login response status: ${response.statusCode}');
+      print('📡 Login response body: ${response.body}');
+
+      final Map<String, dynamic> data = jsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final userData = data['data'] as Map<String, dynamic>?;
         final name = userData?['fullName'] ?? 'User';
+        final email = userData?['email'] ?? _emailController.text.trim();
+        final userId = userData?['id']?.toString() ??
+            userData?['userId']?.toString() ??
+            '';
+
+        // Extract token from response
+        String? token;
+        String? refreshToken;
+
+        // Try different possible token locations
+        if (data['token'] != null) {
+          token = data['token'].toString();
+        } else if (data['data']?['token'] != null) {
+          token = data['data']['token'].toString();
+        } else if (data['accessToken'] != null) {
+          token = data['accessToken'].toString();
+        } else if (data['data']?['accessToken'] != null) {
+          token = data['data']['accessToken'].toString();
+        }
+
+        // Extract refresh token if available
+        if (data['refreshToken'] != null) {
+          refreshToken = data['refreshToken'].toString();
+        } else if (data['data']?['refreshToken'] != null) {
+          refreshToken = data['data']['refreshToken'].toString();
+        }
+
+        // Save all user data
+        if (token != null && token.isNotEmpty) {
+          await _tokenService.saveToken(token);
+          await _tokenService.saveUserEmail(email);
+          await _tokenService.saveUserName(name);
+          if (userId.isNotEmpty) await _tokenService.saveUserId(userId);
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            await _tokenService.saveRefreshToken(refreshToken);
+          }
+          print('✅ Token and user data saved successfully');
+          print('✅ User: $name ($email)');
+        } else {
+          print('⚠️ No token received from server');
+          print('⚠️ Response structure: ${data.keys}');
+        }
 
         if (!mounted) return;
 
@@ -244,23 +311,26 @@ class _LoginScreenState extends State<LoginScreen> {
             content: Text('Welcome back, $name!'),
             backgroundColor: const Color(0xFF5E93D4),
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
           ),
         );
 
+        // Navigate to connect screen
         Navigator.pushReplacementNamed(context, '/connect');
       } else {
-        final serverMessage =
-            data['message']?.toString() ??
+        final serverMessage = data['message']?.toString() ??
             data['error']?.toString() ??
             'Login failed. Please try again.';
         setState(() => _errorMessage = serverMessage);
       }
+    } on SocketException {
+      setState(() => _errorMessage =
+          'No internet connection. Please check your network.');
     } on FormatException {
-      setState(() =>
-          _errorMessage = 'Unexpected server response. Please contact support.');
+      setState(() => _errorMessage =
+          'Unexpected server response. Please contact support.');
     } catch (e) {
-      setState(() =>
-          _errorMessage = e.toString().replaceFirst('Exception: ', ''));
+      setState(() => _errorMessage = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -273,7 +343,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: SafeArea(
         child: Stack(
           children: [
-
+            // Decorative circles
             Positioned(
               top: -60,
               right: -60,
@@ -302,9 +372,9 @@ class _LoginScreenState extends State<LoginScreen> {
             SingleChildScrollView(
               child: Column(
                 children: [
-
                   const SizedBox(height: 20),
 
+                  // Language dropdown
                   Padding(
                     padding: const EdgeInsets.only(right: 20),
                     child: Align(
@@ -315,6 +385,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 28),
 
+                  // Logo
                   Container(
                     width: 110,
                     height: 110,
@@ -343,6 +414,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 22),
 
+                  // App title
                   Text(
                     TranslationService.t('login.app_title'),
                     style: const TextStyle(
@@ -364,6 +436,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const SizedBox(height: 36),
 
+                  // Login form container
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.symmetric(horizontal: 20),
@@ -385,7 +458,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-
+                        // Email field
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0F0F0),
@@ -394,8 +467,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: TextField(
                             controller: _emailController,
                             keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
                             decoration: InputDecoration(
-                              hintText: TranslationService.t('login.email_or_phone'),
+                              hintText:
+                                  TranslationService.t('login.email_or_phone'),
                               hintStyle: TextStyle(
                                 color: Colors.grey[500],
                                 fontSize: 14,
@@ -416,6 +491,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 16),
 
+                        // Password field
                         Container(
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0F0F0),
@@ -424,6 +500,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: TextField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
+                            textInputAction: TextInputAction.done,
+                            onSubmitted: (_) => _handleLogin(),
                             decoration: InputDecoration(
                               hintText: TranslationService.t('login.password'),
                               hintStyle: TextStyle(
@@ -458,6 +536,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 8),
 
+                        // Forgot password
                         Align(
                           alignment: Alignment.centerRight,
                           child: MouseRegion(
@@ -485,6 +564,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 8),
 
+                        // Error message
                         if (_errorMessage != null)
                           Container(
                             width: double.infinity,
@@ -519,6 +599,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
 
+                        // Login button
                         SizedBox(
                           width: double.infinity,
                           height: 50,
@@ -555,6 +636,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 20),
 
+                        // Divider
                         Row(
                           children: [
                             Expanded(
@@ -580,6 +662,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 16),
 
+                        // Register link
                         Center(
                           child: Row(
                             mainAxisSize: MainAxisSize.min,

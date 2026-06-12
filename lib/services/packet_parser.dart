@@ -11,7 +11,7 @@ enum BMSParseError {
   invalidFraming,
   invalidLength,
   crcMismatch,
-  unexpectedResponse, // Response dataId does not match any pending request
+  unexpectedResponse,
   unknownDataId,
 }
 
@@ -59,27 +59,30 @@ class BMSPacketParser {
       return _parseCellVoltageResponse(bytes, lastSentDataId: lastSentDataId);
     }
 
-    // 86-byte full dashboard response  (0xAA … 0xBB)
+    // 86-byte full dashboard response (0xAA … 0xBB)
     if (bytes.length == BMSProtocol.dashboardResponseLength && isBmsFrame) {
       return _parseDashboardResponse(bytes, lastSentDataId: lastSentDataId);
     }
 
-    // 19-byte device-info packet  (0xAA … 0xBB)
-    if (bytes.length == 19 && isBmsFrame) {
-      return _parseDeviceInfoPacket(bytes, lastSentDataId: lastSentDataId);
+    // 19-byte BLE Name response (0xAA … 0xBB)
+    if (bytes.length == BMSProtocol.bleNameResponseLength && isBmsFrame) {
+      return _parseBleNameResponse(bytes, lastSentDataId: lastSentDataId);
     }
 
-    // 12-byte legacy Packet4  (0xAA … 0xBB)
-    if (bytes.length == 12 && isBmsFrame) {
-      return _parseLegacyPacket4(bytes, lastSentDataId: lastSentDataId);
-    }
-
-    // 5-byte control packet  (ACK / Handshake / Disconnect)
+    // 5-byte control packet (ACK / Handshake / Disconnect / requests)
     if (bytes.length == 5) {
       return _parseControlPacket(bytes);
     }
 
-    return const BMSParseResult.failure(BMSParseError.invalidLength);
+    // 19-byte device-info packet (0x59–0x5C)
+    if (bytes.length == 19 && isBmsFrame) {
+      return _parseDeviceInfoPacket(bytes, lastSentDataId: lastSentDataId);
+    }
+
+    return BMSParseResult.failure(
+      BMSParseError.invalidLength,
+      errorDetail: 'Unexpected length: ${bytes.length}',
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -87,7 +90,7 @@ class BMSPacketParser {
   // ─────────────────────────────────────────────────────────────────────────
   static const Map<int, int> _expectedResponseId = {
     BMSProtocol.idHandshake:          BMSProtocol.idAck,
-    BMSProtocol.idAutoRefresh:        BMSProtocol.idPacket4,
+    BMSProtocol.idBleNameRequest:     BMSProtocol.idBleNameResponse,
     BMSProtocol.idDashboardRequest:   BMSProtocol.idDashboardResponse,
     BMSProtocol.idCellVoltageRequest: BMSProtocol.idCellVoltageResponse,
     BMSProtocol.idBatterySerial:      BMSProtocol.idBatterySerial,
@@ -142,20 +145,28 @@ class BMSPacketParser {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 12-BYTE LEGACY PACKET4
+  // 19-BYTE BLE NAME RESPONSE  (dataId 0x51)
+  //
+  // Structure:
+  //   Byte 0       : 0xAA (start)
+  //   Byte 1       : 0x13 (length)
+  //   Byte 2       : 0x51 (Data ID)
+  //   Bytes 3–16   : BLE Name (14 ASCII bytes)
+  //   Byte 17      : CRC
+  //   Byte 18      : 0xBB (stop)
   // ─────────────────────────────────────────────────────────────────────────
-  static BMSParseResult _parseLegacyPacket4(
+  static BMSParseResult _parseBleNameResponse(
     List<int> bytes, {
     int? lastSentDataId,
   }) {
     final int start  = bytes[0]  & 0xFF;
     final int length = bytes[1]  & 0xFF;
     final int dataId = bytes[2]  & 0xFF;
-    final int crc    = bytes[10] & 0xFF;
-    final int stop   = bytes[11] & 0xFF;
+    final int crc    = bytes[17] & 0xFF;
+    final int stop   = bytes[18] & 0xFF;
 
     if (lastSentDataId != null && !_responseMatchesRequest(lastSentDataId, dataId)) {
-      debugPrint('⚠️  RESPONSE MISMATCH [legacy Packet4] '
+      debugPrint('⚠️  RESPONSE MISMATCH [BLE Name] '
           'sent=0x${lastSentDataId.toRadixString(16).toUpperCase().padLeft(2,"0")} '
           'got=0x${dataId.toRadixString(16).toUpperCase().padLeft(2,"0")} — IGNORED');
       return BMSParseResult.failure(
@@ -165,10 +176,11 @@ class BMSPacketParser {
       );
     }
 
-    final crcData     = bytes.sublist(1, 10);
+    // CRC covers bytes[1..16]
+    final crcData     = bytes.sublist(1, 17);
     final computedCrc = BMSCrcService.calculateCRC8(crcData);
     if (computedCrc != crc) {
-      debugPrint('❌ CRC MISMATCH [Packet4] '
+      debugPrint('❌ CRC MISMATCH [BLE Name] '
           'computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")} '
           'received=0x${crc.toRadixString(16).toUpperCase().padLeft(2,"0")}');
       return BMSParseResult.failure(
@@ -178,37 +190,50 @@ class BMSPacketParser {
       );
     }
 
-    debugPrint('✅ CRC OK [Packet4]');
+    debugPrint('✅ CRC OK [BLE Name Response]');
 
-    final int rawVoltage      = (bytes[3] & 0xFF) | ((bytes[4] & 0xFF) << 8);
-    final double totalVoltage = rawVoltage / 10.0;
-    final int rawCurrent      = (bytes[5] & 0xFF) | ((bytes[6] & 0xFF) << 8);
-    final double totalCurrent = _decodeSigned16(rawCurrent) / 10.0;
-    final int soc             = bytes[7] & 0xFF;
-    final int rawCapacity     = (bytes[8] & 0xFF) | ((bytes[9] & 0xFF) << 8);
-    final double remainingCapacity = rawCapacity / 10.0;
-    final double totalPower   = totalVoltage * totalCurrent;
-
-    debugPrint('🔢 Packet4 → V=${totalVoltage}V  A=${totalCurrent}A  SOC=$soc%  Cap=${remainingCapacity}Ah  P=${totalPower}W');
+    final String bleName = _decodeAscii(bytes, BMSProtocol.bleNameStart, BMSProtocol.bleNameEnd);
+    debugPrint('📋 BLE Name → "$bleName"');
 
     return BMSParseResult.success(BMSParsedPacket(
-      startByte:         start,
-      length:            length,
-      dataId:            dataId,
-      crc:               crc,
-      stopByte:          stop,
-      rawBytes:          Uint8List.fromList(bytes),
-      receivedAt:        DateTime.now(),
-      soc:               soc,
-      totalVoltage:      totalVoltage,
-      totalCurrent:      totalCurrent,
-      remainingCapacity: remainingCapacity,
-      totalPower:        totalPower,
+      startByte:  start,
+      length:     length,
+      dataId:     dataId,
+      crc:        crc,
+      stopByte:   stop,
+      rawBytes:   Uint8List.fromList(bytes),
+      receivedAt: DateTime.now(),
+      bleName:    bleName.isNotEmpty ? bleName : null,
     ));
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // 86-BYTE DASHBOARD RESPONSE  (dataId 0x52)
+  //
+  // Structure per spec:
+  //   Byte 0       : 0xAA (start)
+  //   Byte 1       : 0x55 (length)
+  //   Byte 2       : 0x52 (Data ID)
+  //   Bytes 3–16   : Battery Serial No  (14 ASCII bytes)
+  //   Bytes 17–30  : Software Version   (14 ASCII bytes)
+  //   Bytes 31–44  : Hardware Version   (14 ASCII bytes)
+  //   Bytes 45–58  : SN Code            (14 ASCII bytes)
+  //   Byte 59      : SOC (0–100%)
+  //   Byte 60      : Battery Status
+  //   Bytes 61–62  : Remaining Capacity (×0.1 Ah, big-endian)
+  //   Byte 63      : Health
+  //   Bytes 64–65  : Total Voltage (×0.1 V, big-endian)
+  //   Bytes 66–67  : Total Current (signed ×0.1 A, big-endian)
+  //   Bytes 68–69  : Temperature (signed °C, big-endian)
+  //   Bytes 70–71  : Power in KW (signed ×0.1 KW, big-endian)
+  //   Byte 72      : Total Cells
+  //   Bytes 73–74  : Charge/Discharge Cycles (big-endian)
+  //   Bytes 75–76  : Avg Cell Voltage (×0.001 V, big-endian)
+  //   Bytes 77–78  : Voltage Difference (×0.001 V, big-endian)
+  //   Bytes 79–80  : Max Cell Voltage (×0.001 V, big-endian)
+  //   Bytes 81–82  : Min Cell Voltage (×0.001 V, big-endian)
+  //   Bytes 83–84  : CRC (big-endian; compare low byte for CRC-8)
+  //   Byte 85      : 0xBB (stop)
   // ─────────────────────────────────────────────────────────────────────────
   static BMSParseResult _parseDashboardResponse(
     List<int> bytes, {
@@ -217,7 +242,7 @@ class BMSPacketParser {
     final int start  = bytes[0]  & 0xFF;
     final int length = bytes[1]  & 0xFF;
     final int dataId = bytes[2]  & 0xFF;
-    final int stop   = bytes[85] & 0xFF;
+    final int stop   = bytes[BMSProtocol.dashStopByte] & 0xFF;
 
     if (lastSentDataId != null && !_responseMatchesRequest(lastSentDataId, dataId)) {
       debugPrint('⚠️  RESPONSE MISMATCH [Dashboard] '
@@ -230,53 +255,58 @@ class BMSPacketParser {
       );
     }
 
-    final crcData         = bytes.sublist(1, 83);
+    // CRC covers bytes[1..82] (i.e. from length byte up to and not including CRC bytes)
+    final crcData         = bytes.sublist(1, BMSProtocol.dashCrcHigh);
     final int computedCrc = BMSCrcService.calculateCRC8(crcData);
-    final int receivedCrcLow = bytes[83] & 0xFF;
-    if (computedCrc != receivedCrcLow) {
+    final int receivedCrc = bytes[BMSProtocol.dashCrcLow] & 0xFF; // use low byte
+
+    if (computedCrc != receivedCrc) {
       debugPrint('❌ CRC MISMATCH [Dashboard] '
           'computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")} '
-          'received=0x${receivedCrcLow.toRadixString(16).toUpperCase().padLeft(2,"0")} — IGNORED');
+          'received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")} — IGNORED');
       return BMSParseResult.failure(
         BMSParseError.crcMismatch,
         errorDetail: 'computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}'
-            ' received=0x${receivedCrcLow.toRadixString(16).toUpperCase().padLeft(2,"0")}',
+            ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}',
       );
     }
 
     debugPrint('✅ CRC OK [Dashboard Response]');
 
-    final batterySerial   = _decodeAscii(bytes, 3,  17);
-    final softwareVersion = _decodeAscii(bytes, 17, 31);
-    final hardwareVersion = _decodeAscii(bytes, 31, 45);
-    final snCode          = _decodeAscii(bytes, 45, 59);
+    // ── ASCII fields ──────────────────────────────────────────────────────
+    final batterySerial   = _decodeAscii(bytes, BMSProtocol.dashBatterySerialStart,   BMSProtocol.dashBatterySerialEnd);
+    final softwareVersion = _decodeAscii(bytes, BMSProtocol.dashSoftwareVersionStart, BMSProtocol.dashSoftwareVersionEnd);
+    final hardwareVersion = _decodeAscii(bytes, BMSProtocol.dashHardwareVersionStart, BMSProtocol.dashHardwareVersionEnd);
+    final snCode          = _decodeAscii(bytes, BMSProtocol.dashSnCodeStart,          BMSProtocol.dashSnCodeEnd);
 
-    final int soc               = bytes[59] & 0xFF;
-    final int batteryStatusCode = bytes[60] & 0xFF;
-    final int rawCapacity       = _bigEndian16(bytes, 61);
+    // ── Numeric fields ────────────────────────────────────────────────────
+    final int soc                  = bytes[BMSProtocol.dashSocByte] & 0xFF;
+    final int batteryStatusCode    = bytes[BMSProtocol.dashBatteryStatusByte] & 0xFF;
+    final int rawCapacity          = _bigEndian16(bytes, BMSProtocol.dashCapacityHigh);
     final double remainingCapacity = rawCapacity / 10.0;
-    final int healthCode        = bytes[63] & 0xFF;
-    final int rawVoltage        = _bigEndian16(bytes, 64);
-    final double totalVoltage   = rawVoltage / 10.0;
-    final int rawCurrent        = _bigEndian16(bytes, 66);
-    final double totalCurrent   = _decodeSigned16(rawCurrent) / 10.0;
-    final int rawTemp           = _bigEndian16(bytes, 68);
-    final double temperature    = _decodeSigned16(rawTemp).toDouble();
-    final int rawPower          = _bigEndian16(bytes, 70);
-    final double powerKw        = _decodeSigned16(rawPower) / 10.0;
-    final double totalPower     = powerKw * 1000.0;
-    final int totalCells        = bytes[72] & 0xFF;
-    final int rawCycles         = _bigEndian16(bytes, 73);
-    final int rawAvgVoltage     = _bigEndian16(bytes, 75);
-    final double avgCellVoltage = rawAvgVoltage / 1000.0;
-    final int rawVoltDiff       = _bigEndian16(bytes, 77);
-    final double voltageDiff    = rawVoltDiff / 1000.0;
-    final int rawMaxVoltage     = _bigEndian16(bytes, 79);
-    final double maxCellVoltage = rawMaxVoltage / 1000.0;
-    final int rawMinVoltage     = _bigEndian16(bytes, 81);
-    final double minCellVoltage = rawMinVoltage / 1000.0;
+    final int healthCode           = bytes[BMSProtocol.dashHealthByte] & 0xFF;
+    final int rawVoltage           = _bigEndian16(bytes, BMSProtocol.dashVoltageHigh);
+    final double totalVoltage      = rawVoltage / 10.0;
+    final int rawCurrent           = _bigEndian16(bytes, BMSProtocol.dashCurrentHigh);
+    final double totalCurrent      = _decodeSigned16(rawCurrent) / 10.0;
+    final int rawTemp              = _bigEndian16(bytes, BMSProtocol.dashTempHigh);
+    final double temperature       = _decodeSigned16(rawTemp).toDouble();
+    final int rawPower             = _bigEndian16(bytes, BMSProtocol.dashPowerHigh);
+    // Spec: power in KW (×0.1 KW), convert to Watts for internal storage
+    final double totalPower        = _decodeSigned16(rawPower) / 10.0 * 1000.0;
+    final int totalCells           = bytes[BMSProtocol.dashTotalCellsByte] & 0xFF;
+    final int rawCycles            = _bigEndian16(bytes, BMSProtocol.dashCyclesHigh);
+    final int rawAvgVoltage        = _bigEndian16(bytes, BMSProtocol.dashAvgVoltageHigh);
+    final double avgCellVoltage    = rawAvgVoltage / 1000.0;
+    final int rawVoltDiff          = _bigEndian16(bytes, BMSProtocol.dashVoltDiffHigh);
+    final double voltageDiff       = rawVoltDiff / 1000.0;
+    final int rawMaxVoltage        = _bigEndian16(bytes, BMSProtocol.dashMaxVoltageHigh);
+    final double maxCellVoltage    = rawMaxVoltage / 1000.0;
+    final int rawMinVoltage        = _bigEndian16(bytes, BMSProtocol.dashMinVoltageHigh);
+    final double minCellVoltage    = rawMinVoltage / 1000.0;
 
     debugPrint('📊 Dashboard → '
+        'Serial=$batterySerial | SW=$softwareVersion | HW=$hardwareVersion | '
         'SOC=$soc% | V=${totalVoltage}V | A=${totalCurrent}A | '
         'Cap=${remainingCapacity}Ah | Status=$batteryStatusCode | '
         'Health=$healthCode | Temp=$temperature°C | '
@@ -288,7 +318,7 @@ class BMSPacketParser {
       startByte:         start,
       length:            length,
       dataId:            dataId,
-      crc:               receivedCrcLow,
+      crc:               receivedCrc,
       stopByte:          stop,
       rawBytes:          Uint8List.fromList(bytes),
       receivedAt:        DateTime.now(),
@@ -316,7 +346,7 @@ class BMSPacketParser {
   // ─────────────────────────────────────────────────────────────────────────
   // 88-BYTE CELL VOLTAGE RESPONSE  (dataId 0x53)
   //
-  // Structure:
+  // Structure per spec:
   //   Byte 0        : 0xAA (start)
   //   Byte 1        : 0x57 (length)
   //   Byte 2        : 0x53 (Data ID)
@@ -328,9 +358,9 @@ class BMSPacketParser {
   //   Byte 11       : Overall Balancing (0x01=Active, 0x02=Inactive)
   //   Byte 12       : Total Cells (min 6, max 24)
   //   Bytes 13–14   : Cell 1 Voltage (×0.001 V, big-endian)
-  //   Byte 15       : Cell 1 Balancing (0x01=Active, 0x02=Inactive)
-  //   [repeat for cells 2–24, each = 3 bytes]
-  //   Bytes 85–86   : CRC (big-endian)
+  //   Byte 15       : Cell 1 Balancing
+  //   [repeat ×24 cells, 3 bytes each]
+  //   Bytes 85–86   : CRC (use low byte 86 for CRC-8)
   //   Byte 87       : 0xBB (stop)
   // ─────────────────────────────────────────────────────────────────────────
   static BMSParseResult _parseCellVoltageResponse(
@@ -342,7 +372,6 @@ class BMSPacketParser {
     final int dataId = bytes[2]  & 0xFF;
     final int stop   = bytes[BMSProtocol.cellStopByte] & 0xFF;
 
-    // ── Request/response match check ───────────────────────────────────────
     if (lastSentDataId != null && !_responseMatchesRequest(lastSentDataId, dataId)) {
       debugPrint('⚠️  RESPONSE MISMATCH [CellVoltage] '
           'sent=0x${lastSentDataId.toRadixString(16).toUpperCase().padLeft(2,"0")} '
@@ -354,51 +383,49 @@ class BMSPacketParser {
       );
     }
 
-    // ── CRC validation: covers bytes[1..84] ────────────────────────────────
-    // CRC is 2 bytes at [85..86]; use low byte for CRC-8 comparison.
-    final crcData         = bytes.sublist(1, BMSProtocol.cellCrcHigh);
-    final int computedCrc = BMSCrcService.calculateCRC8(crcData);
-    final int receivedCrcLow = bytes[BMSProtocol.cellCrcLow] & 0xFF;
+    // CRC covers bytes[1..84]; compare against low byte (byte 86)
+    final crcData            = bytes.sublist(1, BMSProtocol.cellCrcHigh);
+    final int computedCrc    = BMSCrcService.calculateCRC8(crcData);
+    final int receivedCrc    = bytes[BMSProtocol.cellCrcLow] & 0xFF;
 
-    if (computedCrc != receivedCrcLow) {
+    if (computedCrc != receivedCrc) {
       debugPrint('❌ CRC MISMATCH [CellVoltage] '
           'computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")} '
-          'received=0x${receivedCrcLow.toRadixString(16).toUpperCase().padLeft(2,"0")} — IGNORED');
+          'received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")} — IGNORED');
       return BMSParseResult.failure(
         BMSParseError.crcMismatch,
         errorDetail: 'computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}'
-            ' received=0x${receivedCrcLow.toRadixString(16).toUpperCase().padLeft(2,"0")}',
+            ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}',
       );
     }
 
     debugPrint('✅ CRC OK [Cell Voltage Response]');
 
-    // ── Summary fields ─────────────────────────────────────────────────────
-    final int rawMaxVoltage    = _bigEndian16(bytes, BMSProtocol.cellMaxVoltageHigh);
-    final double maxVoltage    = rawMaxVoltage / 1000.0;
-    final int maxVoltageNo     = bytes[BMSProtocol.cellMaxVoltageCellNo] & 0xFF;
+    // ── Summary fields ────────────────────────────────────────────────────
+    final int rawMaxVoltage  = _bigEndian16(bytes, BMSProtocol.cellMaxVoltageHigh);
+    final double maxVoltage  = rawMaxVoltage / 1000.0;
+    final int maxVoltageNo   = bytes[BMSProtocol.cellMaxVoltageCellNo] & 0xFF;
 
-    final int rawMinVoltage    = _bigEndian16(bytes, BMSProtocol.cellMinVoltageHigh);
-    final double minVoltage    = rawMinVoltage / 1000.0;
-    final int minVoltageNo     = bytes[BMSProtocol.cellMinVoltageCellNo] & 0xFF;
+    final int rawMinVoltage  = _bigEndian16(bytes, BMSProtocol.cellMinVoltageHigh);
+    final double minVoltage  = rawMinVoltage / 1000.0;
+    final int minVoltageNo   = bytes[BMSProtocol.cellMinVoltageCellNo] & 0xFF;
 
-    final int rawAvgVoltage    = _bigEndian16(bytes, BMSProtocol.cellAvgVoltageHigh);
-    final double avgVoltage    = rawAvgVoltage / 1000.0;
+    final int rawAvgVoltage  = _bigEndian16(bytes, BMSProtocol.cellAvgVoltageHigh);
+    final double avgVoltage  = rawAvgVoltage / 1000.0;
 
     final int balancingByte    = bytes[BMSProtocol.cellBalancingByte] & 0xFF;
     final bool balancingActive = balancingByte == BMSProtocol.balancingActive;
 
-    final int totalCells       = bytes[BMSProtocol.cellTotalCellsByte] & 0xFF;
+    final int totalCells = bytes[BMSProtocol.cellTotalCellsByte] & 0xFF;
 
-    // ── Per-cell data ──────────────────────────────────────────────────────
-    // Guard: max 24 cells, and we must not read past byte 84 (before CRC)
-    final int safeCells = totalCells.clamp(0, 24);
-    final List<double> voltages   = [];
-    final List<bool>   balancing  = [];
+    // ── Per-cell data ─────────────────────────────────────────────────────
+    final int safeCells       = totalCells.clamp(0, 24);
+    final List<double> voltages  = [];
+    final List<bool>   balancing = [];
 
     for (int i = 0; i < safeCells; i++) {
       final int base = BMSProtocol.cellDataStart + i * BMSProtocol.cellDataStride;
-      // Safety: ensure we don't read past the CRC area (byte 84)
+      // Guard: don't read into CRC area (bytes 85+)
       if (base + 1 >= BMSProtocol.cellCrcHigh) break;
 
       final int rawV    = _bigEndian16(bytes, base);
@@ -421,28 +448,27 @@ class BMSPacketParser {
     }
 
     return BMSParseResult.success(BMSParsedPacket(
-      startByte:          start,
-      length:             length,
-      dataId:             dataId,
-      crc:                receivedCrcLow,
-      stopByte:           stop,
-      rawBytes:           Uint8List.fromList(bytes),
-      receivedAt:         DateTime.now(),
-      // Cell voltage fields
-      cellVoltages:       voltages,
-      cellBalancing:      balancing,
-      cellMaxVoltage:     maxVoltage,
-      cellMaxVoltageNo:   maxVoltageNo,
-      cellMinVoltage:     minVoltage,
-      cellMinVoltageNo:   minVoltageNo,
-      cellAvgVoltage:     avgVoltage,
+      startByte:           start,
+      length:              length,
+      dataId:              dataId,
+      crc:                 receivedCrc,
+      stopByte:            stop,
+      rawBytes:            Uint8List.fromList(bytes),
+      receivedAt:          DateTime.now(),
+      cellVoltages:        voltages,
+      cellBalancing:       balancing,
+      cellMaxVoltage:      maxVoltage,
+      cellMaxVoltageNo:    maxVoltageNo,
+      cellMinVoltage:      minVoltage,
+      cellMinVoltageNo:    minVoltageNo,
+      cellAvgVoltage:      avgVoltage,
       cellBalancingActive: balancingActive,
-      cellTotalCells:     totalCells,
+      cellTotalCells:      totalCells,
     ));
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 19-BYTE DEVICE INFO PACKET
+  // 19-BYTE DEVICE INFO PACKET  (dataId 0x59–0x5C)
   // ─────────────────────────────────────────────────────────────────────────
   static BMSParseResult _parseDeviceInfoPacket(
     List<int> bytes, {
@@ -473,9 +499,7 @@ class BMSPacketParser {
     final crcData     = bytes.sublist(1, 17);
     final computedCrc = BMSCrcService.calculateCRC8(crcData);
     if (computedCrc != crc) {
-      debugPrint('❌ CRC MISMATCH [DeviceInfo 0x${dataId.toRadixString(16).toUpperCase()}] '
-          'computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")} '
-          'received=0x${crc.toRadixString(16).toUpperCase().padLeft(2,"0")}');
+      debugPrint('❌ CRC MISMATCH [DeviceInfo 0x${dataId.toRadixString(16).toUpperCase()}]');
       return BMSParseResult.failure(
         BMSParseError.crcMismatch,
         errorDetail: 'computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}'
