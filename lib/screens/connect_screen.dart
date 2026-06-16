@@ -1,13 +1,13 @@
-// ignore_for_file: use_build_context_synchronously, deprecated_member_use
-
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import 'package:bmsmobileapp/utils/slide_route.dart';
-import 'package:bmsmobileapp/screens/login_screen.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
+import 'package:bmsmobileapp/services/auth_service.dart';
+
+// ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 class ConnectScreen extends StatefulWidget {
   const ConnectScreen({super.key});
@@ -17,7 +17,6 @@ class ConnectScreen extends StatefulWidget {
 }
 
 class _ConnectScreenState extends State<ConnectScreen> {
-
   static const _primary = Color(0xFF1B6B3A);
 
   String tr(String key) => TranslationService.t(key);
@@ -38,6 +37,57 @@ class _ConnectScreenState extends State<ConnectScreen> {
     super.dispose();
   }
 
+  // ================= LOGOUT =================
+  Future<void> _handleLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout_rounded, color: Color(0xFF1B6B3A)),
+            SizedBox(width: 8),
+            Text('Logout'),
+          ],
+        ),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: Colors.black54),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1B6B3A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true), // ✅ returns true
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    // Clear all stored tokens and user data
+    await AuthService.clearTokens();
+
+    if (!mounted) return;
+
+    // Remove every route from the stack and navigate to login
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      '/login',
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -46,17 +96,16 @@ class _ConnectScreenState extends State<ConnectScreen> {
         backgroundColor: _primary,
         centerTitle: true,
         automaticallyImplyLeading: false,
-        title: Text(tr('connect.title'),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+        title: Text(
+          tr('connect.title'),
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout_rounded),
-            onPressed: () => Navigator.pushAndRemoveUntil(
-              context,
-              SlideRoute(page: const LoginScreen()),
-              (_) => false,
-            ),
-          )
+            icon: const Icon(Icons.logout_rounded, color: Colors.white),
+            tooltip: 'Logout',
+            onPressed: _handleLogout,
+          ),
         ],
       ),
       body: Padding(
@@ -65,8 +114,10 @@ class _ConnectScreenState extends State<ConnectScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 36),
-            Text(tr('connect.choose_device'),
-                style: const TextStyle(color: Colors.black54)),
+            Text(
+              tr('connect.choose_device'),
+              style: const TextStyle(color: Colors.black54),
+            ),
             const SizedBox(height: 10),
 
             _card(
@@ -158,16 +209,14 @@ class _ConnectScreenState extends State<ConnectScreen> {
     final state = await FlutterBluePlus.adapterState.first;
 
     if (state == BluetoothAdapterState.off) {
-      _bluetoothOffDialog(context); // <-- new dialog with Enable button
+      _bluetoothOffDialog(context);
       return;
     }
 
     Navigator.push(
       context,
       SlideRoute(
-        page: BluetoothDeviceScanPage(
-          service: BMSBluetoothService(),
-        ),
+        page: BluetoothDeviceScanPage(service: BMSBluetoothService()),
       ),
     );
   }
@@ -182,11 +231,11 @@ class _ConnectScreenState extends State<ConnectScreen> {
     );
   }
 
-  // ================= BLUETOOTH OFF DIALOG (with Enable button) =================
+  // ================= BLUETOOTH OFF DIALOG =================
   void _bluetoothOffDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Row(
           children: [
             const Icon(Icons.bluetooth_disabled_rounded, color: Colors.red),
@@ -196,15 +245,13 @@ class _ConnectScreenState extends State<ConnectScreen> {
         ),
         content: Text(tr('connect.enable_bluetooth')),
         actions: [
-          // Cancel button
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(
               tr('connect.cancel'),
               style: const TextStyle(color: Colors.black54),
             ),
           ),
-          // Enable button
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: _primary,
@@ -216,22 +263,18 @@ class _ConnectScreenState extends State<ConnectScreen> {
             icon: const Icon(Icons.bluetooth_rounded, size: 18),
             label: Text(tr('connect.enable')),
             onPressed: () async {
-              Navigator.pop(context); // close dialog first
+              Navigator.pop(dialogContext);
               try {
-                await FlutterBluePlus.turnOn(); // request BT turn-on (Android)
+                await FlutterBluePlus.turnOn();
 
-                // Wait until adapter is on (timeout 10s)
                 final newState = await FlutterBluePlus.adapterState
-                    .firstWhere(
-                      (s) => s == BluetoothAdapterState.on,
-                    )
+                    .firstWhere((s) => s == BluetoothAdapterState.on)
                     .timeout(
                       const Duration(seconds: 10),
                       onTimeout: () => BluetoothAdapterState.off,
                     );
 
                 if (newState == BluetoothAdapterState.on) {
-                  // BT turned on — proceed to scan page
                   Navigator.push(
                     context,
                     SlideRoute(
@@ -241,14 +284,11 @@ class _ConnectScreenState extends State<ConnectScreen> {
                     ),
                   );
                 } else {
-                  // User denied or timed out
                   _dialog(context,
                       title: tr('connect.bluetooth_off'),
                       msg: tr('connect.enable_bluetooth'));
                 }
               } catch (e) {
-                // FlutterBluePlus.turnOn() is Android-only;
-                // on iOS it will throw — show a manual instruction dialog
                 _dialog(
                   context,
                   title: tr('connect.bluetooth_off'),
@@ -267,14 +307,14 @@ class _ConnectScreenState extends State<ConnectScreen> {
       {required String title, required String msg}) {
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: Text(title),
         content: Text(msg),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: Text(tr('connect.ok')),
-          )
+          ),
         ],
       ),
     );
