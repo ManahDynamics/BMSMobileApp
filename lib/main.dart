@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'core/api/routes/app_router.dart';
 
 import 'firebase_options.dart';
 
-import 'screens/splash_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/register_screen.dart';
-import 'screens/connect_screen.dart';
-import 'screens/dashboard.dart';
-import 'screens/editprofile_screen.dart';
-import 'screens/forgotpassword_screen.dart';
+// import 'screens/splash_screen.dart';
+// import 'screens/login_screen.dart';
+// import 'screens/register_screen.dart';
+// import 'screens/connect_screen.dart';
+// import 'screens/dashboard.dart';
+// import 'screens/editprofile_screen.dart';
+// import 'screens/forgotpassword_screen.dart';
 
 import 'services/bluetooth_service.dart';
 import 'services/translation_service.dart';
@@ -110,18 +111,20 @@ class _MyAppState extends State<MyApp> {
         ),
       ),
       key: ValueKey(currentLanguage),
-      initialRoute: '/splash',
-      routes: {
-        '/splash': (context) => const SplashScreen(),
-        '/login': (context) => const LoginScreen(),
-        '/register': (context) => const RegisterScreen(),
-        '/connect': (context) => const ConnectScreen(),
-        '/dashboard': (context) => DashboardScreen(
-              service: bmsService,
-            ),
-        '/edit_profile': (context) => const EditProfileScreen(),
-        '/forgot_password': (context) => const ForgotPasswordScreen(),
-      },
+      initialRoute: AppRoutes.splash,
+      onGenerateRoute: AppRouter.generateRoute,
+      // initialRoute: '/splash',
+      // routes: {
+      //   '/splash': (context) => const SplashScreen(),
+      //   '/login': (context) => const LoginScreen(),
+      //   '/register': (context) => const RegisterScreen(),
+      //   '/connect': (context) => const ConnectScreen(),
+      //   '/dashboard': (context) => DashboardScreen(
+      //         service: bmsService,
+      //       ),
+      //   '/edit_profile': (context) => const EditProfileScreen(),
+      //   '/forgot_password': (context) => const ForgotPasswordScreen(),
+      // },
     );
   }
 }

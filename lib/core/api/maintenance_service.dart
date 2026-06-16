@@ -1,4 +1,4 @@
-import 'package:figma_ui_app/core/api/api_provider.dart';
+import 'api_provider.dart';
 
 enum MaintenanceStatus { ok, maintenance }
 
