@@ -9,18 +9,13 @@ class TokenService {
   static const String _userIdKey = 'user_id';
   static const String _refreshTokenKey = 'refresh_token';
   
-  // Correct way to initialize FlutterSecureStorage
+  // Singleton Pattern
+  static final TokenService _instance = TokenService._internal();
+  factory TokenService() => _instance;
+  TokenService._internal();
+
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   
-  // If you need platform-specific options, use this approach:
-  // final FlutterSecureStorage _storage = FlutterSecureStorage(
-  //   aOptions: AndroidOptions(
-  //     encryptedSharedPreferences: true,
-  //   ),
-  //   iOptions: IOSOptions(
-  //     accessibility: KeychainAccessibility.first_unlock,
-  //   ),
-  // );
 
   // Save token after login
   Future<bool> saveToken(String token) async {
@@ -159,11 +154,7 @@ class TokenService {
   // Clear all stored data (logout)
   Future<bool> clearAll() async {
     try {
-      await _storage.delete(key: _tokenKey);
-      await _storage.delete(key: _userEmailKey);
-      await _storage.delete(key: _userNameKey);
-      await _storage.delete(key: _userIdKey);
-      await _storage.delete(key: _refreshTokenKey);
+      await _storage.deleteAll();
       
       if (kDebugMode) {
         print('✅ All user data cleared successfully');

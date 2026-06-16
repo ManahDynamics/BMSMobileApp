@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
-import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/auth_service.dart';
+import 'package:bmsmobileapp/services/token_service.dart';
+import 'package:bmsmobileapp/core/api/routes/app_router.dart';
 
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
@@ -43,32 +45,32 @@ class _ConnectScreenState extends State<ConnectScreen> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.logout_rounded, color: Color(0xFF1B6B3A)),
-            SizedBox(width: 8),
-            Text('Logout'),
+            const Icon(Icons.logout_rounded, color: _primary),
+            const SizedBox(width: 8),
+            Text(tr('logout.title')),
           ],
         ),
-        content: const Text('Are you sure you want to logout?'),
+        content: Text(tr('logout.confirmation')),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(color: Colors.black54),
+            child: Text(
+              tr('logout.cancel'),
+              style: const TextStyle(color: Colors.black54),
             ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1B6B3A),
+              backgroundColor: _primary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
             onPressed: () => Navigator.pop(dialogContext, true), // ✅ returns true
-            child: const Text('Logout'),
+            child: Text(tr('logout.confirm_button')),
           ),
         ],
       ),
@@ -76,14 +78,30 @@ class _ConnectScreenState extends State<ConnectScreen> {
 
     if (confirmed != true) return;
 
-    // Clear all stored tokens and user data
-    await AuthService.clearTokens();
+    try {
+      // 1. Forcefully terminate Bluetooth sessions
+      await AppRouter.bmsService.disconnect().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => null,
+      );
+
+      // 2. Wipe all tokens and secure storage
+      await AuthService.clearTokens();
+      await TokenService().clearAll();
+
+      // 3. Small delay to allow SecureStorage to synchronize with the OS filesystem.
+      // This prevents the Login screen from seeing a "stale" token on immediate redirect.
+      await Future.delayed(const Duration(milliseconds: 250));
+    } catch (e) {
+      if (kDebugMode) print('Logout error: $e');
+    }
 
     if (!mounted) return;
 
-    // Remove every route from the stack and navigate to login
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      '/login',
+    // 4. Force navigation from the root navigator to ensure the stack is wiped
+    // and no nested navigator state interferes with the logout.
+    Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+      AppRoutes.login,
       (route) => false,
     );
   }
@@ -103,7 +121,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.logout_rounded, color: Colors.white),
-            tooltip: 'Logout',
+            tooltip: tr('logout.title'),
             onPressed: _handleLogout,
           ),
         ],
@@ -216,7 +234,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
     Navigator.push(
       context,
       SlideRoute(
-        page: BluetoothDeviceScanPage(service: BMSBluetoothService()),
+        page: BluetoothDeviceScanPage(service: AppRouter.bmsService),
       ),
     );
   }
@@ -279,7 +297,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
                     context,
                     SlideRoute(
                       page: BluetoothDeviceScanPage(
-                        service: BMSBluetoothService(),
+                        service: AppRouter.bmsService,
                       ),
                     ),
                   );
