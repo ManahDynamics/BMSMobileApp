@@ -12,17 +12,17 @@ class BMSProtocol {
   // ── Data IDs (Mobile → BMS requests) ─────────────────────────────────────
   static const int idHandshake          = 0x90;
   static const int idDisconnect         = 0x91;
-  static const int idBleNameRequest     = 0x92; // Request BLE device name
-  static const int idDashboardRequest   = 0x93; // Dashboard full data request
-  static const int idCellVoltageRequest = 0x94; // Cell Voltages request
+  static const int idBleNameRequest     = 0x92;
+  static const int idDashboardRequest   = 0x93;
+  static const int idCellVoltageRequest = 0x94;
 
   // ── Data IDs (BMS → Mobile responses) ────────────────────────────────────
-  static const int idAck                 = 0x50; // ACK to handshake
-  static const int idBleNameResponse     = 0x51; // BLE Name response (19 bytes)
-  static const int idDashboardResponse   = 0x52; // Dashboard full response (86 bytes)
-  static const int idCellVoltageResponse = 0x53; // Cell Voltage response (88 bytes)
+  static const int idAck                 = 0x50;
+  static const int idBleNameResponse     = 0x51;
+  static const int idDashboardResponse   = 0x52; // 120-byte response
+  static const int idCellVoltageResponse = 0x53; // 88-byte response
 
-  // ── Device Info IDs (both directions) ────────────────────────────────────
+  // ── Device Info IDs ───────────────────────────────────────────────────────
   static const int idBatterySerial   = 0x59;
   static const int idSoftwareVersion = 0x5A;
   static const int idHardwareVersion = 0x5B;
@@ -47,71 +47,74 @@ class BMSProtocol {
   static const int bleNameStart          = 3;
   static const int bleNameEnd            = 17; // exclusive
 
-  // ── Dashboard Response Packet (86 bytes) ──────────────────────────────────
-  // Byte 0       : Start byte (0xAA)
-  // Byte 1       : Length (0x55)
-  // Byte 2       : Data ID (0x52)
-  // Bytes 3–16   : Battery Serial No (14 ASCII bytes)
-  // Bytes 17–30  : Software Version  (14 ASCII bytes)
-  // Bytes 31–44  : Hardware Version  (14 ASCII bytes)
-  // Bytes 45–58  : SN Code           (14 ASCII bytes)
-  // Byte 59      : SOC (0–100%)
-  // Byte 60      : Battery Status (0x01=Charging, 0x02=Idle, 0x03=Load Connected)
-  // Bytes 61–62  : Remaining Capacity (×0.1 Ah, big-endian)
-  // Byte 63      : Health (0x01=Good, 0x02=Poor)
-  // Bytes 64–65  : Total Voltage (×0.1 V, big-endian)
-  // Bytes 66–67  : Total Current (signed ×0.1 A, big-endian)
-  // Bytes 68–69  : Temperature (signed °C, big-endian)
-  // Bytes 70–71  : Power in KW (signed ×0.1 KW, big-endian)
-  // Byte 72      : Total Cells (min 6, max 24)
-  // Bytes 73–74  : No of Charge/Discharge Cycles (big-endian)
-  // Bytes 75–76  : Avg Cell Voltage (×0.001 V, big-endian)
-  // Bytes 77–78  : Voltage Difference (×0.001 V, big-endian)
-  // Bytes 79–80  : Max Cell Voltage (×0.001 V, big-endian)
-  // Bytes 81–82  : Min Cell Voltage (×0.001 V, big-endian)
-  // Bytes 83–84  : CRC (big-endian, use low byte for CRC-8)
-  // Byte 85      : Stop byte (0xBB)
-  static const int dashboardResponseLength  = 86;
+  // ── Dashboard Response Packet (120 bytes) ─────────────────────────────────
+  // Byte 0        : Start byte (0xAA)
+  // Byte 1        : Length (0x78)
+  // Byte 2        : Data ID (0x52)
+  // Bytes 3–19    : Battery Type (17 ASCII bytes)
+  // Byte 20       : SOC (0–100%)
+  // Byte 21       : Battery Status (0x01=Charging, 0x02=Idle, 0x03=Load Connected)
+  // Bytes 22–23   : Remaining Capacity (×0.1 Ah, big-endian)
+  // Bytes 24–25   : No of Charge/Discharge Cycles (big-endian)
+  // Byte 26       : Health (0x01=Good, 0x02=Poor)
+  // Bytes 27–28   : Total Voltage (×0.1 V, big-endian)
+  // Bytes 29–30   : Total Current (signed ×0.1 A, big-endian)
+  // Bytes 31–32   : Temperature (signed °C, big-endian)
+  // Bytes 33–34   : Power in KW (signed ×0.1 KW, big-endian)
+  // Byte 35       : Total Cells (min 6, max 24)
+  // Bytes 36–37   : Avg Cell Voltage (×0.001 V, big-endian)
+  // Bytes 38–39   : Voltage Difference (×0.001 V, big-endian)
+  // Bytes 40–41   : Max Cell Voltage (×0.001 V, big-endian)
+  // Bytes 42–43   : Min Cell Voltage (×0.001 V, big-endian)
+  // Bytes 44–59   : Battery Serial No (16 ASCII bytes)
+  // Bytes 60–78   : Software Version (19 ASCII bytes)
+  // Bytes 79–97   : Hardware Version (19 ASCII bytes)
+  // Bytes 98–116  : Firmware Version (19 ASCII bytes)
+  // Bytes 117–118 : CRC (big-endian, use low byte for CRC-8)
+  // Byte 119      : Stop byte (0xBB)
+  static const int dashboardResponseLength  = 120;
 
-  static const int dashBatterySerialStart   = 3;
-  static const int dashBatterySerialEnd     = 17;
-  static const int dashSoftwareVersionStart = 17;
-  static const int dashSoftwareVersionEnd   = 31;
-  static const int dashHardwareVersionStart = 31;
-  static const int dashHardwareVersionEnd   = 45;
-  static const int dashSnCodeStart          = 45;
-  static const int dashSnCodeEnd            = 59;
-  static const int dashSocByte              = 59;
-  static const int dashBatteryStatusByte    = 60;
-  static const int dashCapacityHigh         = 61;
-  static const int dashCapacityLow          = 62;
-  static const int dashHealthByte           = 63;
-  static const int dashVoltageHigh          = 64;
-  static const int dashVoltageLow           = 65;
-  static const int dashCurrentHigh          = 66;
-  static const int dashCurrentLow           = 67;
-  static const int dashTempHigh             = 68;
-  static const int dashTempLow              = 69;
-  static const int dashPowerHigh            = 70;
-  static const int dashPowerLow             = 71;
-  static const int dashTotalCellsByte       = 72;
-  static const int dashCyclesHigh           = 73;
-  static const int dashCyclesLow            = 74;
-  static const int dashAvgVoltageHigh       = 75;
-  static const int dashAvgVoltageLow        = 76;
-  static const int dashVoltDiffHigh         = 77;
-  static const int dashVoltDiffLow          = 78;
-  static const int dashMaxVoltageHigh       = 79;
-  static const int dashMaxVoltageLow        = 80;
-  static const int dashMinVoltageHigh       = 81;
-  static const int dashMinVoltageLow        = 82;
-  static const int dashCrcHigh              = 83;
-  static const int dashCrcLow               = 84;
-  static const int dashStopByte             = 85;
+  static const int dashBatteryTypeStart     = 3;
+  static const int dashBatteryTypeEnd       = 20; // exclusive (17 bytes)
+  static const int dashSocByte              = 20;
+  static const int dashBatteryStatusByte    = 21;
+  static const int dashCapacityHigh         = 22;
+  static const int dashCapacityLow          = 23;
+  static const int dashCyclesHigh           = 24;
+  static const int dashCyclesLow            = 25;
+  static const int dashHealthByte           = 26;
+  static const int dashVoltageHigh          = 27;
+  static const int dashVoltageLow           = 28;
+  static const int dashCurrentHigh          = 29;
+  static const int dashCurrentLow           = 30;
+  static const int dashTempHigh             = 31;
+  static const int dashTempLow              = 32;
+  static const int dashPowerHigh            = 33;
+  static const int dashPowerLow             = 34;
+  static const int dashTotalCellsByte       = 35;
+  static const int dashAvgVoltageHigh       = 36;
+  static const int dashAvgVoltageLow        = 37;
+  static const int dashVoltDiffHigh         = 38;
+  static const int dashVoltDiffLow          = 39;
+  static const int dashMaxVoltageHigh       = 40;
+  static const int dashMaxVoltageLow        = 41;
+  static const int dashMinVoltageHigh       = 42;
+  static const int dashMinVoltageLow        = 43;
+  static const int dashBatterySerialStart   = 44;
+  static const int dashBatterySerialEnd     = 60; // exclusive (16 bytes)
+  static const int dashSoftwareVersionStart = 60;
+  static const int dashSoftwareVersionEnd   = 79; // exclusive (19 bytes)
+  static const int dashHardwareVersionStart = 79;
+  static const int dashHardwareVersionEnd   = 98; // exclusive (19 bytes)
+  static const int dashFirmwareVersionStart = 98;
+  static const int dashFirmwareVersionEnd   = 117; // exclusive (19 bytes)
+  static const int dashCrcHigh              = 117;
+  static const int dashCrcLow              = 118;
+  static const int dashStopByte             = 119;
 
   // ── Cell Voltage Response Packet (88 bytes) ───────────────────────────────
   // Byte 0        : Start byte (0xAA)
-  // Byte 1        : Length (0x57)
+  // Byte 1        : Length (0x58)
   // Byte 2        : Data ID (0x53)
   // Bytes 3–4     : Max Voltage (×0.001 V, big-endian)
   // Byte 5        : Max Voltage Cell No (1–24)
@@ -121,7 +124,7 @@ class BMSProtocol {
   // Byte 11       : Overall Balancing (0x01=Active, 0x02=Inactive)
   // Byte 12       : Total Cells (min 6, max 24)
   // Bytes 13–14   : Cell 1 Voltage (×0.001 V, big-endian)
-  // Byte 15       : Cell 1 Balancing (0x01=Active, 0x02=Inactive)
+  // Byte 15       : Cell 1 Balancing
   // [Each cell = 3 bytes: volt_H, volt_L, balancing. Repeat for cells 2–24]
   // Bytes 85–86   : CRC (big-endian, use low byte for CRC-8)
   // Byte 87       : Stop byte (0xBB)
@@ -137,8 +140,8 @@ class BMSProtocol {
   static const int cellAvgVoltageLow    = 10;
   static const int cellBalancingByte    = 11;
   static const int cellTotalCellsByte   = 12;
-  static const int cellDataStart        = 13; // first cell voltage high byte
-  static const int cellDataStride       = 3;  // bytes per cell
+  static const int cellDataStart        = 13;
+  static const int cellDataStride       = 3;
   static const int cellCrcHigh          = 85;
   static const int cellCrcLow           = 86;
   static const int cellStopByte         = 87;

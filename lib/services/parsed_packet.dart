@@ -16,7 +16,7 @@ class BMSParsedPacket {
   final DateTime receivedAt;
   final PacketDirection direction;
 
-  // ── BLE Name Response (dataId == 0x51, 19-byte response) ─────────────────
+  // ── BLE Name Response (dataId == 0x51) ────────────────────────────────────
   final String? bleName;
 
   // ── Dashboard / shared fields ─────────────────────────────────────────────
@@ -27,27 +27,29 @@ class BMSParsedPacket {
   final double? totalPower;        // in Watts (converted from KW)
   final String? totalPowerDisplay;
 
-  // ── Dashboard-only fields (dataId == 0x52, 86-byte response) ─────────────
+  // ── Dashboard-only fields (dataId == 0x52, 120-byte response) ────────────
+  final String? batteryType;       // Bytes 3–19 (17 ASCII bytes)
   final int?    batteryStatusCode; // 0x01=Charging, 0x02=Idle, 0x03=Load Connected
   final int?    healthCode;        // 0x01=Good, 0x02=Poor
   final double? temperature;       // °C (signed)
-  final int?    totalCells;        // Byte 72
-  final int?    chargeCycles;      // Bytes 73–74
-  final double? avgCellVoltage;    // Bytes 75–76 (×0.001 V)
-  final double? voltageDiff;       // Bytes 77–78 (×0.001 V)
-  final double? maxCellVoltage;    // Bytes 79–80 (×0.001 V)
-  final double? minCellVoltage;    // Bytes 81–82 (×0.001 V)
+  final int?    totalCells;        // Byte 35
+  final int?    chargeCycles;      // Bytes 24–25
+  final double? avgCellVoltage;    // Bytes 36–37 (×0.001 V)
+  final double? voltageDiff;       // Bytes 38–39 (×0.001 V)
+  final double? maxCellVoltage;    // Bytes 40–41 (×0.001 V)
+  final double? minCellVoltage;    // Bytes 42–43 (×0.001 V)
+  final String? firmwareVersion;   // Bytes 98–116 (19 ASCII bytes)
 
   // ── Cell Voltage Response fields (dataId == 0x53, 88-byte response) ───────
-  final List<double>? cellVoltages;    // per-cell voltages (×0.001 V)
-  final List<bool>?   cellBalancing;   // per-cell balancing flags
-  final double? cellMaxVoltage;        // summary max from response
-  final int?    cellMaxVoltageNo;      // cell number with max (1-based)
-  final double? cellMinVoltage;        // summary min from response
-  final int?    cellMinVoltageNo;      // cell number with min (1-based)
-  final double? cellAvgVoltage;        // average cell voltage from response
-  final bool?   cellBalancingActive;   // overall balancing status (Byte 11)
-  final int?    cellTotalCells;        // total cells from cell response (Byte 12)
+  final List<double>? cellVoltages;
+  final List<bool>?   cellBalancing;
+  final double? cellMaxVoltage;
+  final int?    cellMaxVoltageNo;
+  final double? cellMinVoltage;
+  final int?    cellMinVoltageNo;
+  final double? cellAvgVoltage;
+  final bool?   cellBalancingActive;
+  final int?    cellTotalCells;
 
   // ── Device info fields (dataId 0x59–0x5C) ────────────────────────────────
   final String? batterySerial;
@@ -74,6 +76,7 @@ class BMSParsedPacket {
     this.totalPower,
     this.totalPowerDisplay,
     // Dashboard-only
+    this.batteryType,
     this.batteryStatusCode,
     this.healthCode,
     this.temperature,
@@ -83,6 +86,7 @@ class BMSParsedPacket {
     this.voltageDiff,
     this.maxCellVoltage,
     this.minCellVoltage,
+    this.firmwareVersion,
     // Cell voltage response
     this.cellVoltages,
     this.cellBalancing,
@@ -109,13 +113,10 @@ class BMSParsedPacket {
 
   bool get isHandshake => dataId == 0x90 && startByte == 0xCC;
 
-  /// BLE Name response (19-byte, dataId == 0x51)
   bool get isBleNameResponse => dataId == 0x51 && bleName != null;
 
-  /// Full 86-byte dashboard response (0x52)
   bool get isDashboardResponse => dataId == 0x52 && totalVoltage != null;
 
-  /// Cell voltage response (0x53)
   bool get isCellVoltageResponse => dataId == 0x53 && cellVoltages != null;
 
   bool get isDeviceInfo =>
@@ -148,20 +149,20 @@ class BMSParsedPacket {
           : '– Ah';
 
   String get powerDisplay =>
-      totalPower != null ? '${totalPower!.toStringAsFixed(0)} W' : '– W';
+      totalPower != null ? '${(totalPower! / 1000).toStringAsFixed(0)} Kw' : '– Kw';
 
   String get temperatureDisplay =>
-      temperature != null ? '${temperature!.toStringAsFixed(1)} °C' : '– °C';
+      temperature != null ? '${temperature!.toStringAsFixed(0)} °C' : '– °C';
 
   String get avgCellVoltageDisplay =>
       avgCellVoltage != null
-          ? '${avgCellVoltage!.toStringAsFixed(3)} V'
-          : '– V';
+          ? '${avgCellVoltage!.toStringAsFixed(2)} v'
+          : '– v';
 
   String get voltageDiffDisplay =>
       voltageDiff != null
-          ? '${voltageDiff!.toStringAsFixed(3)} V'
-          : '– V';
+          ? '${voltageDiff!.toStringAsFixed(2)} v'
+          : '– v';
 
   String get maxCellVoltageDisplay =>
       maxCellVoltage != null
@@ -186,7 +187,7 @@ class BMSParsedPacket {
       case 0x50: return 'ACK';
       case 0x91: return 'DISCONNECT';
       case 0x51: return 'BLE Name Response (19-byte)';
-      case 0x52: return 'Dashboard Response (86-byte)';
+      case 0x52: return 'Dashboard Response (120-byte)';
       case 0x53: return 'Cell Voltage Response (88-byte)';
       case 0x59: return 'Battery Serial No';
       case 0x5A: return 'Software Version';
@@ -222,6 +223,7 @@ class BMSParsedPacket {
     double?          remainingCapacity,
     double?          totalPower,
     String?          totalPowerDisplay,
+    String?          batteryType,
     int?             batteryStatusCode,
     int?             healthCode,
     double?          temperature,
@@ -231,6 +233,7 @@ class BMSParsedPacket {
     double?          voltageDiff,
     double?          maxCellVoltage,
     double?          minCellVoltage,
+    String?          firmwareVersion,
     List<double>?    cellVoltages,
     List<bool>?      cellBalancing,
     double?          cellMaxVoltage,
@@ -261,6 +264,7 @@ class BMSParsedPacket {
       remainingCapacity:   remainingCapacity   ?? this.remainingCapacity,
       totalPower:          totalPower          ?? this.totalPower,
       totalPowerDisplay:   totalPowerDisplay   ?? this.totalPowerDisplay,
+      batteryType:         batteryType         ?? this.batteryType,
       batteryStatusCode:   batteryStatusCode   ?? this.batteryStatusCode,
       healthCode:          healthCode          ?? this.healthCode,
       temperature:         temperature         ?? this.temperature,
@@ -270,6 +274,7 @@ class BMSParsedPacket {
       voltageDiff:         voltageDiff         ?? this.voltageDiff,
       maxCellVoltage:      maxCellVoltage      ?? this.maxCellVoltage,
       minCellVoltage:      minCellVoltage      ?? this.minCellVoltage,
+      firmwareVersion:     firmwareVersion     ?? this.firmwareVersion,
       cellVoltages:        cellVoltages        ?? this.cellVoltages,
       cellBalancing:       cellBalancing       ?? this.cellBalancing,
       cellMaxVoltage:      cellMaxVoltage      ?? this.cellMaxVoltage,
@@ -293,6 +298,7 @@ class BMSParsedPacket {
       sb.write(', bleName=$bleName');
     }
     if (isDashboardResponse) {
+      sb.write(', type=$batteryType');
       sb.write(', $voltageDisplay, $currentDisplay, $socDisplay, $capacityDisplay');
       sb.write(', status=$batteryStatusLabel, health=$healthLabel'
           ', temp=$temperatureDisplay, cells=$totalCellsDisplay'
