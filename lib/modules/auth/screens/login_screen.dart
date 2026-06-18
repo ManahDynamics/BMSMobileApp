@@ -48,12 +48,22 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    _updateLanguageDisplay();
     TranslationService.instance.addListener(_onTranslationsChanged);
     _checkAlreadyLoggedIn();
   }
 
+  void _updateLanguageDisplay() {
+    final currentCode = TranslationService.language;
+    final entry = _langCodeMap.entries.firstWhere(
+      (e) => e.value == currentCode,
+      orElse: () => _langCodeMap.entries.first,
+    );
+    _selectedLanguage = entry.key;
+  }
+
   void _onTranslationsChanged() {
-    if (mounted) setState(() {});
+    if (mounted) setState(() => _updateLanguageDisplay());
   }
 
   Future<void> _checkAlreadyLoggedIn() async {
