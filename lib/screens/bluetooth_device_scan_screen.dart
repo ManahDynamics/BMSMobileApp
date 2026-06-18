@@ -546,9 +546,9 @@ class _ScanTab extends StatelessWidget {
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                   child: Row(
                     children: [
-                      const Text(
-                        'Paired Devices',
-                        style: TextStyle(
+                      Text(
+                        tr('paired_devices'), // or AppLocalizations.of(context)!.pairedDevices
+                        style: const TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
@@ -578,22 +578,42 @@ class _ScanTab extends StatelessWidget {
                   )
                 else
                   ...pairedDevices.map((device) {
+                    final isThis = service.device?.remoteId.str == device.deviceId;
+                    final isBusy = connectingDeviceId == device.deviceId;
                     return ListTile(
                       leading: const Icon(Icons.battery_charging_full,
                           color: Color(0xFF1B6B3A)),
                       title: Text(device.deviceName,
-                          style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text(device.deviceId,
-                          style: const TextStyle(fontSize: 12)),
-                      trailing: ElevatedButton(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                  'Connect functionality to be implemented'),
-                              backgroundColor: Color(0xFF1B6B3A),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis),
+                      trailing: isBusy
+                          ? _StatusChip(
+                              label: _chipLabel(service.state),
+                              color: _chipColor(service.state),
+                              loading: true,
+                            )
+                          : isThis && service.state == BMSConnectionState.ready
+                              ? _StatusChip(
+                                  label: tr('scan.authenticated'),
+                                  color: Colors.green,
+                                )
+                              : ElevatedButton(
+                                  onPressed: () {
+                                    try {
+                                      final d = devices.firstWhere((d) =>
+                                          d.remoteId.str == device.deviceId);
+                                      onConnect(d);
+                                    } catch (e) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                             SnackBar(
+                                content: Text(
+                                  tr('scan.device_not_in_range'), // Translation added here
+                            ),
+                             backgroundColor: Colors.red,
                             ),
                           );
+                        }
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF1B6B3A),
@@ -602,6 +622,7 @@ class _ScanTab extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           elevation: 0,
+                          visualDensity: VisualDensity.compact,
                         ),
                         child: Text(tr('scan.connect')),
                       ),
@@ -613,13 +634,13 @@ class _ScanTab extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                 child: Row(
                   children: [
-                    Text(
-                      'Available Devices',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
+                   Text(
+                    tr('scan.available_devices'), // or tr('availableDevices')
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
                     ),
+                  ),
                   ],
                 ),
               ),
