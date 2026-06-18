@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
@@ -47,7 +46,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         title: Row(
           children: [
-            const Icon(Icons.logout_rounded, color: _primary),
+            const Icon(Icons.power_settings_new, color: _primary),
             const SizedBox(width: 8),
             Text(tr('logout.title')),
           ],
@@ -120,7 +119,7 @@ class _ConnectScreenState extends State<ConnectScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Colors.white),
+            icon: const Icon(Icons.power_settings_new, color: Colors.white),
             tooltip: tr('logout.title'),
             onPressed: _handleLogout,
           ),
