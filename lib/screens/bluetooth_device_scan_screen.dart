@@ -3,6 +3,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
@@ -14,6 +15,8 @@ import 'package:bmsmobileapp/screens/dashboard.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/token_service.dart';
+import 'package:bmsmobileapp/services/auth_service.dart';
+import 'package:bmsmobileapp/core/api/routes/app_router.dart';
 
 class PairedDevice {
   final String deviceId;
@@ -60,8 +63,10 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
   List<PairedDevice> _pairedDevices = [];
   bool _isLoadingPairedDevices = false;
   String? _pairedDevicesError;
-  
+
   final TokenService _tokenService = TokenService();
+
+  static const _primary = Color(0xFF1B6B3A);
 
   String tr(String key) => TranslationService.t(key);
 
@@ -116,7 +121,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
         _devices = results
             .where((r) {
               final name = r.device.platformName.toLowerCase();
-              return name.isNotEmpty && name.startsWith('miv');
+              return name.isNotEmpty && name.startsWith('mch');
             })
             .map((r) => r.device)
             .toList();
@@ -172,12 +177,77 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     };
   }
 
+  // ================= LOGOUT =================
+  Future<void> _handleLogout() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Row(
+          children: [
+            const Icon(Icons.power_settings_new, color: _primary),
+            const SizedBox(width: 8),
+            Text(tr('logout.title')),
+          ],
+        ),
+        content: Text(tr('logout.confirmation')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: Text(
+              tr('logout.cancel'),
+              style: const TextStyle(color: Colors.black54),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(tr('logout.confirm_button')),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // 1. Forcefully terminate Bluetooth sessions
+      await AppRouter.bmsService.disconnect().timeout(
+        const Duration(seconds: 2),
+        onTimeout: () => null,
+      );
+
+      // 2. Wipe all tokens and secure storage
+      await AuthService.clearTokens();
+      await TokenService().clearAll();
+
+      // 3. Small delay to allow SecureStorage to synchronize with the OS filesystem.
+      await Future.delayed(const Duration(milliseconds: 250));
+    } catch (e) {
+      if (kDebugMode) print('Logout error: $e');
+    }
+
+    if (!mounted) return;
+
+    // 4. Force navigation from the root navigator to ensure the stack is wiped
+    Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+      AppRoutes.login,
+      (route) => false,
+    );
+  }
+
   Future<void> _pairDevice(String batterySerial) async {
     if (_isPairing || batterySerial.isEmpty) return;
 
     setState(() => _isPairing = true);
     _showSnackBar('Pairing device...');
-    
+
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('📡 [PAIR DEVICE API] Starting pairing process');
     print('📡 [PAIR DEVICE API] Battery Serial: $batterySerial');
@@ -187,7 +257,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     try {
       final headers = await _getAuthHeaders();
       print('📡 [PAIR DEVICE API] Headers: $headers');
-      
+
       final response = await http
           .post(
             Uri.parse('http://15.207.26.224:3030/api/connect/paired-device'),
@@ -201,7 +271,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
 
       final Map<String, dynamic> data = jsonDecode(response.body);
       print('📡 [PAIR DEVICE API] Parsed Response: $data');
-      
+
       if (response.statusCode == 200 && data['success'] == true) {
         _pairedBatterySerial = batterySerial;
         _showSnackBar('Device paired successfully');
@@ -210,7 +280,6 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
       } else if (response.statusCode == 401) {
         print('❌ [PAIR DEVICE API] Authentication failed - token may be expired');
         _showSnackBar('Session expired. Please login again.', isError: true);
-        // Navigate to login screen
         if (mounted) {
           Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
         }
@@ -248,7 +317,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     try {
       final headers = await _getAuthHeaders();
       print('📡 [FETCH PAIRED DEVICES API] Headers: $headers');
-      
+
       final response = await http
           .get(
             Uri.parse('http://15.207.26.224:3030/api/connect/paired-devices'),
@@ -261,7 +330,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
 
       final Map<String, dynamic> data = jsonDecode(response.body);
       print('📡 [FETCH PAIRED DEVICES API] Parsed Response: $data');
-      
+
       if (response.statusCode == 200 && data['success'] == true) {
         final devices = (data['data'] as List<dynamic>?)
                 ?.cast<Map<String, dynamic>>()
@@ -286,7 +355,6 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
           _pairedDevicesError = 'Session expired. Please login again.';
           _pairedDevices = [];
         });
-        // Optionally navigate to login screen
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -337,7 +405,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(msg),
-      backgroundColor: isError ? Colors.red : const Color(0xFF1B6B3A),
+      backgroundColor: isError ? Colors.red : _primary,
       behavior: SnackBarBehavior.floating,
     ));
   }
@@ -358,9 +426,16 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1B6B3A),
+        backgroundColor: _primary,
         title: Text(tr('scan.title'),
             style: const TextStyle(color: Colors.white)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.power_settings_new, color: Colors.white),
+            tooltip: tr('logout.title'),
+            onPressed: _handleLogout,
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           labelColor: Colors.white,
@@ -439,7 +514,7 @@ class _ScanTab extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: isScanning ? null : onScan,
               icon: isScanning
-                  ? SizedBox(
+                  ? const SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
@@ -464,78 +539,76 @@ class _ScanTab extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: Row(
-                  children: [
-                    Text(
-                      'Paired Devices',
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed:
-                          isLoadingPairedDevices ? null : onRefreshPairedDevices,
-                      icon: const Icon(Icons.refresh, size: 20),
-                    ),
-                  ],
-                ),
-              ),
-              if (isLoadingPairedDevices)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              else if (pairedDevicesError != null)
+              if (pairedDevices.isNotEmpty ||
+                  isLoadingPairedDevices ||
+                  pairedDevicesError != null) ...[
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(pairedDevicesError!,
-                      style: const TextStyle(color: Colors.red)),
-                )
-              else if (pairedDevices.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('No Paired devices',
-                      style: TextStyle(color: Colors.grey[600])),
-                )
-              else ...pairedDevices.map((device) {
-                return ListTile(
-                  leading: const Icon(Icons.battery_charging_full,
-                      color: Color(0xFF1B6B3A)),
-                  title: Text(device.deviceName,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text(device.deviceId,
-                      style: const TextStyle(fontSize: 12)),
-                  trailing: ElevatedButton(
-                    onPressed: () {
-                      // Here you would need to connect to the paired device
-                      // You might need to search for the device by name/ID first
-                      // For now, showing a message
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Connect functionality to be implemented'),
-                          backgroundColor: Color(0xFF1B6B3A),
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Paired Devices',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
                         ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF1B6B3A),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
                       ),
-                      elevation: 0,
-                    ),
-                    child: Text(tr('scan.connect')),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: isLoadingPairedDevices
+                            ? null
+                            : onRefreshPairedDevices,
+                        icon: const Icon(Icons.refresh, size: 20),
+                      ),
+                    ],
                   ),
-                );
-              }).toList(),
-              const SizedBox(height: 24),
+                ),
+                if (isLoadingPairedDevices)
+                  const Center(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else if (pairedDevicesError != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(pairedDevicesError!,
+                        style: const TextStyle(color: Colors.red)),
+                  )
+                else
+                  ...pairedDevices.map((device) {
+                    return ListTile(
+                      leading: const Icon(Icons.battery_charging_full,
+                          color: Color(0xFF1B6B3A)),
+                      title: Text(device.deviceName,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(device.deviceId,
+                          style: const TextStyle(fontSize: 12)),
+                      trailing: ElevatedButton(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                  'Connect functionality to be implemented'),
+                              backgroundColor: Color(0xFF1B6B3A),
+                            ),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF1B6B3A),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: Text(tr('scan.connect')),
+                      ),
+                    );
+                  }),
+                const SizedBox(height: 24),
+              ],
               Padding(
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
                 child: Row(
@@ -564,46 +637,46 @@ class _ScanTab extends StatelessWidget {
                     ],
                   ),
                 )
-              else ...devices.map((d) {
-                final isThis = service.device?.remoteId == d.remoteId;
-                final isBusy = connectingDeviceId == d.remoteId.str;
+              else
+                ...devices.map((d) {
+                  final isThis = service.device?.remoteId == d.remoteId;
+                  final isBusy = connectingDeviceId == d.remoteId.str;
 
-                return ListTile(
-                  leading: const Icon(Icons.bluetooth),
-                  title: Text(
-                    d.platformName.isEmpty
-                        ? tr('scan.unknown_device')
-                        : d.platformName,
-                    style:
-                        const TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  subtitle: Text(d.remoteId.str,
-                      style: const TextStyle(fontSize: 12)),
-                  trailing: isBusy
-                      ? _StatusChip(
-                          label: _chipLabel(service.state),
-                          color: _chipColor(service.state),
-                          loading: true,
-                        )
-                      : isThis && service.state == BMSConnectionState.ready
-                          ? _StatusChip(
-                              label: tr('scan.authenticated'),
-                              color: Colors.green,
-                            )
-                          : ElevatedButton(
-                              onPressed: () => onConnect(d),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1B6B3A),
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(8),
+                  return ListTile(
+                    leading: const Icon(Icons.bluetooth),
+                    title: Text(
+                      d.platformName.isEmpty
+                          ? tr('scan.unknown_device')
+                          : d.platformName,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(d.remoteId.str,
+                        style: const TextStyle(fontSize: 12)),
+                    trailing: isBusy
+                        ? _StatusChip(
+                            label: _chipLabel(service.state),
+                            color: _chipColor(service.state),
+                            loading: true,
+                          )
+                        : isThis && service.state == BMSConnectionState.ready
+                            ? _StatusChip(
+                                label: tr('scan.authenticated'),
+                                color: Colors.green,
+                              )
+                            : ElevatedButton(
+                                onPressed: () => onConnect(d),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1B6B3A),
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  elevation: 0,
                                 ),
-                                elevation: 0,
+                                child: Text(tr('scan.connect')),
                               ),
-                              child: Text(tr('scan.connect')),
-                            ),
-                );
-              }).toList(),
+                  );
+                }),
             ],
           ),
         ),
@@ -684,20 +757,22 @@ class _PacketCard extends StatelessWidget {
   const _PacketCard({required this.packet});
 
   Color get _directionColor {
-    if (packet.direction == PacketDirection.send){
-      return const Color(0xFF1B6B3A);}
-    if (packet.direction == PacketDirection.receive){
-      return Colors.blueAccent;}
+    if (packet.direction == PacketDirection.send) {
+      return const Color(0xFF1B6B3A);
+    }
+    if (packet.direction == PacketDirection.receive) {
+      return Colors.blueAccent;
+    }
     return Colors.grey;
   }
 
   Color get _accentColor => _directionColor;
 
   IconData get _directionIcon {
-    if (packet.direction == PacketDirection.send){
+    if (packet.direction == PacketDirection.send) {
       return Icons.arrow_upward;
     }
-    if (packet.direction == PacketDirection.receive){
+    if (packet.direction == PacketDirection.receive) {
       return Icons.arrow_downward;
     }
     return Icons.swap_horiz;
@@ -844,8 +919,7 @@ class _ConnectionStateBanner extends StatelessWidget {
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-      padding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
           color: bg, borderRadius: BorderRadius.circular(8)),
       child: Row(
