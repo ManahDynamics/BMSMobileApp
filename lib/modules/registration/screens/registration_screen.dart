@@ -1,16 +1,12 @@
 // lib/screens/register_screen.dart
-// ignore_for_file: unnecessary_const, deprecated_member_use
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'package:bmsmobileapp/core/theme/app_colors.dart';
+import 'package:bmsmobileapp/core/theme/app_spacing.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
-// import 'package:bmsmobileapp/modules/registration/models/registration_response.dart';
 import 'package:bmsmobileapp/modules/registration/models/registration_request.dart';
 import 'package:bmsmobileapp/modules/registration/services/registration_service.dart';
-
-
-
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -20,14 +16,14 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final _fullNameController        = TextEditingController();
-  final _emailOrPhoneController    = TextEditingController();
-  final _passwordController        = TextEditingController();
+  final _fullNameController = TextEditingController();
+  final _emailOrPhoneController = TextEditingController();
+  final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
 
-  bool _obscurePassword        = true;
+  bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  bool _isLoading              = false;
+  bool _isLoading = false;
 
   String tr(String key) => TranslationService.t(key);
 
@@ -61,7 +57,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.redAccent : Colors.green,
+        backgroundColor: isError ? AppColors.error : AppColors.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(16),
@@ -72,20 +68,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // ─── Register Handler ─────────────────────────────────────────────────────
 
   Future<void> _register() async {
-    // ── Local validation ──────────────────────────────────────────────────
-    final fullName        = _fullNameController.text.trim();
-    final input           = _emailOrPhoneController.text.trim();
-    final password        = _passwordController.text.trim();
+    final fullName = _fullNameController.text.trim();
+    final input = _emailOrPhoneController.text.trim();
+    final password = _passwordController.text.trim();
     final confirmPassword = _confirmPasswordController.text.trim();
 
     if (fullName.isEmpty || input.isEmpty ||
         password.isEmpty || confirmPassword.isEmpty) {
-      _showSnackBar('All fields are required');
+      _showSnackBar(tr('register.all_fields_required'));
       return;
     }
 
     if (password != confirmPassword) {
-      _showSnackBar('Passwords do not match');
+      _showSnackBar(tr('register.passwords_do_not_match'));
       return;
     }
 
@@ -94,20 +89,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       final bool isPhone = _isPhone(input);
 
-      // ── Build typed request model ────────────────────────────────────────
       final request = RegisterRequest(
         fullName: fullName,
         password: password,
-        email:    isPhone ? null : input,
+        email: isPhone ? null : input,
         mobileNo: isPhone ? input : null,
       );
 
-      // ── Call service ─────────────────────────────────────────────────────
       final response = await RegisterService.register(request);
 
       if (response.success) {
         _showSnackBar(response.message, isError: false);
-        await Future.delayed(const Duration(milliseconds: 1000));
+        await Future.delayed(const Duration(milliseconds: 1200));
         if (mounted) Navigator.pop(context);
       } else {
         _showSnackBar(response.message);
@@ -123,8 +116,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1B6B3A),
+      backgroundColor: AppColors.primaryGreen,
       body: SafeArea(
         child: Stack(
           children: [
@@ -190,18 +185,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   Text(
                     tr('login.app_title'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      color: AppColors.textLight,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     tr('login.app_subtitle'),
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13.5,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textLightSecondary,
                     ),
                   ),
 
@@ -209,14 +201,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                   // Form card
                   Container(
-                    width: double.infinity,
                     margin: const EdgeInsets.symmetric(horizontal: 20),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
                       vertical: 28,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.cardBackground,
                       borderRadius: BorderRadius.circular(15),
                       boxShadow: [
                         BoxShadow(
@@ -231,10 +222,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       children: [
                         Text(
                           tr('register.title'),
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF4F4F4F),
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: const Color(0xFF4F4F4F),
                           ),
                         ),
 
@@ -246,7 +235,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           hint: tr('register.full_name'),
                           icon: Icons.person_rounded,
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: AppSpacing.md),
 
                         // Email or Phone
                         _buildInputField(
@@ -255,7 +244,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           icon: Icons.email_rounded,
                           keyboardType: TextInputType.emailAddress,
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: AppSpacing.md),
 
                         // Password
                         _buildPasswordField(
@@ -263,9 +252,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           hint: tr('register.password'),
                           obscure: _obscurePassword,
                           onToggle: () => setState(
-                              () => _obscurePassword = !_obscurePassword),
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
                         ),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: AppSpacing.md),
 
                         // Confirm Password
                         _buildPasswordField(
@@ -273,10 +263,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           hint: tr('register.confirm_password'),
                           obscure: _obscureConfirmPassword,
                           onToggle: () => setState(() =>
-                              _obscureConfirmPassword =
-                                  !_obscureConfirmPassword),
+                              _obscureConfirmPassword = !_obscureConfirmPassword),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: AppSpacing.xl),
 
                         // Register button
                         SizedBox(
@@ -284,20 +273,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           height: 52,
                           child: ElevatedButton(
                             onPressed: _isLoading ? null : _register,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF3A6EAC),
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor:
-                                  const Color(0xFF3A6EAC).withOpacity(0.6),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              elevation: 0,
-                            ),
                             child: _isLoading
                                 ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
+                                    width: 24,
+                                    height: 24,
                                     child: CircularProgressIndicator(
                                       color: Colors.white,
                                       strokeWidth: 2.5,
@@ -322,18 +301,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             Text(
                               tr('register.already_have_account'),
                               style: TextStyle(
-                                color: Colors.grey[600],
+                                color: AppColors.textSecondary,
                                 fontSize: 13,
                               ),
                             ),
+                            const SizedBox(width: 4),
                             GestureDetector(
                               onTap: _isLoading
                                   ? null
                                   : () => Navigator.pop(context),
                               child: Text(
                                 tr('register.login'),
-                                style: const TextStyle(
-                                  color: Color(0xFF3A6EAC),
+                                style: TextStyle(
+                                  color: AppColors.primaryBlue,
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -355,7 +335,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  // ─── Reusable field widgets ───────────────────────────────────────────────
+  // ─── Reusable Input Field ───────────────────────────────────────────────
 
   Widget _buildInputField({
     required TextEditingController controller,
@@ -365,7 +345,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F0F0),
+        color: AppColors.inputBackground,
         borderRadius: BorderRadius.circular(12),
       ),
       child: TextField(
@@ -373,15 +353,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
         keyboardType: keyboardType,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
           prefixIcon: Icon(icon, color: Colors.grey[600], size: 20),
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
       ),
     );
   }
+
+  // ─── Reusable Password Field ───────────────────────────────────────────
 
   Widget _buildPasswordField({
     required TextEditingController controller,
@@ -391,7 +369,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F0F0),
+        color: AppColors.inputBackground,
         borderRadius: BorderRadius.circular(12),
       ),
       child: TextField(
@@ -399,9 +377,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         obscureText: obscure,
         decoration: InputDecoration(
           hintText: hint,
-          hintStyle: TextStyle(color: Colors.grey[500], fontSize: 14),
-          prefixIcon:
-              Icon(Icons.lock_rounded, color: Colors.grey[600], size: 20),
+          prefixIcon: const Icon(Icons.lock_rounded,
+              color: Colors.grey, size: 20),
           suffixIcon: IconButton(
             icon: Icon(
               obscure
@@ -412,9 +389,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
             ),
             onPressed: onToggle,
           ),
-          border: InputBorder.none,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
       ),
     );

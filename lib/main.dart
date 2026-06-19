@@ -1,17 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+
 import 'core/api/routes/app_router.dart';
-
+import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
-
-// import 'screens/splash_screen.dart';
-// import 'screens/login_screen.dart';
-// import 'screens/register_screen.dart';
-// import 'screens/connect_screen.dart';
-// import 'screens/dashboard.dart';
-// import 'screens/editprofile_screen.dart';
-// import 'screens/forgotpassword_screen.dart';
 
 import 'services/bluetooth_service.dart';
 import 'services/translation_service.dart';
@@ -97,34 +90,25 @@ class _MyAppState extends State<MyApp> {
     return MaterialApp(
       title: 'Smart BMS',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF1E7D4F),
-        ),
-        useMaterial3: true,
-        scaffoldBackgroundColor: Colors.white,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF1B6B3A),
-          foregroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: true,
-        ),
-      ),
-      key: ValueKey(currentLanguage),
+
+      // === New Theme Integration ===
+      theme: AppTheme.lightTheme,
+      // darkTheme: AppTheme.darkTheme,        // Enable when you add dark mode
+      // themeMode: ThemeMode.system,          // Or .light / .dark
+
+      key: ValueKey(currentLanguage), // Refresh UI when language changes
       initialRoute: AppRoutes.splash,
       onGenerateRoute: AppRouter.generateRoute,
-      // initialRoute: '/splash',
-      // routes: {
-      //   '/splash': (context) => const SplashScreen(),
-      //   '/login': (context) => const LoginScreen(),
-      //   '/register': (context) => const RegisterScreen(),
-      //   '/connect': (context) => const ConnectScreen(),
-      //   '/dashboard': (context) => DashboardScreen(
-      //         service: bmsService,
-      //       ),
-      //   '/edit_profile': (context) => const EditProfileScreen(),
-      //   '/forgot_password': (context) => const ForgotPasswordScreen(),
-      // },
+
+      // Optional: You can still override specific theme properties if needed
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.noScaling, // Optional: Prevent system font scaling
+          ),
+          child: child!,
+        );
+      },
     );
   }
 }
