@@ -1,6 +1,4 @@
 // lib/screens/login_screen.dart
-// ignore_for_file: deprecated_member_use
-
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,14 +6,16 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:bmsmobileapp/screens/forgotpassword_screen.dart';
-import 'package:bmsmobileapp/utils/slide_route.dart';
+
+import 'package:bmsmobileapp/core/theme/app_colors.dart';
+// import 'package:bmsmobileapp/core/theme/app_spacing.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/token_service.dart';
 import 'package:bmsmobileapp/modules/auth/models/login_request.dart';
 import 'package:bmsmobileapp/modules/auth/models/login_response.dart';
 import 'package:bmsmobileapp/modules/registration/screens/registration_screen.dart';
-// import 'package:bmsmobileapp/screens/connect_screen.dart';
+import 'package:bmsmobileapp/screens/forgotpassword_screen.dart';
+import 'package:bmsmobileapp/utils/slide_route.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -63,7 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _onTranslationsChanged() {
-    if (mounted) setState(() => _updateLanguageDisplay());
+    if (mounted) setState(_updateLanguageDisplay);
   }
 
   Future<void> _checkAlreadyLoggedIn() async {
@@ -104,53 +104,44 @@ class _LoginScreenState extends State<LoginScreen> {
               link: _layerLink,
               showWhenUnlinked: false,
               offset: const Offset(0, 44),
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: Material(
-                  elevation: 6,
-                  borderRadius: BorderRadius.circular(10),
-                  color: Colors.white,
-                  child: SizedBox(
-                    width: 140,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: _langCodeMap.keys.map((lang) {
-                        final isSelected = lang == _selectedLanguage;
-                        return InkWell(
-                          onTap: () async {
-                            setState(() => _selectedLanguage = lang);
-                            await TranslationService.loadTranslations(
-                              _langCodeMap[lang]!,
-                            );
-                            _removeOverlay();
-                          },
-                          borderRadius: BorderRadius.circular(10),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Colors.grey.shade200
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              lang,
-                              style: TextStyle(
-                                color: Colors.black87,
-                                fontSize: 14,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ),
+              child: Material(
+                elevation: 6,
+                borderRadius: BorderRadius.circular(10),
+                color: AppColors.overlayBackground,
+                child: SizedBox(
+                  width: 140,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: _langCodeMap.keys.map((lang) {
+                      final isSelected = lang == _selectedLanguage;
+                      return InkWell(
+                        onTap: () async {
+                          setState(() => _selectedLanguage = lang);
+                          await TranslationService.loadTranslations(
+                            _langCodeMap[lang]!,
+                          );
+                          _removeOverlay();
+                        },
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          color: isSelected
+                              ? Colors.grey.shade100
+                              : Colors.white,
+                          child: Text(
+                            lang,
+                            style: TextStyle(
+                              fontWeight: isSelected
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
                             ),
                           ),
-                        );
-                      }).toList(),
-                    ),
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ),
               ),
@@ -245,7 +236,6 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final deviceInfo = await _getDeviceInfo();
 
-      // ── Build typed request model ──────────────────────────────────────────
       final loginRequest = LoginRequest(
         email: _emailController.text.trim(),
         password: _passwordController.text,
@@ -254,7 +244,7 @@ class _LoginScreenState extends State<LoginScreen> {
         deviceToken: deviceInfo['deviceToken']!,
       );
 
-      print('📡 Login request: ${loginRequest.toJson()}');
+      // print('📡 Login request: ${loginRequest.toJson()}');
 
       final response = await http.post(
         Uri.parse('http://15.207.26.224:3030/api/auth/login'),
@@ -269,13 +259,12 @@ class _LoginScreenState extends State<LoginScreen> {
             throw Exception('Request timed out. Please try again.'),
       );
 
-      print('📡 Login response status: ${response.statusCode}');
-      print('📡 Login response body: ${response.body}');
+      // print('📡 Login response status: ${response.statusCode}');
+      // print('📡 Login response body: ${response.body}');
 
       final Map<String, dynamic> rawJson = jsonDecode(response.body);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        // ── Parse into typed response model ─────────────────────────────────
         final loginResponse = LoginResponse.fromJson(rawJson);
 
         final name = loginResponse.name ?? 'User';
@@ -285,7 +274,6 @@ class _LoginScreenState extends State<LoginScreen> {
         final accessToken = loginResponse.accessToken;
         final refreshToken = loginResponse.refreshToken;
 
-        // ── Persist session data ─────────────────────────────────────────────
         if (accessToken != null && accessToken.isNotEmpty) {
           await _tokenService.saveToken(accessToken);
           await _tokenService.saveUserEmail(email);
@@ -294,10 +282,10 @@ class _LoginScreenState extends State<LoginScreen> {
           if (refreshToken != null && refreshToken.isNotEmpty) {
             await _tokenService.saveRefreshToken(refreshToken);
           }
-          print('✅ Token and user data saved successfully');
-          print('✅ User: $name ($email)');
+          // print('✅ Token and user data saved successfully');
+          // print('✅ User: $name ($email)');
         } else {
-          print('⚠️ No token received from server');
+          // print('⚠️ No token received from server');
         }
 
         if (!mounted) return;
@@ -336,8 +324,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: const Color(0xFF1B6B3A),
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Stack(
           children: [
@@ -415,20 +405,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   // App title
                   Text(
                     TranslationService.t('login.app_title'),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 26,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.3,
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      color: AppColors.textLight,
                     ),
                   ),
                   const SizedBox(height: 6),
                   Text(
                     TranslationService.t('login.app_subtitle'),
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w400,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: AppColors.textLightSecondary,
                     ),
                   ),
 
@@ -436,14 +421,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   // Login form card
                   Container(
-                    width: double.infinity,
                     margin: const EdgeInsets.symmetric(horizontal: 20),
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
                       vertical: 32,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.cardBackground,
                       borderRadius: BorderRadius.circular(15),
                       boxShadow: [
                         BoxShadow(
@@ -457,80 +441,34 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Email field
-                        Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F0F0),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: TextField(
-                            controller: _emailController,
-                            keyboardType: TextInputType.emailAddress,
-                            textInputAction: TextInputAction.next,
-                            decoration: InputDecoration(
-                              hintText: TranslationService.t(
-                                  'login.email_or_phone'),
-                              hintStyle: TextStyle(
-                                color: Colors.grey[500],
-                                fontSize: 14,
-                              ),
-                              prefixIcon: Icon(
-                                Icons.email_rounded,
-                                color: Colors.grey[600],
-                                size: 20,
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
-                            ),
-                          ),
+                        _buildInputField(
+                          controller: _emailController,
+                          hint: TranslationService.t('login.email_or_phone'),
+                          icon: Icons.email_rounded,
+                          keyboardType: TextInputType.emailAddress,
                         ),
 
                         const SizedBox(height: 16),
 
                         // Password field
-                        Container(
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F0F0),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: TextField(
-                            controller: _passwordController,
-                            obscureText: _obscurePassword,
-                            textInputAction: TextInputAction.done,
-                            onSubmitted: (_) => _handleLogin(),
-                            decoration: InputDecoration(
-                              hintText:
-                                  TranslationService.t('login.password'),
-                              hintStyle: TextStyle(
-                                color: Colors.grey[500],
-                                fontSize: 14,
-                              ),
-                              prefixIcon: Icon(
-                                Icons.lock_rounded,
-                                color: Colors.grey[600],
-                                size: 20,
-                              ),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_off_outlined
-                                      : Icons.visibility_outlined,
-                                  color: Colors.grey,
-                                  size: 20,
-                                ),
-                                onPressed: () => setState(
-                                  () => _obscurePassword = !_obscurePassword,
-                                ),
-                              ),
-                              border: InputBorder.none,
-                              contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 14,
-                              ),
+                        _buildInputField(
+                          controller: _passwordController,
+                          hint: TranslationService.t('login.password'),
+                          icon: Icons.lock_rounded,
+                          obscureText: _obscurePassword,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: Colors.grey,
+                            ),
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
                             ),
                           ),
+                          // FIX: pass true to indicate this field triggers login on submit
+                          isLastField: true,
                         ),
 
                         const SizedBox(height: 8),
@@ -538,168 +476,56 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Forgot password
                         Align(
                           alignment: Alignment.centerRight,
-                          child: MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: GestureDetector(
-                              onTap: _isLoading
-                                  ? null
-                                  : () => Navigator.push(
-                                        context,
-                                        SlideRoute(
-                                          page: const ForgotPasswordScreen(),
-                                        ),
+                          child: GestureDetector(
+                            onTap: _isLoading
+                                ? null
+                                : () => Navigator.push(
+                                      context,
+                                      SlideRoute(
+                                        page: const ForgotPasswordScreen(),
                                       ),
-                              child: Text(
-                                TranslationService.t('login.forgot_password'),
-                                style: const TextStyle(
-                                  color: Color(0xFF3A6EAC),
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                ),
+                                    ),
+                            child: Text(
+                              TranslationService.t('login.forgot_password'),
+                              style: TextStyle(
+                                color: AppColors.primaryBlue,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
                         ),
 
-                        const SizedBox(height: 8),
+                        if (_errorMessage != null) ...[
+                          const SizedBox(height: 12),
+                          _buildErrorMessage(),
+                        ],
 
-                        // Error message
-                        if (_errorMessage != null)
-                          Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 10,
-                            ),
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade50,
-                              borderRadius: BorderRadius.circular(10),
-                              border:
-                                  Border.all(color: Colors.red.shade200),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.error_outline,
-                                  color: Colors.red.shade400,
-                                  size: 16,
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    _errorMessage!,
-                                    style: TextStyle(
-                                      color: Colors.red.shade700,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
+                        const SizedBox(height: 16),
 
                         // Login button
                         SizedBox(
                           width: double.infinity,
-                          height: 50,
+                          height: 52,
                           child: ElevatedButton(
                             onPressed: _isLoading ? null : _handleLogin,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF3A6EAC),
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor:
-                                  const Color(0xFF3A6EAC).withOpacity(0.6),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              elevation: 0,
-                            ),
                             child: _isLoading
                                 ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
+                                    width: 24,
+                                    height: 24,
                                     child: CircularProgressIndicator(
                                       color: Colors.white,
                                       strokeWidth: 2.5,
                                     ),
                                   )
-                                : Text(
-                                    TranslationService.t('login.login'),
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                : Text(TranslationService.t('login.login')),
                           ),
                         ),
 
                         const SizedBox(height: 20),
 
-                        // Divider
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Divider(color: Colors.grey.shade300),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              child: Text(
-                                'or',
-                                style: TextStyle(
-                                  color: Colors.grey[500],
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              child: Divider(color: Colors.grey.shade300),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // Register link
-                        Center(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                TranslationService.t(
-                                    'login.no_account_prefix'),
-                                style: TextStyle(
-                                  color: Colors.grey[600],
-                                  fontSize: 12,
-                                ),
-                              ),
-                              MouseRegion(
-                                cursor: SystemMouseCursors.click,
-                                child: GestureDetector(
-                                  onTap: _isLoading
-                                      ? null
-                                      : () => Navigator.push(
-                                            context,
-                                            SlideRoute(
-                                              page: const RegisterScreen(),
-                                            ),
-                                          ),
-                                  child: Text(
-                                    TranslationService.t(
-                                        'login.register_here'),
-                                    style: const TextStyle(
-                                      color: Color(0xFF3A6EAC),
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        // Divider + Register
+                        _buildDividerAndRegister(),
                       ],
                     ),
                   ),
@@ -711,6 +537,108 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  // FIX: changed onSubmitted from VoidCallback? to ValueChanged<String>?
+  // so it matches TextField's expected signature: void Function(String)
+  Widget _buildInputField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    bool obscureText = false,
+    Widget? suffixIcon,
+    TextInputType? keyboardType,
+    bool isLastField = false,        // replaces the old VoidCallback? onSubmitted
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.inputBackground,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: TextField(
+        controller: controller,
+        obscureText: obscureText,
+        keyboardType: keyboardType,
+        textInputAction:
+            isLastField ? TextInputAction.done : TextInputAction.next,
+        // ValueChanged<String> — receives the submitted string, ignores it
+        onSubmitted: isLastField ? (_) => _handleLogin() : null,
+        decoration: InputDecoration(
+          hintText: hint,
+          prefixIcon: Icon(icon, color: Colors.grey[600], size: 20),
+          suffixIcon: suffixIcon,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorMessage() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, color: AppColors.error, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: TextStyle(color: AppColors.error, fontSize: 13),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDividerAndRegister() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: Divider(color: Colors.grey.shade300)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text('or', style: TextStyle(color: Colors.grey[500])),
+            ),
+            Expanded(child: Divider(color: Colors.grey.shade300)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Center(
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                TranslationService.t('login.no_account_prefix'),
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: _isLoading
+                    ? null
+                    : () => Navigator.push(
+                          context,
+                          SlideRoute(page: const RegisterScreen()),
+                        ),
+                child: Text(
+                  TranslationService.t('login.register_here'),
+                  style: TextStyle(
+                    color: AppColors.primaryBlue,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
