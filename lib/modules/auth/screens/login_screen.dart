@@ -14,7 +14,7 @@ import 'package:bmsmobileapp/services/token_service.dart';
 import 'package:bmsmobileapp/modules/auth/models/login_request.dart';
 import 'package:bmsmobileapp/modules/auth/models/login_response.dart';
 import 'package:bmsmobileapp/modules/registration/screens/registration_screen.dart';
-import 'package:bmsmobileapp/screens/forgotpassword_screen.dart';
+import 'package:bmsmobileapp/modules/forgotPassword/screens/forgot_password_screen.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 
 class LoginScreen extends StatefulWidget {
