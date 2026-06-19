@@ -36,26 +36,106 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _showDisconnectDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        title: const Text('Disconnect', textAlign: TextAlign.center),
-        content: const Text('Are you sure you want to disconnect?', textAlign: TextAlign.center),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () { Navigator.pop(ctx); _disconnect(); },
-            style: ElevatedButton.styleFrom(backgroundColor: _orange),
-            child: const Text('Disconnect'),
+void _showDisconnectDialog() {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      contentPadding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Bluetooth Icon
+          Container(
+            width: 72,
+            height: 72,
+            decoration: const BoxDecoration(
+              color: Color(0xFFE0F2F1), // Light teal
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.bluetooth,
+              size: 40,
+              color: Color(0xFF00796B),
+            ),
+          ),
+
+          const SizedBox(height: 24),
+
+          // Message
+          const Text(
+            'Are you sure you want to disconnect the device?',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 16,
+              height: 1.4,
+              color: Colors.black87,
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // Buttons - Yes (Orange) on LEFT, Cancel on RIGHT
+          Row(
+            children: [
+              // Yes Button (Orange)
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _disconnect();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFAC5624), // Orange like image
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Yes',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Cancel Button (Light Gray)
+              Expanded(
+                child: TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: TextButton.styleFrom(
+                    backgroundColor: const Color(0xFFF5F5F5),
+                    foregroundColor: Colors.black87,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
-    );
-  }
-
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     final svc = widget.service;
@@ -117,11 +197,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             const Text(
               'Dashboard',
-              style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w400),
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500),
             ),
             Text(
               deviceName,
-              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w400),
             ),
             if (svc.bleName != null)
               Text(
@@ -187,25 +267,74 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           children: [
             // ── Device Header ─────────────────────────────────────────────
-            _DeviceHeader(
-              batteryType: batteryType,
-              serialNo: serialNo,
-              onDisconnect: _showDisconnectDialog,
-            ),
+           // ── Device Header ─────────────────────────────────────────────
+_DeviceHeader(
+  batteryType: batteryType,
+  serialNo: serialNo,
+  onDisconnect: _showDisconnectDialog,
+),
 
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                const Text('Connected',
-                    style: TextStyle(color: _green, fontWeight: FontWeight.w600, fontSize: 13)),
-                const SizedBox(width: 6),
-                Container(
-                  width: 8, height: 8,
-                  decoration: const BoxDecoration(color: _green, shape: BoxShape.circle),
-                ),
-              ],
-            ),
+const SizedBox(height: 8),
 
+// ── Connected Pill + Disconnect Button (Same Line) ─────────────
+Row(
+  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  crossAxisAlignment: CrossAxisAlignment.center,
+  children: [
+    // Connected Green Pill
+    Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(255, 239, 242, 240),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: _green,  // Using your app's green
+          width: 2.5,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text(
+            'Connected',
+            style: TextStyle(
+              color: _green,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: _green,
+              shape: BoxShape.circle,
+            ),
+          ),
+        ],
+      ),
+    ),
+
+    // Disconnect Button (Orange)
+    ElevatedButton(
+      onPressed: _showDisconnectDialog,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _orange,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        elevation: 0,
+      ),
+      child: const Text(
+        'Disconnect',
+        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+    ),
+  ],
+),
             _gap16,
 
             // ── Battery Card ──────────────────────────────────────────────
@@ -350,30 +479,17 @@ class _DeviceHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Battery Type: $batteryType',
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.black87)),
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: Color(0xFF424242))),
               const SizedBox(height: 4),
               Text('Battery Serial No: $serialNo',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w400, color: Colors.grey[600])),
             ],
           ),
-        ),
-        const SizedBox(width: 8),
-        ElevatedButton(
-          onPressed: onDisconnect,
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _orange,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-          ),
-          child: const Text('Disconnect', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         ),
       ],
     );
   }
 }
-
 // ==================== BATTERY CARD ====================
 class _BatteryCard extends StatefulWidget {
   final int soc;
@@ -409,6 +525,7 @@ class _BatteryCardState extends State<_BatteryCard> with SingleTickerProviderSta
         CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut));
     _updateBlink();
   }
+
 
   void _updateBlink() {
     if (widget.soc <= 10) {

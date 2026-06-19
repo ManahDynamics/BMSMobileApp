@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
+import 'package:bmsmobileapp/widgets/app_drawer.dart';
 
 enum SortType { cellNo, voltage }
 
@@ -29,11 +30,12 @@ class CellsScreen extends StatefulWidget {
 
 class _CellsScreenState extends State<CellsScreen> {
   static const primaryGreen = Color(0xFF1B6B3A);
-  static const cardBlue = Color(0xFF3A6EAC);
-  static const titleGreyBg = Color(0xFFEEEEEE);
+  static const cardBlue     = Color(0xFF3A6EAC);
+  static const titleGreyBg  = Color(0xFFEEEEEE);
 
   SortType _sortBy = SortType.cellNo;
   List<CellData> _sortedCells = [];
+  final GlobalKey _sortButtonKey = GlobalKey();
 
   String tr(String key) => TranslationService.t(key);
 
@@ -43,6 +45,8 @@ class _CellsScreenState extends State<CellsScreen> {
     TranslationService.instance.addListener(_onChanged);
     widget.service.addListener(_onChanged);
     _sortCells();
+    // ── Request fresh cell voltage data the moment this screen opens ──────
+    widget.service.requestCellVoltages();
   }
 
   void _onChanged() {
@@ -58,20 +62,14 @@ class _CellsScreenState extends State<CellsScreen> {
 
   List<CellData> _buildCells() {
     final cv = widget.service.latestCellVoltage;
-    if (cv?.cellVoltages == null || cv!.cellVoltages!.isEmpty) {
-      return [];
-    }
-
-    final voltages = List<double>.from(cv.cellVoltages!);
+    if (cv?.cellVoltages == null || cv!.cellVoltages!.isEmpty) return [];
+    final voltages  = List<double>.from(cv.cellVoltages!);
     final balancing = cv.cellBalancing ?? [];
-
-    return List.generate(voltages.length, (i) {
-      return CellData(
-        no: i + 1,
-        voltage: voltages[i],
-        balancingActive: i < balancing.length ? balancing[i] : false,
-      );
-    });
+    return List.generate(voltages.length, (i) => CellData(
+      no: i + 1,
+      voltage: voltages[i],
+      balancingActive: i < balancing.length ? balancing[i] : false,
+    ));
   }
 
   void _sortCells() {
@@ -90,42 +88,97 @@ class _CellsScreenState extends State<CellsScreen> {
       widget.service.latestDashboard?.totalCells ??
       _sortedCells.length;
 
-  double? get _maxVoltage => widget.service.latestCellVoltage?.cellMaxVoltage;
-  int? get _maxVoltageNo => widget.service.latestCellVoltage?.cellMaxVoltageNo;
-  double? get _minVoltage => widget.service.latestCellVoltage?.cellMinVoltage;
-  int? get _minVoltageNo => widget.service.latestCellVoltage?.cellMinVoltageNo;
-  double? get _avgVoltage => widget.service.latestCellVoltage?.cellAvgVoltage;
-  bool get _balancingActive => widget.service.latestCellVoltage?.cellBalancingActive ?? false;
+  double? get _maxVoltage      => widget.service.latestCellVoltage?.cellMaxVoltage;
+  int?    get _maxVoltageNo    => widget.service.latestCellVoltage?.cellMaxVoltageNo;
+  double? get _minVoltage      => widget.service.latestCellVoltage?.cellMinVoltage;
+  int?    get _minVoltageNo    => widget.service.latestCellVoltage?.cellMinVoltageNo;
+  double? get _avgVoltage      => widget.service.latestCellVoltage?.cellAvgVoltage;
+  bool    get _balancingActive => widget.service.latestCellVoltage?.cellBalancingActive ?? false;
 
-  ({String text, Color color}) _cellStatus(double v) {
-    if (v < 3.2) {
-      return (text: 'Poor', color: Colors.orange);
-    }
-    return (text: 'Good', color: primaryGreen);
+  // Alert count reused from dashboard logic (just SOC + temp for now)
+  int get _alertCount {
+    int count = 0;
+    final dash = widget.service.latestDashboard;
+    if (dash?.temperature != null && dash!.temperature! > 45) count++;
+    if ((dash?.soc ?? 100) <= 10) count++;
+    if (dash?.temperature != null && dash!.temperature! < 0) count++;
+    if ((dash?.voltageDiff ?? 0) > 0.1) count++;
+    return count;
   }
 
-  Widget _summaryCard({
-    required IconData icon,
+  ({String text, Color color}) _cellStatus(double v) =>
+      v < 3.2 ? (text: 'Poor', color: Colors.orange) : (text: 'Good', color: primaryGreen);
+
+  // ── Single combined summary container with 4 equal tiles ────────────────
+  Widget _summaryTile({
     required String label,
     required String value,
     String? sub,
+    bool isBalancing = false,
+    bool balancingActive = false,
   }) =>
       Expanded(
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: cardBlue,
-            borderRadius: BorderRadius.circular(10),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: Colors.white, size: 24),
-              const SizedBox(height: 6),
-              Text(label, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 11)),
-              const SizedBox(height: 4),
-              Text(value, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
-              if (sub != null)
-                Text(sub, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 10)),
+              // Circle icon
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+                child: Center(
+                  child: isBalancing
+                      ? const Icon(Icons.balance_rounded,
+                          color: Colors.white, size: 14)
+                      : const Text('V',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(label,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70, fontSize: 10)),
+              const SizedBox(height: 3),
+              if (isBalancing) ...[
+                Text('Active/',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: balancingActive
+                            ? Colors.greenAccent
+                            : Colors.white38,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold)),
+                Text('Inactive',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        color: !balancingActive
+                            ? Colors.orangeAccent
+                            : Colors.white38,
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold)),
+              ] else ...[
+                Text(value,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold)),
+                if (sub != null) ...[
+                  const SizedBox(height: 2),
+                  Text(sub,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 10)),
+                ],
+              ],
             ],
           ),
         ),
@@ -133,51 +186,152 @@ class _CellsScreenState extends State<CellsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasData = _sortedCells.isNotEmpty;
+    final hasData    = _sortedCells.isNotEmpty;
+    final maxCellNo  = _maxVoltageNo;
+    final minCellNo  = _minVoltageNo;
+    final alertCount = _alertCount;
 
     return Scaffold(
       backgroundColor: Colors.white,
+      drawer: AppDrawer(activeRoute: '/cells', service: widget.service),
       appBar: AppBar(
         backgroundColor: primaryGreen,
         elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () => Navigator.pop(context),
+        centerTitle: true,
+        // ── Hamburger menu on left ────────────────────────────────────
+        leading: Builder(
+          builder: (ctx) => IconButton(
+            icon: const Icon(Icons.menu_rounded, color: Colors.white),
+            onPressed: () => Scaffold.of(ctx).openDrawer(),
+          ),
         ),
-        title: Text(_deviceName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        // ── Title: "Cell Details" + device name subtitle ──────────────
+        title: Column(
+          children: [
+            const Text('Cell Details',
+                style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600)),
+            Text(_deviceName,
+                style: const TextStyle(
+                    color: Colors.white70, fontSize: 11)),
+          ],
+        ),
         actions: [
-          IconButton(icon: const Icon(Icons.more_vert, color: Colors.white), onPressed: () {}),
+          // ── Notification bell with badge ──────────────────────────
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none_rounded,
+                    color: Colors.white),
+                onPressed: () {},
+              ),
+              if (alertCount > 0)
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: const BoxDecoration(
+                        color: Colors.red, shape: BoxShape.circle),
+                    child: Text('$alertCount',
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold)),
+                  ),
+                ),
+            ],
+          ),
+          // ── Three dots menu ───────────────────────────────────────
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.white),
+            color: Colors.white,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            onSelected: (value) {
+              // TODO: handle menu actions
+            },
+            itemBuilder: (ctx) => const [
+              PopupMenuItem(
+                  value: 'edit_profile', child: Text('Edit Profile')),
+              PopupMenuItem(
+                  value: 'forget_password', child: Text('Forget Password')),
+              PopupMenuItem(value: 'logout', child: Text('Logout')),
+            ],
+          ),
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+
+            // ── Title row ─────────────────────────────────────────────────
             Text(
               'Cell Details${_totalCells > 0 ? ' ($_totalCells Cells)' : ''}',
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
 
-            IntrinsicHeight(
-              child: Row(
-                children: [
-                  _summaryCard(icon: Icons.arrow_upward, label: 'Max. Volt', value: _maxVoltage != null ? '${_maxVoltage!.toStringAsFixed(3)} V' : '– V', sub: _maxVoltageNo != null ? 'Cell ${_maxVoltageNo.toString().padLeft(2, '0')}' : null),
-                  const SizedBox(width: 8),
-                  _summaryCard(icon: Icons.arrow_downward, label: 'Min. Volt', value: _minVoltage != null ? '${_minVoltage!.toStringAsFixed(3)} V' : '– V', sub: _minVoltageNo != null ? 'Cell ${_minVoltageNo.toString().padLeft(2, '0')}' : null),
-                  const SizedBox(width: 8),
-                  _summaryCard(icon: Icons.show_chart, label: 'Average Voltage', value: _avgVoltage != null ? '${_avgVoltage!.toStringAsFixed(1)} V' : '– V'),
-                  const SizedBox(width: 8),
-                  _summaryCard(icon: Icons.balance_rounded, label: 'Balancing', value: _balancingActive ? 'Active' : 'Inactive'),
-                ],
+            // ── Single combined summary container ─────────────────────────
+            Container(
+              decoration: BoxDecoration(
+                color: cardBlue,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _summaryTile(
+                      label: 'Max. Volt',
+                      value: _maxVoltage != null
+                          ? '${_maxVoltage!.toStringAsFixed(3)} V'
+                          : '– V',
+                      sub: _maxVoltageNo != null
+                          ? 'Cell ${_maxVoltageNo.toString().padLeft(2, '0')}'
+                          : null,
+                    ),
+                    // Vertical divider
+                    Container(width: 1, color: Colors.white24),
+                    _summaryTile(
+                      label: 'Min. Volt',
+                      value: _minVoltage != null
+                          ? '${_minVoltage!.toStringAsFixed(3)} V'
+                          : '– V',
+                      sub: _minVoltageNo != null
+                          ? 'Cell ${_minVoltageNo.toString().padLeft(2, '0')}'
+                          : null,
+                    ),
+                    Container(width: 1, color: Colors.white24),
+                    _summaryTile(
+                      label: 'Average\nVoltage',
+                      value: _avgVoltage != null
+                          ? '${_avgVoltage!.toStringAsFixed(1)} V'
+                          : '– V',
+                    ),
+                    Container(width: 1, color: Colors.white24),
+                    _summaryTile(
+                      label: 'Balancing',
+                      value: '',
+                      isBalancing: true,
+                      balancingActive: _balancingActive,
+                    ),
+                  ],
+                ),
               ),
             ),
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 14),
 
+            // ── Cell Voltages header + sort ───────────────────────────────
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: titleGreyBg,
                 borderRadius: BorderRadius.circular(8),
@@ -185,23 +339,38 @@ class _CellsScreenState extends State<CellsScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Cell Voltages', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.black54)),
+                  const Text('Cell Voltages',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black54)),
                   Row(
                     children: [
-                      const Text('Sort by: ', style: TextStyle(fontSize: 13, color: Colors.black54)),
+                      const Text('Sort by: ',
+                          style:
+                              TextStyle(fontSize: 12, color: Colors.black54)),
                       GestureDetector(
+                        key: _sortButtonKey,
                         onTap: () => _showSortMenu(context),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: Colors.grey.shade300),
+                            border:
+                                Border.all(color: Colors.grey.shade300),
                           ),
                           child: Row(
                             children: [
-                              Text(_sortBy == SortType.cellNo ? 'Cell No.' : 'Voltage'),
-                              const Icon(Icons.keyboard_arrow_down, size: 18),
+                              Text(
+                                _sortBy == SortType.cellNo
+                                    ? 'Cell No.'
+                                    : 'Voltage',
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                              const Icon(Icons.keyboard_arrow_down,
+                                  size: 16),
                             ],
                           ),
                         ),
@@ -214,64 +383,136 @@ class _CellsScreenState extends State<CellsScreen> {
 
             const SizedBox(height: 4),
 
+            // ── Cell List ─────────────────────────────────────────────────
             Expanded(
               child: hasData
                   ? ListView.builder(
                       itemCount: _sortedCells.length,
                       itemBuilder: (context, index) {
-                        final cell = _sortedCells[index];
+                        final cell   = _sortedCells[index];
                         final status = _cellStatus(cell.voltage);
+                        final bool isPoor   = cell.voltage < 3.2;
+                        final bool isMaxCell = cell.no == maxCellNo;
+                        final bool isMinCell = cell.no == minCellNo;
+
+                        // Bar fill: 3.0–4.2V → 0–8 bars
+                        final int filledBars =
+                            ((cell.voltage - 3.0) / (4.2 - 3.0) * 8)
+                                .clamp(0, 8)
+                                .toInt();
 
                         return Column(
                           children: [
                             Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 11),
                               child: Row(
                                 children: [
-                                  SizedBox(width: 58, child: Text('Cell ${cell.no.toString().padLeft(2, '0')}', style: const TextStyle(fontWeight: FontWeight.w500))),
-                                  SizedBox(width: 78, child: Text('${cell.voltage.toStringAsFixed(3)} V', style: const TextStyle(fontSize: 13.5))),
+                                  // Cell number
+                                  SizedBox(
+                                    width: 52,
+                                    child: Text(
+                                      'Cell ${cell.no.toString().padLeft(2, '0')}',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 13),
+                                    ),
+                                  ),
 
+                                  // Voltage value
+                                  SizedBox(
+                                    width: 68,
+                                    child: Text(
+                                      '${cell.voltage.toStringAsFixed(3)} V',
+                                      style: const TextStyle(fontSize: 13),
+                                    ),
+                                  ),
+
+                                  // Bar chart — 8 segments
                                   Expanded(
                                     child: Row(
-                                      children: List.generate(
-                                        8,
-                                        (i) => Container(
-                                          width: 9.5,
-                                          height: 16,
-                                          margin: const EdgeInsets.only(right: 2),
+                                      children: List.generate(8, (i) {
+                                        final bool filled = i < filledBars;
+                                        return Container(
+                                          width: 10,
+                                          height: 15,
+                                          margin: const EdgeInsets.only(
+                                              right: 2),
                                           decoration: BoxDecoration(
-                                            color: i < (cell.voltage * 2.4).clamp(0, 8).toInt()
-                                                ? (cell.voltage >= 3.2 ? primaryGreen : Colors.orange)
+                                            color: filled
+                                                ? (isPoor
+                                                    ? Colors.orange
+                                                    : primaryGreen)
                                                 : Colors.grey.shade300,
-                                            borderRadius: BorderRadius.circular(2),
+                                            borderRadius:
+                                                BorderRadius.circular(2),
                                           ),
-                                        ),
-                                      ),
+                                        );
+                                      }),
                                     ),
                                   ),
 
-                                  SizedBox(
-                                    width: 85,
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        Text(status.text, style: TextStyle(color: status.color, fontWeight: FontWeight.w500, fontSize: 13.5)),
-                                        if (cell.balancingActive) ...[
-                                          const SizedBox(width: 6),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                            decoration: BoxDecoration(color: primaryGreen, borderRadius: BorderRadius.circular(4)),
-                                            child: const Text('B', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
+                                  const SizedBox(width: 6),
+
+                                  // ── Red dot for max cell ──────────
+                                  if (isMaxCell)
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      margin: const EdgeInsets.only(right: 4),
+                                      decoration: const BoxDecoration(
+                                          color: Colors.red,
+                                          shape: BoxShape.circle),
+                                    )
+                                  else if (isMinCell)
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      margin: const EdgeInsets.only(right: 4),
+                                      decoration: const BoxDecoration(
+                                          color: Colors.orange,
+                                          shape: BoxShape.circle),
+                                    )
+                                  else
+                                    const SizedBox(width: 12),
+
+                                  // Status text
+                                  Text(
+                                    status.text,
+                                    style: TextStyle(
+                                        color: status.color,
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 13),
                                   ),
+
+                                  // Balancing badge
+                                  if (cell.balancingActive) ...[
+                                    const SizedBox(width: 5),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 5, vertical: 1),
+                                      decoration: BoxDecoration(
+                                        color: primaryGreen,
+                                        borderRadius:
+                                            BorderRadius.circular(4),
+                                      ),
+                                      child: const Text('B',
+                                          style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                              fontWeight:
+                                                  FontWeight.bold)),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
                             if (index != _sortedCells.length - 1)
-                              const Divider(height: 1, indent: 16, endIndent: 16),
+                              const Divider(
+                                  height: 1,
+                                  thickness: 1,
+                                  indent: 14,
+                                  endIndent: 14),
                           ],
                         );
                       },
@@ -282,7 +523,8 @@ class _CellsScreenState extends State<CellsScreen> {
                         children: [
                           CircularProgressIndicator(color: primaryGreen),
                           SizedBox(height: 16),
-                          Text('Waiting for cell data...', style: TextStyle(color: Colors.black54)),
+                          Text('Waiting for cell data...',
+                              style: TextStyle(color: Colors.black54)),
                         ],
                       ),
                     ),
@@ -294,15 +536,32 @@ class _CellsScreenState extends State<CellsScreen> {
   }
 
   Future<void> _showSortMenu(BuildContext context) async {
+    // ── Calculate the button's position so menu opens directly below it ───
+    final RenderBox button =
+        _sortButtonKey.currentContext!.findRenderObject() as RenderBox;
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+
+    final Offset buttonTopLeft = button.localToGlobal(Offset.zero, ancestor: overlay);
+    final Offset buttonBottomRight = button.localToGlobal(
+        button.size.bottomRight(Offset.zero),
+        ancestor: overlay);
+
+    final RelativeRect position = RelativeRect.fromLTRB(
+      buttonTopLeft.dx,
+      buttonBottomRight.dy + 4, // small gap below the button
+      overlay.size.width - buttonBottomRight.dx,
+      0,
+    );
+
     final result = await showMenu<SortType>(
       context: context,
-      position: const RelativeRect.fromLTRB(200, 100, 0, 0),
+      position: position,
       items: [
-        const PopupMenuItem(value: SortType.cellNo, child: Text('Cell No.')),
+        const PopupMenuItem(value: SortType.cellNo,  child: Text('Cell No.')),
         const PopupMenuItem(value: SortType.voltage, child: Text('Voltage')),
       ],
     );
-
     if (result != null && result != _sortBy) {
       setState(() {
         _sortBy = result;
