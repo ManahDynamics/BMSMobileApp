@@ -21,6 +21,9 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   BMSConnectionState state = BMSConnectionState.disconnected;
   String? errorMessage;
   bool isConnecting = false;
+  bool dashboardReady = false;
+
+  bool dashboardNavigationTriggered = false;
 
   final List<BMSParsedPacket> packetLog = [];
 
@@ -189,18 +192,48 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
         debugPrint('✅ RX Parsed: ${packet.typeName}');
 
         if (packet.isCellVoltageResponse) {
-          latestCellVoltage = packet;
-          notifyListeners();
+          addDebugLog('Cell Voltage Response Received');
+  latestCellVoltage = packet;
 
+  if (!dashboardReady) {
+    dashboardReady = true;
+    debugPrint('🚀 Dashboard Ready from Cell Voltage');
+  }
+  notifyListeners();
         } else if (packet.isDashboardResponse) {
-          latestDashboard = packet;
-          if (packet.batteryType     != null) batteryType     = packet.batteryType;
-          if (packet.batterySerial   != null) batterySerial   = packet.batterySerial;
-          if (packet.softwareVersion != null) softwareVersion = packet.softwareVersion;
-          if (packet.hardwareVersion != null) hardwareVersion = packet.hardwareVersion;
-          if (packet.firmwareVersion != null) firmwareVersion = packet.firmwareVersion;
-          debugPrint('📊 Dashboard updated: $packet');
-          notifyListeners();
+  addDebugLog('Dashboard Response Received');
+  addDebugLog('Battery Serial = ${packet.batterySerial}');
+
+  latestDashboard = packet;
+if (!dashboardReady) {
+  dashboardReady = true;
+}
+ notifyListeners();
+  if (packet.batteryType != null) {
+    batteryType = packet.batteryType;
+  }
+
+  if (packet.batterySerial != null) {
+    batterySerial = packet.batterySerial;
+  }
+
+  if (packet.softwareVersion != null) {
+    softwareVersion = packet.softwareVersion;
+  }
+
+  if (packet.hardwareVersion != null) {
+    hardwareVersion = packet.hardwareVersion;
+  }
+
+  if (packet.firmwareVersion != null) {
+    firmwareVersion = packet.firmwareVersion;
+  }
+
+  dashboardReady = true;
+
+  debugPrint('🚀 Dashboard Ready');
+
+  notifyListeners();
 
         } else if (packet.isBleNameResponse) {
           if (packet.bleName != null) {
@@ -345,6 +378,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
     final bool matches = receivedAck.length == expectedAck.length &&
         List.generate(expectedAck.length, (i) => receivedAck[i] == expectedAck[i]).every((ok) => ok);
+        
 
     if (matches) {
       state = BMSConnectionState.ready;
@@ -437,6 +471,10 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  void addDebugLog(String message) {
+    debugPrint(message);
+  }
+
   void _newSession() {
     _sessionId++;
     packetLog.clear();
@@ -450,6 +488,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     firmwareVersion   = null;
     snCode            = null;
     _lastSentDataId   = null;
+    dashboardReady = false;
+    dashboardNavigationTriggered = false;
     _ackTimer?.cancel();
     _stopPolling();
   }

@@ -132,7 +132,6 @@ class BluetoothDeviceScanPage extends StatefulWidget {
 class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-
   List<BluetoothDevice> _devices = [];
 
   /// RSSI map: device remoteId.str → latest RSSI value
@@ -144,7 +143,8 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
 
   String? _connectingDeviceId;
   bool _isPairing = false;
-  String? _pairedBatterySerial;
+  bool _dashboardOpened = false;
+  // Previously used to store selected paired battery serial. Removed as unused.
 
   List<PairedDevice> _pairedDevices = [];
   bool _isLoadingPairedDevices = false;
@@ -168,31 +168,34 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
     if (mounted) setState(() {});
   }
 
-  void _onServiceChanged() {
-    if (!mounted) return;
-    setState(() {});
+ void _onServiceChanged() {
+  if (!mounted) return;
+   debugPrint(
+    'dashboardReady=${widget.service.dashboardReady}',
+  );
 
-    if (widget.service.state == BMSConnectionState.ready) {
-      final serial = widget.service.batterySerial?.trim();
-      if (serial != null && serial.isNotEmpty) {
-        if (serial == _pairedBatterySerial) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _navigateToDashboard();
-          });
-        } else if (!_isPairing) {
-          _pairDevice(serial);
-        }
+  setState(() {});
+
+  if (widget.service.dashboardReady) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _navigateToDashboard();
       }
-    }
-
-    if (widget.service.state == BMSConnectionState.error &&
-        widget.service.errorMessage != null) {
-      _connectingDeviceId = null;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showSnackBar(widget.service.errorMessage!, isError: true);
-      });
-    }
+    });
   }
+
+if (widget.service.dashboardReady &&
+    !_dashboardOpened) {
+
+  _dashboardOpened = true;
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) {
+      _navigateToDashboard();
+    }
+  });
+}
+}
 
   void _listenScan() {
     _scanSub?.cancel();
@@ -335,7 +338,6 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success'] == true) {
-        _pairedBatterySerial = batterySerial;
         _showSnackBar('Device paired successfully', isError: false);
         if (mounted) _navigateToDashboard();
       } else {
@@ -495,6 +497,7 @@ class _ScanTab extends StatelessWidget {
   final bool isLoadingPairedDevices;
   final String? pairedDevicesError;
   final Future<void> Function() onRefreshPairedDevices;
+  
 
   const _ScanTab({
     required this.devices,
@@ -998,6 +1001,7 @@ class _StatusChip extends StatelessWidget {
   final String label;
   final Color color;
   final bool loading;
+  
 
   const _StatusChip(
       {required this.label, required this.color, this.loading = false});
