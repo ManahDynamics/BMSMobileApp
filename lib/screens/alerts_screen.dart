@@ -4,8 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
-import 'package:bmsmobileapp/screens/bluetooth_device_scan_screen.dart';
-// import '../../../modules/scanner/screens/bluetooth_device_scan_screen.dart';
+import '../../../modules/scanner/screens/BMS_scanner_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 
