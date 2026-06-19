@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (isLoggedIn && mounted) {
       Future.delayed(Duration.zero, () {
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/dashboard');
+          Navigator.pushReplacementNamed(context, '/connect');
         }
       });
     }
@@ -299,7 +299,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
 
-        Navigator.pushReplacementNamed(context, '/dashboard');
+        Navigator.pushReplacementNamed(context, '/connect');
       } else {
         final serverMessage = rawJson['message']?.toString() ??
             rawJson['error']?.toString() ??
