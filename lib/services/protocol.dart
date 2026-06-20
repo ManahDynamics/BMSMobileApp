@@ -133,14 +133,19 @@ class BMSProtocol {
   // Bytes 13–14   : Cell 1 Voltage (×0.001 V, big-endian)
   // Byte 15       : Cell 1 Balancing
   // [Each cell = 3 bytes: volt_H, volt_L, balancing. Repeat for cells 2–24]
-  // Bytes 85–86   : CRC (exact algorithm/position NOT YET CONFIRMED — see note)
+  // Bytes 85–86   : CRC-16/CCITT (poly 0x1021, init 0xFFFF), LITTLE-ENDIAN
+  //                 byte 85 = CRC low byte, byte 86 = CRC high byte.
+  //                 Computed over bytes[1..83] (Dart: sublist(1, 84)) —
+  //                 i.e. everything except the start byte, up to (not
+  //                 including) the CRC bytes themselves.
   // Byte 87       : Stop byte (0xBB)
   //
-  // ⚠️ UNRESOLVED: live-capture testing shows neither CRC-8 nor CRC-16 over
-  // bytes[1..84] matches byte 85/86 cleanly yet. Left as CRC-16 for now so it
-  // fails closed (rejects packets) rather than silently accepting bad data.
-  // This does NOT block the dashboard navigation flow — only cell-voltage
-  // detail display is affected. Needs additional live captures to solve.
+  // ✅ CONFIRMED FROM LIVE CAPTURE: CRC16-CCITT(poly=0x1021, init=0xFFFF)
+  // over bytes[1:84] produces 0x39F0 for the captured packet, matching
+  // byte85=0xF0 (low) / byte86=0x39 (high) exactly. This is a DIFFERENT
+  // algorithm and byte order than Dashboard/BLE Name (which use a single
+  // CRC-8 byte) — confirmed independently, not assumed to be consistent
+  // across packet types.
   static const int cellVoltageResponseLength = 88;
 
   static const int cellMaxVoltageHigh   = 3;

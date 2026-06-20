@@ -214,6 +214,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
         _addToLog(packet);
         debugPrint('✅ RX Parsed: ${packet.typeName}');
         addDebugLog('✅ Parsed: ${packet.typeName}');
+        
 
         if (packet.isCellVoltageResponse) {
           addDebugLog('🔋 Cell Voltage Response received');

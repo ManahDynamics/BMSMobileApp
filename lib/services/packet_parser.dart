@@ -236,15 +236,17 @@ class BMSPacketParser {
         ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}'
         ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}');
 
-    if (computedCrc != receivedCrc) {
-      debugPrint('❌ CRC8 MISMATCH [Dashboard]');
-      return BMSParseResult.failure(
-        BMSParseError.crcMismatch,
-        errorDetail: 'CRC8 computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}'
-            ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}',
-      );
-    }
-
+ if (computedCrc != receivedCrc) {
+  return BMSParseResult.failure(
+    BMSParseError.crcMismatch,
+    errorDetail:
+        'Dashboard CRC mismatch. '
+        'Computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
+        'Received=0x${receivedCrc.toRadixString(16).toUpperCase()} '
+        'CRC Bytes=[${bytes[117].toRadixString(16).toUpperCase()} '
+        '${bytes[118].toRadixString(16).toUpperCase()}]',
+  );
+}
     debugPrint('✅ CRC8 OK [Dashboard Response]');
 
     // ── ASCII fields ────────────────────────────────────────────────────────
