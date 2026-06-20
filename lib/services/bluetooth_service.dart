@@ -21,6 +21,10 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   BMSConnectionState state = BMSConnectionState.disconnected;
   String? errorMessage;
   bool isConnecting = false;
+
+  /// True once the first Dashboard packet has parsed successfully
+  /// (CRC passed). The scan screen watches this flag to trigger
+  /// navigation to the Dashboard screen.
   bool dashboardReady = false;
 
   bool dashboardNavigationTriggered = false;
@@ -193,47 +197,29 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
         if (packet.isCellVoltageResponse) {
           addDebugLog('Cell Voltage Response Received');
-  latestCellVoltage = packet;
+          latestCellVoltage = packet;
+          notifyListeners();
 
-  if (!dashboardReady) {
-    dashboardReady = true;
-    debugPrint('🚀 Dashboard Ready from Cell Voltage');
-  }
-  notifyListeners();
         } else if (packet.isDashboardResponse) {
-  addDebugLog('Dashboard Response Received');
-  addDebugLog('Battery Serial = ${packet.batterySerial}');
+          addDebugLog('Dashboard Response Received');
+          addDebugLog('Battery Serial = ${packet.batterySerial}');
 
-  latestDashboard = packet;
-if (!dashboardReady) {
-  dashboardReady = true;
-}
- notifyListeners();
-  if (packet.batteryType != null) {
-    batteryType = packet.batteryType;
-  }
+          latestDashboard = packet;
 
-  if (packet.batterySerial != null) {
-    batterySerial = packet.batterySerial;
-  }
+          if (packet.batteryType     != null) batteryType     = packet.batteryType;
+          if (packet.batterySerial   != null) batterySerial   = packet.batterySerial;
+          if (packet.softwareVersion != null) softwareVersion = packet.softwareVersion;
+          if (packet.hardwareVersion != null) hardwareVersion = packet.hardwareVersion;
+          if (packet.firmwareVersion != null) firmwareVersion = packet.firmwareVersion;
 
-  if (packet.softwareVersion != null) {
-    softwareVersion = packet.softwareVersion;
-  }
+          // Dashboard parsed + CRC passed → this is what unblocks navigation
+          // on the scan screen via the dashboardReady flag.
+          if (!dashboardReady) {
+            dashboardReady = true;
+            debugPrint('🚀 Dashboard Ready');
+          }
 
-  if (packet.hardwareVersion != null) {
-    hardwareVersion = packet.hardwareVersion;
-  }
-
-  if (packet.firmwareVersion != null) {
-    firmwareVersion = packet.firmwareVersion;
-  }
-
-  dashboardReady = true;
-
-  debugPrint('🚀 Dashboard Ready');
-
-  notifyListeners();
+          notifyListeners();
 
         } else if (packet.isBleNameResponse) {
           if (packet.bleName != null) {
@@ -253,6 +239,7 @@ if (!dashboardReady) {
         final reason = result.error?.name ?? 'unknown';
         final detail = result.errorDetail ?? '';
         debugPrint('❌ RX Parse Failed [$reason] $detail — last valid data retained');
+        addDebugLog('❌ Parse failed [$reason] $detail');
       }
     });
   }
@@ -378,7 +365,6 @@ if (!dashboardReady) {
 
     final bool matches = receivedAck.length == expectedAck.length &&
         List.generate(expectedAck.length, (i) => receivedAck[i] == expectedAck[i]).every((ok) => ok);
-        
 
     if (matches) {
       state = BMSConnectionState.ready;
@@ -488,7 +474,7 @@ if (!dashboardReady) {
     firmwareVersion   = null;
     snCode            = null;
     _lastSentDataId   = null;
-    dashboardReady = false;
+    dashboardReady    = false;
     dashboardNavigationTriggered = false;
     _ackTimer?.cancel();
     _stopPolling();

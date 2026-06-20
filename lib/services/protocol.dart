@@ -36,16 +36,20 @@ class BMSProtocol {
   static const int indexCrc     = 3;
   static const int indexStop    = 4;
 
-  // ── BLE Name Response Packet (19 bytes) ───────────────────────────────────
+  // ── BLE Name Response Packet (21 bytes) ───────────────────────────────────
   // Byte 0       : Start byte (0xAA)
-  // Byte 1       : Length (0x13)
+  // Byte 1       : Length (0x15 = 21)
   // Byte 2       : Data ID (0x51)
-  // Bytes 3–16   : BLE Name (14 ASCII bytes)
-  // Byte 17      : CRC
-  // Byte 18      : Stop byte (0xBB)
-  static const int bleNameResponseLength = 19;
+  // Bytes 3–18   : BLE Name (16 ASCII bytes)
+  // Byte 19      : CRC-8 (single byte, computed over bytes[1..18])
+  // Byte 20      : Stop byte (0xBB)
+  //
+  // ⚠️ CONFIRMED FROM LIVE CAPTURE (previously documented as 19 bytes / 14
+  // char name — that was wrong). Real packet is 21 bytes, name is 16 chars.
+  static const int bleNameResponseLength = 21;
   static const int bleNameStart          = 3;
-  static const int bleNameEnd            = 17; // exclusive
+  static const int bleNameEnd            = 19; // exclusive (16 ASCII bytes)
+  static const int bleNameCrcByte        = 19; // single CRC-8 byte
 
   // ── Dashboard Response Packet (120 bytes) ─────────────────────────────────
   // Byte 0        : Start byte (0xAA)
@@ -70,8 +74,12 @@ class BMSProtocol {
   // Bytes 60–78   : Software Version (19 ASCII bytes)
   // Bytes 79–97   : Hardware Version (19 ASCII bytes)
   // Bytes 98–116  : Firmware Version (19 ASCII bytes)
-  // Bytes 117–118 : CRC (big-endian, use low byte for CRC-8)
+  // Byte 117      : CRC-8 (single byte, computed over bytes[1..116])
+  // Byte 118      : Unknown/reserved — NOT part of CRC (purpose unconfirmed)
   // Byte 119      : Stop byte (0xBB)
+  //
+  // ⚠️ CONFIRMED FROM LIVE CAPTURE: CRC is a single CRC-8 byte at index 117,
+  // NOT a 2-byte CRC-16 as previously assumed. Byte 118 is unrelated to CRC.
   static const int dashboardResponseLength  = 120;
 
   static const int dashBatteryTypeStart     = 3;
@@ -108,8 +116,7 @@ class BMSProtocol {
   static const int dashHardwareVersionEnd   = 98; // exclusive (19 bytes)
   static const int dashFirmwareVersionStart = 98;
   static const int dashFirmwareVersionEnd   = 117; // exclusive (19 bytes)
-  static const int dashCrcHigh              = 117;
-  static const int dashCrcLow              = 118;
+  static const int dashCrcByte              = 117; // single CRC-8 byte
   static const int dashStopByte             = 119;
 
   // ── Cell Voltage Response Packet (88 bytes) ───────────────────────────────
@@ -126,8 +133,14 @@ class BMSProtocol {
   // Bytes 13–14   : Cell 1 Voltage (×0.001 V, big-endian)
   // Byte 15       : Cell 1 Balancing
   // [Each cell = 3 bytes: volt_H, volt_L, balancing. Repeat for cells 2–24]
-  // Bytes 85–86   : CRC (big-endian, use low byte for CRC-8)
+  // Bytes 85–86   : CRC (exact algorithm/position NOT YET CONFIRMED — see note)
   // Byte 87       : Stop byte (0xBB)
+  //
+  // ⚠️ UNRESOLVED: live-capture testing shows neither CRC-8 nor CRC-16 over
+  // bytes[1..84] matches byte 85/86 cleanly yet. Left as CRC-16 for now so it
+  // fails closed (rejects packets) rather than silently accepting bad data.
+  // This does NOT block the dashboard navigation flow — only cell-voltage
+  // detail display is affected. Needs additional live captures to solve.
   static const int cellVoltageResponseLength = 88;
 
   static const int cellMaxVoltageHigh   = 3;

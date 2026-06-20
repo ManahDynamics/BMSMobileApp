@@ -62,7 +62,7 @@ class BMSPacketParser {
       return _parseDashboardResponse(bytes, lastSentDataId: lastSentDataId);
     }
 
-    // 19-byte BLE Name response
+    // 21-byte BLE Name response
     if (bytes.length == BMSProtocol.bleNameResponseLength && isBmsFrame) {
       return _parseBleNameResponse(bytes, lastSentDataId: lastSentDataId);
     }
@@ -145,18 +145,19 @@ class BMSPacketParser {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 19-BYTE BLE NAME RESPONSE (dataId 0x51)
-  // CRC-8 over bytes[1..16]
+  // 21-BYTE BLE NAME RESPONSE (dataId 0x51)
+  // CRC-8 over bytes[1..18] (everything except start byte, up to CRC byte)
+  // CRC byte is at index 19 (BMSProtocol.bleNameCrcByte)
   // ─────────────────────────────────────────────────────────────────────────
   static BMSParseResult _parseBleNameResponse(
     List<int> bytes, {
     int? lastSentDataId,
   }) {
-    final int start  = bytes[0]  & 0xFF;
-    final int length = bytes[1]  & 0xFF;
-    final int dataId = bytes[2]  & 0xFF;
-    final int crc    = bytes[17] & 0xFF;
-    final int stop   = bytes[18] & 0xFF;
+    final int start  = bytes[0] & 0xFF;
+    final int length = bytes[1] & 0xFF;
+    final int dataId = bytes[2] & 0xFF;
+    final int crc    = bytes[BMSProtocol.bleNameCrcByte] & 0xFF; // byte 19
+    final int stop   = bytes[bytes.length - 1] & 0xFF;
 
     if (lastSentDataId != null &&
         !_responseMatchesRequest(lastSentDataId, dataId)) {
@@ -167,10 +168,14 @@ class BMSPacketParser {
       );
     }
 
-    final crcData     = bytes.sublist(1, 17);
+    // CRC-8 over bytes[1..18] — everything except the start byte, up to
+    // (but not including) the CRC byte itself.
+    final crcData     = bytes.sublist(1, BMSProtocol.bleNameCrcByte);
     final computedCrc = BMSCrcService.calculateCRC8(crcData);
     if (computedCrc != crc) {
-      debugPrint('❌ CRC8 MISMATCH [BLE Name]');
+      debugPrint('❌ CRC8 MISMATCH [BLE Name] '
+          'computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")} '
+          'received=0x${crc.toRadixString(16).toUpperCase().padLeft(2,"0")}');
       return BMSParseResult.failure(
         BMSParseError.crcMismatch,
         errorDetail: 'computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}'
@@ -197,8 +202,10 @@ class BMSPacketParser {
   // ─────────────────────────────────────────────────────────────────────────
   // 120-BYTE DASHBOARD RESPONSE (dataId 0x52)
   //
-  // ✅ FIX: CRC is 2 bytes at positions 117–118 (CRC-16)
-  //         Computed over bytes[1..116] (i.e. sublist(1, 117))
+  // ✅ CONFIRMED FROM LIVE CAPTURE: CRC is a SINGLE CRC-8 byte at index 117
+  //    (BMSProtocol.dashCrcByte), computed over bytes[1..116] — i.e. every
+  //    byte except the start byte, up to (not including) the CRC byte.
+  //    Byte 118 is NOT part of the CRC (purpose unconfirmed, ignored here).
   // ─────────────────────────────────────────────────────────────────────────
   static BMSParseResult _parseDashboardResponse(
     List<int> bytes, {
@@ -219,29 +226,26 @@ class BMSPacketParser {
       );
     }
 
-    // ✅ CRC-16 over bytes[1..116]
-    final List<int> crcData = bytes.sublist(1, BMSProtocol.dashCrcHigh);
-    final int computedCrc   = BMSCrcService.calculateCRC16(crcData);
-
-    // ✅ Read both CRC bytes and combine into full 16-bit value
-    final int receivedCrc =
-        ((bytes[BMSProtocol.dashCrcHigh] & 0xFF) << 8) |
-         (bytes[BMSProtocol.dashCrcLow]  & 0xFF);
+    // CRC-8 over bytes[1..116] (everything except the start byte, up to the
+    // CRC byte itself).
+    final List<int> crcData = bytes.sublist(1, BMSProtocol.dashCrcByte);
+    final int computedCrc   = BMSCrcService.calculateCRC8(crcData);
+    final int receivedCrc   = bytes[BMSProtocol.dashCrcByte] & 0xFF;
 
     debugPrint('🔍 Dashboard CRC check:'
-        ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
-        ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}');
+        ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}'
+        ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}');
 
     if (computedCrc != receivedCrc) {
-      debugPrint('❌ CRC16 MISMATCH [Dashboard]');
+      debugPrint('❌ CRC8 MISMATCH [Dashboard]');
       return BMSParseResult.failure(
         BMSParseError.crcMismatch,
-        errorDetail: 'CRC16 computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
-            ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}',
+        errorDetail: 'CRC8 computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}'
+            ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}',
       );
     }
 
-    debugPrint('✅ CRC16 OK [Dashboard Response]');
+    debugPrint('✅ CRC8 OK [Dashboard Response]');
 
     // ── ASCII fields ────────────────────────────────────────────────────────
     final batteryType     = _decodeAscii(bytes, BMSProtocol.dashBatteryTypeStart,     BMSProtocol.dashBatteryTypeEnd);
@@ -312,8 +316,13 @@ class BMSPacketParser {
   // ─────────────────────────────────────────────────────────────────────────
   // 88-BYTE CELL VOLTAGE RESPONSE (dataId 0x53)
   //
-  // ✅ FIX: CRC is 2 bytes at positions 85–86 (CRC-16)
-  //         Computed over bytes[1..84] (i.e. sublist(1, 85))
+  // ⚠️ UNRESOLVED: CRC algorithm/position for this packet type has not been
+  // confirmed against live captures yet (CRC-8 over bytes[1..84] came close
+  // — 0xF7 computed vs 0xF0 actual — but did not match exactly). Left as
+  // CRC-16 over bytes[1..84] for now so it fails closed rather than silently
+  // accepting unverified data. This does NOT block dashboard navigation —
+  // only cell-voltage detail display is affected until solved.
+  // TODO: capture 2-3 more live cell-voltage packets and re-derive the CRC.
   // ─────────────────────────────────────────────────────────────────────────
   static BMSParseResult _parseCellVoltageResponse(
     List<int> bytes, {
@@ -334,11 +343,10 @@ class BMSPacketParser {
       );
     }
 
-    // ✅ CRC-16 over bytes[1..84]
+    // CRC-16 over bytes[1..84] — NOT YET CONFIRMED, see note above.
     final List<int> crcData = bytes.sublist(1, BMSProtocol.cellCrcHigh);
     final int computedCrc   = BMSCrcService.calculateCRC16(crcData);
 
-    // ✅ Read both CRC bytes and combine into full 16-bit value
     final int receivedCrc =
         ((bytes[BMSProtocol.cellCrcHigh] & 0xFF) << 8) |
          (bytes[BMSProtocol.cellCrcLow]  & 0xFF);
@@ -348,7 +356,7 @@ class BMSPacketParser {
         ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}');
 
     if (computedCrc != receivedCrc) {
-      debugPrint('❌ CRC16 MISMATCH [CellVoltage]');
+      debugPrint('❌ CRC16 MISMATCH [CellVoltage] — known unresolved, see TODO');
       return BMSParseResult.failure(
         BMSParseError.crcMismatch,
         errorDetail: 'CRC16 computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
