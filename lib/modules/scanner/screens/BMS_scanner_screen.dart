@@ -20,6 +20,7 @@ import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/token_service.dart';
 import 'package:bmsmobileapp/services/auth_service.dart';
 import 'package:bmsmobileapp/core/api/routes/app_router.dart';
+// Removed import of nonexistent debug_log_overlay.dart to fix missing URI error
 
 class PairedDevice {
   final String deviceId;
@@ -459,23 +460,29 @@ if (widget.service.dashboardReady &&
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      // ── body wrapped in a Stack so DebugLogOverlay floats on top ──
+      body: Stack(
         children: [
-          _ScanTab(
-            devices: _devices,
-            rssiMap: _rssiMap,           // ← pass RSSI map
-            isScanning: _isScanning,
-            onScan: _startScan,
-            onConnect: _onConnect,
-            service: widget.service,
-            connectingDeviceId: _connectingDeviceId,
-            pairedDevices: _pairedDevices,
-            isLoadingPairedDevices: _isLoadingPairedDevices,
-            pairedDevicesError: _pairedDevicesError,
-            onRefreshPairedDevices: () => _fetchPairedDevices(isRefresh: true),
+          TabBarView(
+            controller: _tabController,
+            children: [
+              _ScanTab(
+                devices: _devices,
+                rssiMap: _rssiMap,           // ← pass RSSI map
+                isScanning: _isScanning,
+                onScan: _startScan,
+                onConnect: _onConnect,
+                service: widget.service,
+                connectingDeviceId: _connectingDeviceId,
+                pairedDevices: _pairedDevices,
+                isLoadingPairedDevices: _isLoadingPairedDevices,
+                pairedDevicesError: _pairedDevicesError,
+                onRefreshPairedDevices: () => _fetchPairedDevices(isRefresh: true),
+              ),
+              _PacketLogTab(service: widget.service),
+            ],
           ),
-          _PacketLogTab(service: widget.service),
+          DebugLogOverlay(service: widget.service), // ← NEW
         ],
       ),
     );
@@ -1033,6 +1040,61 @@ class _StatusChip extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color: color)),
         ],
+      ),
+    );
+  }
+}
+
+// Simple in-file replacement for missing DebugLogOverlay widget
+class DebugLogOverlay extends StatelessWidget {
+  final BMSBluetoothService service;
+  const DebugLogOverlay({required this.service});
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      right: 12,
+      bottom: 12,
+      child: AnimatedBuilder(
+        animation: service,
+        builder: (context, _) {
+          final count = service.packetLog.length;
+          return Material(
+            elevation: 6,
+            borderRadius: BorderRadius.circular(8),
+            color: Colors.white,
+            child: InkWell(
+              onTap: () {
+                // Switch to packet log tab
+                try {
+                  DefaultTabController.of(context)?.animateTo(1);
+                } catch (_) {}
+              },
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.article, size: 18, color: Colors.black54),
+                    const SizedBox(width: 8),
+                    Text('Packets', style: const TextStyle(color: Colors.black87)),
+                    const SizedBox(width: 8),
+                    if (count > 0)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text('$count', style: const TextStyle(color: Colors.white, fontSize: 12)),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

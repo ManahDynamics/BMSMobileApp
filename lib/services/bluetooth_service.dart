@@ -31,6 +31,13 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
   final List<BMSParsedPacket> packetLog = [];
 
+  // ── On-screen debug log ────────────────────────────────────────────────
+  // Stores human-readable trace lines for the DebugLogOverlay widget.
+  // Capped so it doesn't grow unbounded during long sessions.
+  final List<String> _debugLogs = [];
+  List<String> get debugLogs => List.unmodifiable(_debugLogs);
+  static const int _maxDebugLogs = 300;
+
   // ── Latest valid packets ──────────────────────────────────────────────────
   BMSParsedPacket? latestDashboard;
   BMSParsedPacket? latestCellVoltage;
@@ -89,6 +96,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     _newSession();
     debugPrint('══════════════════════════════');
     debugPrint('🚀 SESSION $_sessionId — connect to ${d.remoteId.str}');
+    addDebugLog('🚀 SESSION $_sessionId — connect to ${d.remoteId.str}');
 
     try {
       isConnecting = true;
@@ -98,12 +106,14 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
       await d.connect(timeout: const Duration(seconds: 15));
       device = d;
       debugPrint('✅ BLE CONNECTED');
+      addDebugLog('✅ BLE CONNECTED');
 
       _connectionStateSub = d.connectionState.listen((cs) {
         if (cs == BluetoothConnectionState.disconnected &&
             state != BMSConnectionState.disconnecting &&
             state != BMSConnectionState.disconnected) {
           debugPrint('⚠️  Device disconnected unexpectedly');
+          addDebugLog('⚠️ Device disconnected unexpectedly');
           errorMessage = 'Device disconnected unexpectedly';
           state = BMSConnectionState.error;
           isConnecting = false;
@@ -119,14 +129,17 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
       try {
         await d.requestMtu(512);
         debugPrint('📶 MTU negotiated');
+        addDebugLog('📶 MTU negotiated');
       } catch (e) {
         debugPrint('⚠️  MTU request failed (non-fatal): $e');
+        addDebugLog('⚠️ MTU request failed (non-fatal): $e');
       }
 
       await _discoverServices();
       await sendHandshake();
     } catch (e, st) {
       debugPrint('❌ CONNECT ERROR: $e\n$st');
+      addDebugLog('❌ CONNECT ERROR: $e');
       final msg = e.toString();
       if (msg.contains('android-code: 14') || msg.contains('GATT_UNLIKELY')) {
         errorMessage =
@@ -146,6 +159,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> _discoverServices() async {
     debugPrint('🔍 DISCOVERING SERVICES…');
+    addDebugLog('🔍 Discovering services…');
     state = BMSConnectionState.discovering;
     notifyListeners();
 
@@ -165,9 +179,12 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     if (_notifyChar == null || _writeChar == null) {
+      addDebugLog('❌ Required BLE characteristics not found '
+          '(notify=${_notifyChar != null}, write=${_writeChar != null})');
       throw Exception('Required BLE characteristics not found.');
     }
 
+    addDebugLog('✅ Characteristics found (notify + write)');
     await _startListening();
     state = BMSConnectionState.connected;
     notifyListeners();
@@ -178,12 +195,14 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> _startListening() async {
     debugPrint('📡 SUBSCRIBING TO NOTIFICATIONS…');
+    addDebugLog('📡 Subscribing to notifications…');
     await _notifyChar!.setNotifyValue(true);
 
     _notifySub = _notifyChar!.value.listen((raw) {
       if (raw.isEmpty) return;
 
       debugPrint('📥 RX [${raw.length} bytes] : ${_toHex(raw)}');
+      addDebugLog('📥 RX [${raw.length}B]: ${_toHex(raw)}');
 
       final result = BMSPacketParser.parse(
         Uint8List.fromList(raw),
@@ -194,15 +213,16 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
         final packet = result.packet!.copyWith(direction: PacketDirection.receive);
         _addToLog(packet);
         debugPrint('✅ RX Parsed: ${packet.typeName}');
+        addDebugLog('✅ Parsed: ${packet.typeName}');
 
         if (packet.isCellVoltageResponse) {
-          addDebugLog('Cell Voltage Response Received');
+          addDebugLog('🔋 Cell Voltage Response received');
           latestCellVoltage = packet;
           notifyListeners();
 
         } else if (packet.isDashboardResponse) {
-          addDebugLog('Dashboard Response Received');
-          addDebugLog('Battery Serial = ${packet.batterySerial}');
+          addDebugLog('📊 Dashboard Response received — CRC passed');
+          addDebugLog('   Battery Serial = "${packet.batterySerial}"');
 
           latestDashboard = packet;
 
@@ -212,11 +232,20 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
           if (packet.hardwareVersion != null) hardwareVersion = packet.hardwareVersion;
           if (packet.firmwareVersion != null) firmwareVersion = packet.firmwareVersion;
 
+          if (batterySerial == null || batterySerial!.trim().isEmpty) {
+            addDebugLog('⚠️ batterySerial is NULL/EMPTY after extraction — '
+                'navigation will NOT trigger');
+          } else {
+            addDebugLog('✅ batterySerial set: "$batterySerial" — '
+                'navigation should trigger now');
+          }
+
           // Dashboard parsed + CRC passed → this is what unblocks navigation
           // on the scan screen via the dashboardReady flag.
           if (!dashboardReady) {
             dashboardReady = true;
             debugPrint('🚀 Dashboard Ready');
+            addDebugLog('🚀 dashboardReady = true');
           }
 
           notifyListeners();
@@ -225,13 +254,16 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
           if (packet.bleName != null) {
             bleName = packet.bleName;
             debugPrint('📋 BLE Name: $bleName');
+            addDebugLog('📋 BLE Name: $bleName');
           }
           notifyListeners();
 
         } else if (packet.isDeviceInfo) {
+          addDebugLog('ℹ️ Device info packet: 0x${packet.dataId.toRadixString(16)}');
           _updateDeviceInfo(packet);
 
         } else if (state == BMSConnectionState.waitingAck && packet.isAck) {
+          addDebugLog('🤝 ACK packet received — validating…');
           _onAckReceived(packet);
         }
 
@@ -239,7 +271,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
         final reason = result.error?.name ?? 'unknown';
         final detail = result.errorDetail ?? '';
         debugPrint('❌ RX Parse Failed [$reason] $detail — last valid data retained');
-        addDebugLog('❌ Parse failed [$reason] $detail');
+        addDebugLog('❌ Parse FAILED [$reason] $detail');
       }
     });
   }
@@ -248,6 +280,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     switch (packet.dataId) {
       case 0x59:
         batterySerial   = packet.batterySerial;
+        addDebugLog('ℹ️ batterySerial (from 0x59) = "$batterySerial"');
       case 0x5A:
         softwareVersion = packet.softwareVersion;
       case 0x5B:
@@ -274,6 +307,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
     final bool useWithoutResponse = _writeChar!.properties.writeWithoutResponse;
     debugPrint('📤 TX${logName != null ? " ($logName)" : ""} : ${_toHex(packetBytes)}');
+    addDebugLog('📤 TX${logName != null ? " ($logName)" : ""}: ${_toHex(packetBytes)}');
 
     final result = BMSPacketParser.parse(Uint8List.fromList(packetBytes));
     if (result.isSuccess && result.packet != null) {
@@ -304,6 +338,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     _ackTimer?.cancel();
     _ackTimer = Timer(const Duration(seconds: 5), () {
       if (state == BMSConnectionState.waitingAck) {
+        addDebugLog('⏰ ACK TIMEOUT — no response within 5s');
         errorMessage = 'Handshake timeout — no response from device';
         state = BMSConnectionState.error;
         isConnecting = false;
@@ -367,11 +402,14 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
         List.generate(expectedAck.length, (i) => receivedAck[i] == expectedAck[i]).every((ok) => ok);
 
     if (matches) {
+      addDebugLog('✅ ACK validated — state = ready');
       state = BMSConnectionState.ready;
       isConnecting = false;
       notifyListeners();
       _requestBleNameThenStartPolling();
     } else {
+      addDebugLog('❌ ACK validation FAILED — '
+          'expected=${_toHex(expectedAck)} received=${_toHex(receivedAck)}');
       errorMessage = 'ACK validation failed — device not authenticated.';
       state = BMSConnectionState.error;
       isConnecting = false;
@@ -382,6 +420,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _requestBleNameThenStartPolling() async {
     await requestBleName();
     await Future.delayed(const Duration(milliseconds: 500));
+    addDebugLog('▶️ Starting poll cycle (dashboard + cell voltage every 5s)');
     _startPolling();
   }
 
@@ -457,8 +496,27 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  /// Appends a line to the on-screen debug log (used by DebugLogOverlay)
+  /// AND prints it to the regular debug console, so both views stay in sync.
   void addDebugLog(String message) {
     debugPrint(message);
+    _debugLogs.add('[${_timeNow()}] $message');
+    if (_debugLogs.length > _maxDebugLogs) {
+      _debugLogs.removeAt(0);
+    }
+    notifyListeners();
+  }
+
+  void clearDebugLogs() {
+    _debugLogs.clear();
+    notifyListeners();
+  }
+
+  String _timeNow() {
+    final now = DateTime.now();
+    return '${now.hour.toString().padLeft(2, '0')}:'
+        '${now.minute.toString().padLeft(2, '0')}:'
+        '${now.second.toString().padLeft(2, '0')}';
   }
 
   void _newSession() {
@@ -478,6 +536,9 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     dashboardNavigationTriggered = false;
     _ackTimer?.cancel();
     _stopPolling();
+    // Note: _debugLogs is intentionally NOT cleared on new session, so you
+    // can see the full history across a reconnect attempt. Use the trash
+    // icon in DebugLogOverlay (or call clearDebugLogs()) to reset manually.
   }
 
   void _cleanup() {
