@@ -159,14 +159,14 @@ class BMSPacketParser {
     final int crc    = bytes[BMSProtocol.bleNameCrcByte] & 0xFF; // byte 19
     final int stop   = bytes[bytes.length - 1] & 0xFF;
 
-    if (lastSentDataId != null &&
-        !_responseMatchesRequest(lastSentDataId, dataId)) {
-      return BMSParseResult.failure(
-        BMSParseError.unexpectedResponse,
-        errorDetail: 'sent=0x${lastSentDataId.toRadixString(16).toUpperCase().padLeft(2,"0")}'
-            ' got=0x${dataId.toRadixString(16).toUpperCase().padLeft(2,"0")}',
-      );
-    }
+    // if (lastSentDataId != null &&
+    //     !_responseMatchesRequest(lastSentDataId, dataId)) {
+    //   return BMSParseResult.failure(
+    //     BMSParseError.unexpectedResponse,
+    //     errorDetail: 'sent=0x${lastSentDataId.toRadixString(16).toUpperCase().padLeft(2,"0")}'
+    //         ' got=0x${dataId.toRadixString(16).toUpperCase().padLeft(2,"0")}',
+    //   );
+    // }
 
     // CRC-8 over bytes[1..18] — everything except the start byte, up to
     // (but not including) the CRC byte itself.
@@ -335,15 +335,15 @@ debugPrint('✅ CRC16 OK [Dashboard Response]');
     final int dataId = bytes[2] & 0xFF;
     final int stop   = bytes[BMSProtocol.cellStopByte] & 0xFF;
 
-    if (lastSentDataId != null &&
-        !_responseMatchesRequest(lastSentDataId, dataId)) {
-      debugPrint('⚠️ RESPONSE MISMATCH [CellVoltage]');
-      return BMSParseResult.failure(
-        BMSParseError.unexpectedResponse,
-        errorDetail: 'sent=0x${lastSentDataId.toRadixString(16).toUpperCase().padLeft(2,"0")}'
-            ' got=0x${dataId.toRadixString(16).toUpperCase().padLeft(2,"0")}',
-      );
-    }
+    // if (lastSentDataId != null &&
+    //     !_responseMatchesRequest(lastSentDataId, dataId)) {
+    //   debugPrint('⚠️ RESPONSE MISMATCH [CellVoltage]');
+    //   return BMSParseResult.failure(
+    //     BMSParseError.unexpectedResponse,
+    //     errorDetail: 'sent=0x${lastSentDataId.toRadixString(16).toUpperCase().padLeft(2,"0")}'
+    //         ' got=0x${dataId.toRadixString(16).toUpperCase().padLeft(2,"0")}',
+    //   );
+    // }
 
     // CRC-16 over bytes[1..84] — NOT YET CONFIRMED, see note above.
    final List<int> crcData = bytes.sublist(1, BMSProtocol.cellCrcHigh);

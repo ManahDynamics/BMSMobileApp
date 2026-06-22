@@ -52,8 +52,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   String? snCode;
 
   // ── Tracks the Data ID of the most recently sent request ──────────────────
-  int? _lastSentDataId;
-
+final Set<int> _pendingRequests = {};
   BluetoothCharacteristic? _notifyChar;
   BluetoothCharacteristic? _writeChar;
   StreamSubscription? _notifySub;
@@ -206,7 +205,6 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
       final result = BMSPacketParser.parse(
         Uint8List.fromList(raw),
-        lastSentDataId: _lastSentDataId,
       );
 
       if (result.isSuccess && result.packet != null) {
@@ -214,6 +212,9 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
         _addToLog(packet);
         debugPrint('✅ RX Parsed: ${packet.typeName}');
         addDebugLog('✅ Parsed: ${packet.typeName}');
+        addDebugLog(
+  '✅ Response received: 0x${result.packet!.dataId.toRadixString(16).toUpperCase()}'
+);
         
 
         if (packet.isCellVoltageResponse) {
@@ -302,9 +303,13 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   }) async {
     if (_writeChar == null) return;
 
-    if (sentDataId != null) {
-      _lastSentDataId = sentDataId;
-    }
+   if (sentDataId != null) {
+  _pendingRequests.add(sentDataId);
+
+  addDebugLog(
+    '📤 Pending Requests: ${_pendingRequests.map((e) => "0x${e.toRadixString(16).toUpperCase()}").join(", ")}'
+  );
+}
 
     final bool useWithoutResponse = _writeChar!.properties.writeWithoutResponse;
     debugPrint('📤 TX${logName != null ? " ($logName)" : ""} : ${_toHex(packetBytes)}');
@@ -532,7 +537,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     hardwareVersion   = null;
     firmwareVersion   = null;
     snCode            = null;
-    _lastSentDataId   = null;
+    _pendingRequests.clear();
     dashboardReady    = false;
     dashboardNavigationTriggered = false;
     _ackTimer?.cancel();
@@ -551,8 +556,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     _connectionStateSub = null;
     device = null;
     isConnecting = false;
-    _lastSentDataId = null;
-  }
+    _pendingRequests.clear();
+      }
 
   @override
   void dispose() {
