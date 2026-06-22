@@ -230,12 +230,10 @@ class BMSPacketParser {
     // CRC byte itself).
     // CRC-16 Modbus (poly 0xA001, init 0xFFFF) over bytes[1..116].
 // Byte 117 = low byte, Byte 118 = high byte (confirmed: B9 13 → 0x13B9).
-final List<int> crcData = bytes.sublist(1, 117);
-final int computedCrc =
-    BMSCrcService.calculateCRC16(crcData);
-final int receivedCrc =
-    ((bytes[118] & 0xFF) << 8) |
-     (bytes[117] & 0xFF);
+final List<int> crcData = bytes.sublist(1, BMSProtocol.dashCrcLow);
+final int computedCrc   = BMSCrcService.calculateCRC16(crcData);
+final int receivedCrc   = ((bytes[BMSProtocol.dashCrcHigh] & 0xFF) << 8) |
+                            (bytes[BMSProtocol.dashCrcLow]  & 0xFF);
 
 debugPrint('🔍 Dashboard CRC check:'
     ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
