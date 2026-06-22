@@ -116,7 +116,8 @@ class BMSProtocol {
   static const int dashHardwareVersionEnd   = 98; // exclusive (19 bytes)
   static const int dashFirmwareVersionStart = 98;
   static const int dashFirmwareVersionEnd   = 117; // exclusive (19 bytes)
-  static const int dashCrcByte              = 117; // single CRC-8 byte
+  static const int dashCrcLow  = 117; // CRC-16 low byte
+static const int dashCrcHigh = 118; // CRC-16 high byte
   static const int dashStopByte             = 119;
 
   // ── Cell Voltage Response Packet (88 bytes) ───────────────────────────────
@@ -162,7 +163,7 @@ class BMSProtocol {
   static const int cellDataStride       = 3;
   static const int cellCrcHigh          = 85;
   static const int cellCrcLow           = 86;
-  static const int cellStopByte         = 87;
+  static const int cellStopByte         = 87;  
 
   // ── Balancing values ──────────────────────────────────────────────────────
   static const int balancingActive   = 0x01;

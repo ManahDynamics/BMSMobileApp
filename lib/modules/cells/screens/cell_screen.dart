@@ -80,8 +80,7 @@ class _CellsScreenState extends State<CellsScreen> {
           : a.no.compareTo(b.no));
   }
 
-  String get _deviceName =>
-      widget.service.bleName ?? widget.service.latestDashboard?.bleName ?? 'BMS Device';
+      String get _deviceName => widget.service.bleName ?? 'BMS Device';
 
   int get _totalCells =>
       widget.service.latestCellVoltage?.cellTotalCells ??
@@ -286,6 +285,12 @@ class _CellsScreenState extends State<CellsScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                     Container(width: 1, color: Colors.white24),
+                    _summaryTile(
+                    label: 'Total Cells',
+                    value: '$_totalCells',
+                    ),
+                     Container(width: 1, color: Colors.white24),
                     _summaryTile(
                       label: 'Max. Volt',
                       value: _maxVoltage != null
@@ -313,13 +318,7 @@ class _CellsScreenState extends State<CellsScreen> {
                           ? '${_avgVoltage!.toStringAsFixed(1)} V'
                           : '– V',
                     ),
-                    Container(width: 1, color: Colors.white24),
-                    _summaryTile(
-                      label: 'Balancing',
-                      value: '',
-                      isBalancing: true,
-                      balancingActive: _balancingActive,
-                    ),
+                  
                   ],
                 ),
               ),

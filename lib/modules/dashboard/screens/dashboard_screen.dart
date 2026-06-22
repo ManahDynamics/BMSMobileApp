@@ -173,13 +173,47 @@ void _showDisconnectDialog() {
     final int? minVoltageNo         = cell?.cellMinVoltageNo;
 
     // Alerts derived from packet data
-    final List<_AlertItem> alerts = _buildAlerts(
-      dash?.temperature,
-      dash?.batteryStatusCode,
-      soc,
-      dash?.voltageDiff,
-    );
+    List<_AlertItem> _buildAlerts(
+  double? temp,
+  int? statusCode,
+  int soc, [
+  double? voltageDiff,
+]) {
+  final List<_AlertItem> items = [];
 
+  if (temp != null && temp > 45) {
+    items.add(_AlertItem(
+      title: 'Over Temperature',
+      time: _nowTime(),
+    ));
+  }
+  if (soc <= 10) {
+    items.add(_AlertItem(
+      title: 'Low Battery',
+      time: _nowTime(),
+    ));
+  }
+  if (temp != null && temp < 0) {
+    items.add(_AlertItem(
+      title: 'Under Temperature',
+      time: _nowTime(),
+    ));
+  }
+  if (voltageDiff != null && voltageDiff > 0.1) {
+    items.add(_AlertItem(
+      title: 'Cell Imbalance',
+      time: _nowTime(),
+    ));
+  }
+  return items;
+}final List<_AlertItem> alerts = dash == null
+    ? <_AlertItem>[]
+    : _buildAlerts(
+        dash.temperature,
+        dash.batteryStatusCode,
+        soc,
+        dash.voltageDiff,
+      );
     return Scaffold(
       backgroundColor: Colors.white,
       drawer: AppDrawer(activeRoute: '/dashboard', service: widget.service),
@@ -406,46 +440,6 @@ Row(
         ),
       ),
     );
-  }
-
-  List<_AlertItem> _buildAlerts(
-    double? temp,
-    int? statusCode,
-    int soc, [
-    double? voltageDiff,
-  ]) {
-    final List<_AlertItem> items = [];
-
-    if (temp != null && temp > 45) {
-      items.add(_AlertItem(
-        title: 'Over Temperature',
-        subtitle: 'Battery Temperature is too high',
-        time: _nowTime(),
-      ));
-    }
-    if (soc <= 10) {
-      items.add(_AlertItem(
-        title: 'Low Battery',
-        subtitle: 'State of Charge is critically low',
-        time: _nowTime(),
-      ));
-    }
-    if (temp != null && temp < 0) {
-      items.add(_AlertItem(
-        title: 'Under Temperature',
-        subtitle: 'Battery Temperature is too low',
-        time: _nowTime(),
-      ));
-    }
-    if (voltageDiff != null && voltageDiff > 0.1) {
-      items.add(_AlertItem(
-        title: 'Cell Imbalance',
-        subtitle: 'Cells are imbalanced. Check cell details.',
-        time: _nowTime(),
-      ));
-    }
-
-    return items;
   }
 
   String _nowTime() {
@@ -779,7 +773,6 @@ class _MetricCard extends StatelessWidget {
     );
   }
 }
-
 // ==================== CELL SUMMARY ====================
 class _CellSummary extends StatelessWidget {
   final int cellCount;
@@ -799,6 +792,11 @@ class _CellSummary extends StatelessWidget {
     this.minVoltageNo,
     this.onViewMore,
   });
+
+  String _truncate2(double v) {
+    final cents = (v * 100 + 1e-9).floor();
+    return (cents / 100).toStringAsFixed(2);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -848,7 +846,6 @@ class _CellSummary extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
           child: Column(
             children: [
-              // ── UPDATED: Smaller bar chart ──────────────────────────────
               SizedBox(
                 height: 90,
                 child: isScrollable
@@ -900,7 +897,6 @@ class _CellSummary extends StatelessWidget {
     final bool isMin = (index + 1) == minNo;
     final bool isLow = v < 3.01;
 
-    // ── UPDATED: Smaller bar heights ──────────────────────────────────────
     final double height = 20 + ((v - 3.0) * 50).clamp(0.0, 55.0);
 
     final Color barColor = isLow
@@ -912,16 +908,14 @@ class _CellSummary extends StatelessWidget {
                 : _green.withOpacity(0.85);
 
     return Padding(
-      // ── UPDATED: Tighter horizontal padding ──────────────────────────
       padding: EdgeInsets.symmetric(horizontal: isExpanded ? 2 : 3),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Text(v.toStringAsFixed(2),
+          Text(_truncate2(v),
               style: const TextStyle(fontSize: 8, color: Colors.black54)),
           const SizedBox(height: 2),
           Container(
-            // ── UPDATED: Thinner bar width ────────────────────────────
             width: isExpanded ? null : 10,
             height: height,
             decoration: BoxDecoration(
@@ -940,8 +934,8 @@ class _CellSummary extends StatelessWidget {
 
 // ==================== ALERT ITEM MODEL ====================
 class _AlertItem {
-  final String title, subtitle, time;
-  const _AlertItem({required this.title, required this.subtitle, required this.time});
+  final String title, time;
+  const _AlertItem({required this.title,  required this.time});
 }
 
 // ==================== ALERTS CARD ====================
@@ -1043,8 +1037,6 @@ class _AlertsCard extends StatelessWidget {
                                         fontWeight: FontWeight.w600,
                                         color: Colors.black87)),
                                 const SizedBox(height: 2),
-                                Text(a.subtitle,
-                                    style: TextStyle(fontSize: 12, color: Colors.grey[500])),
                               ],
                             ),
                           ),

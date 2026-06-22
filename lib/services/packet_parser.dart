@@ -228,26 +228,26 @@ class BMSPacketParser {
 
     // CRC-8 over bytes[1..116] (everything except the start byte, up to the
     // CRC byte itself).
-    final List<int> crcData = bytes.sublist(1, BMSProtocol.dashCrcByte);
-    final int computedCrc   = BMSCrcService.calculateCRC8(crcData);
-    final int receivedCrc   = bytes[BMSProtocol.dashCrcByte] & 0xFF;
+    // CRC-16 Modbus (poly 0xA001, init 0xFFFF) over bytes[1..116].
+// Byte 117 = low byte, Byte 118 = high byte (confirmed: B9 13 → 0x13B9).
+final List<int> crcData = bytes.sublist(1, BMSProtocol.dashCrcLow);
+final int computedCrc   = BMSCrcService.calculateCRC16(crcData);
+final int receivedCrc   = ((bytes[BMSProtocol.dashCrcHigh] & 0xFF) << 8) |
+                            (bytes[BMSProtocol.dashCrcLow]  & 0xFF);
 
-    debugPrint('🔍 Dashboard CRC check:'
-        ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}'
-        ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}');
+debugPrint('🔍 Dashboard CRC check:'
+    ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
+    ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}');
 
- if (computedCrc != receivedCrc) {
+if (computedCrc != receivedCrc) {
   return BMSParseResult.failure(
     BMSParseError.crcMismatch,
-    errorDetail:
-        'Dashboard CRC mismatch. '
+    errorDetail: 'Dashboard CRC16 mismatch. '
         'Computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
-        'Received=0x${receivedCrc.toRadixString(16).toUpperCase()} '
-        'CRC Bytes=[${bytes[117].toRadixString(16).toUpperCase()} '
-        '${bytes[118].toRadixString(16).toUpperCase()}]',
+        'Received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
   );
 }
-    debugPrint('✅ CRC8 OK [Dashboard Response]');
+debugPrint('✅ CRC16 OK [Dashboard Response]');
 
     // ── ASCII fields ────────────────────────────────────────────────────────
     final batteryType     = _decodeAscii(bytes, BMSProtocol.dashBatteryTypeStart,     BMSProtocol.dashBatteryTypeEnd);
@@ -346,27 +346,24 @@ class BMSPacketParser {
     }
 
     // CRC-16 over bytes[1..84] — NOT YET CONFIRMED, see note above.
-    final List<int> crcData = bytes.sublist(1, BMSProtocol.cellCrcHigh);
-    final int computedCrc   = BMSCrcService.calculateCRC16(crcData);
+   final List<int> crcData = bytes.sublist(1, BMSProtocol.cellCrcHigh);
+final int computedCrc   = BMSCrcService.calculateCRC16(crcData);
+final int receivedCrc   = ((bytes[BMSProtocol.cellCrcHigh] & 0xFF) << 8) |
+                            (bytes[BMSProtocol.cellCrcLow]  & 0xFF);
 
-    final int receivedCrc =
-        ((bytes[BMSProtocol.cellCrcHigh] & 0xFF) << 8) |
-         (bytes[BMSProtocol.cellCrcLow]  & 0xFF);
+debugPrint('🔍 CellVoltage CRC check:'
+    ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
+    ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}');
 
-    debugPrint('🔍 CellVoltage CRC check:'
-        ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
-        ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}');
-
-    if (computedCrc != receivedCrc) {
-      debugPrint('❌ CRC16 MISMATCH [CellVoltage] — known unresolved, see TODO');
-      return BMSParseResult.failure(
-        BMSParseError.crcMismatch,
-        errorDetail: 'CRC16 computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
-            ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}',
-      );
-    }
-
-    debugPrint('✅ CRC16 OK [Cell Voltage Response]');
+if (computedCrc != receivedCrc) {
+  debugPrint('❌ CRC16 MISMATCH [CellVoltage]');
+  return BMSParseResult.failure(
+    BMSParseError.crcMismatch,
+    errorDetail: 'CRC16 computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
+        ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}',
+  );
+}
+debugPrint('✅ CRC16 OK [Cell Voltage Response]');
 
     final int rawMaxVoltage  = _bigEndian16(bytes, BMSProtocol.cellMaxVoltageHigh);
     final double maxVoltage  = rawMaxVoltage / 1000.0;
