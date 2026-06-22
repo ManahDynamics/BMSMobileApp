@@ -14,7 +14,7 @@ import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/packet_formatter.dart';
 import 'package:bmsmobileapp/services/parsed_packet.dart';
 import 'package:bmsmobileapp/services/protocol.dart';
-import 'package:bmsmobileapp/screens/dashboard.dart';
+import '../../../modules/dashboard/screens/dashboard_screen.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/token_service.dart';

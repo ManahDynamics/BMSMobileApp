@@ -1,10 +1,10 @@
 // ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
-import 'package:bmsmobileapp/screens/dashboard.dart';
-import 'package:bmsmobileapp/screens/cells_screen.dart';
-import 'package:bmsmobileapp/screens/alerts_screen.dart';
-import 'package:bmsmobileapp/screens/settings_screen.dart';
+import '../../../modules/dashboard/screens/dashboard_screen.dart';
+import '../../../modules/cells/screens/cell_screen.dart';
+import '../../../modules/alerts/screens/alert_screen.dart';
+import '../../../modules/settings/screens/setting_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 

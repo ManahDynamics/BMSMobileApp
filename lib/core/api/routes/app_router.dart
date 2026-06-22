@@ -5,12 +5,11 @@ import '../../../modules/registration/screens/registration_screen.dart';
 import '../../../modules/connect/screens/connect_screen.dart';
 import '../../../modules/scanner/screens/BMS_scanner_screen.dart';
 import '../../../modules/forgotPassword/screens/forgot_password_screen.dart';
-import '../../../screens/dashboard.dart';
-import '../../../screens/alerts_screen.dart';
-import '../../../screens/cells_screen.dart';
-// import '../../../screens/connect_screen.dart';
-import '../../../screens/editprofile_screen.dart';
-import '../../../screens/settings_screen.dart';
+import '../../../modules/dashboard/screens/dashboard_screen.dart';
+import '../../../modules/cells/screens/cell_screen.dart';
+import '../../../modules/alerts/screens/alert_screen.dart';
+import '../../../modules/editProfile/screens/editProfile_screen.dart';
+import '../../../modules/settings/screens/setting_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 
 class AppRoutes {
