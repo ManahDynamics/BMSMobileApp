@@ -105,7 +105,7 @@ class AuthService {
       refreshToken = null;
       userId = null;
     } catch (e) {
-      print("Error clearing tokens: $e");
+      // print("Error clearing tokens: $e");
     }
   }
 
@@ -126,7 +126,7 @@ class AuthService {
       accessToken = storedToken;
       return true;
     } catch (e) {
-      print("Error checking login status: $e");
+      // print("Error checking login status: $e");
       return false;
     }
   }
@@ -136,7 +136,7 @@ class AuthService {
     try {
       return await _secureStorage.read(key: "accessToken");
     } catch (e) {
-      print("Error getting access token: $e");
+      // print("Error getting access token: $e");
       return null;
     }
   }
@@ -146,7 +146,7 @@ class AuthService {
     try {
       return await _secureStorage.read(key: "userId");
     } catch (e) {
-      print("Error getting user ID: $e");
+      // print("Error getting user ID: $e");
       return null;
     }
   }

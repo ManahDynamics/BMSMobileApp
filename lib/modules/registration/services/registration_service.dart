@@ -28,8 +28,8 @@ class RegisterService {
                 throw Exception('Request timed out. Please try again.'),
           );
 
-      print('📡 Register response status : ${response.statusCode}');
-      print('📡 Register response body   : ${response.body}');
+      // print('📡 Register response status : ${response.statusCode}');
+      // print('📡 Register response body   : ${response.body}');
 
       final Map<String, dynamic> json = jsonDecode(response.body);
       final bool success =

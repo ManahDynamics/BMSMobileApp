@@ -71,7 +71,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (isLoggedIn && mounted) {
       Future.delayed(Duration.zero, () {
         if (mounted) {
-          Navigator.pushReplacementNamed(context, '/connect');
+          Navigator.pushReplacementNamed(context, '/dashboard');
         }
       });
     }
@@ -244,8 +244,6 @@ class _LoginScreenState extends State<LoginScreen> {
         deviceToken: deviceInfo['deviceToken']!,
       );
 
-      // print('📡 Login request: ${loginRequest.toJson()}');
-
       final response = await http.post(
         Uri.parse('http://15.207.26.224:3030/api/auth/login'),
         headers: {
@@ -258,9 +256,6 @@ class _LoginScreenState extends State<LoginScreen> {
         onTimeout: () =>
             throw Exception('Request timed out. Please try again.'),
       );
-
-      // print('📡 Login response status: ${response.statusCode}');
-      // print('📡 Login response body: ${response.body}');
 
       final Map<String, dynamic> rawJson = jsonDecode(response.body);
 
@@ -282,10 +277,7 @@ class _LoginScreenState extends State<LoginScreen> {
           if (refreshToken != null && refreshToken.isNotEmpty) {
             await _tokenService.saveRefreshToken(refreshToken);
           }
-          // print('✅ Token and user data saved successfully');
-          // print('✅ User: $name ($email)');
         } else {
-          // print('⚠️ No token received from server');
         }
 
         if (!mounted) return;
@@ -299,7 +291,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
 
-        Navigator.pushReplacementNamed(context, '/connect');
+        Navigator.pushReplacementNamed(context, '/dashboard');
       } else {
         final serverMessage = rawJson['message']?.toString() ??
             rawJson['error']?.toString() ??
