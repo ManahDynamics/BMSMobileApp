@@ -23,21 +23,22 @@ class BMSCrcService {
   /// CRC-16 — Modbus style (most common in BMS devices)
   /// Polynomial: 0x8005 (reflected 0xA001), Initial value: 0xFFFF
   static int calculateCRC16(List<int> data) {
-    int crc = 0xFFFF;
-    const int poly = 0xA001;
+  int crc = 0xFFFF;
 
-    for (int byte in data) {
-      crc ^= byte & 0xFF;
-      for (int i = 0; i < 8; i++) {
-        if ((crc & 1) != 0) {
-          crc = (crc >> 1) ^ poly;
-        } else {
-          crc >>= 1;
-        }
+  for (final byte in data) {
+    crc ^= (byte & 0xFF) << 8;
+
+    for (int i = 0; i < 8; i++) {
+      if ((crc & 0x8000) != 0) {
+        crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+      } else {
+        crc = (crc << 1) & 0xFFFF;
       }
     }
-    return crc & 0xFFFF;
   }
+
+  return crc & 0xFFFF;
+}
 
   /// Returns true if [crcByte] matches the CRC computed over [data].
   static bool verifyCRC8(List<int> data, int crcByte) =>
