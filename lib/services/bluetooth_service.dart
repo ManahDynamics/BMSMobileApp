@@ -549,9 +549,9 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     final success = await completer.future.timeout(
-  const Duration(seconds: 10),
+  const Duration(seconds: 20),
   onTimeout: () {
-    addDebugLog('⏰ $name timed out after 10s');
+    addDebugLog('⏰ $name timed out after 20s');
     return false;
   },
 );
