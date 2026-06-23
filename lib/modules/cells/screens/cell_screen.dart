@@ -46,7 +46,7 @@ class _CellsScreenState extends State<CellsScreen> {
     widget.service.addListener(_onChanged);
     _sortCells();
     // ── Request fresh cell voltage data the moment this screen opens ──────
-    widget.service.requestCellVoltages();
+    widget.service.refreshCellVoltages();
   }
 
   void _onChanged() {

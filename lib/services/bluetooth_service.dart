@@ -23,11 +23,28 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   bool isConnecting = false;
 
   /// True once the first Dashboard packet has parsed successfully
-  /// (CRC passed). The scan screen watches this flag to trigger
-  /// navigation to the Dashboard screen.
+  /// (CRC passed). Kept for backward-compat / informational use.
   bool dashboardReady = false;
 
   bool dashboardNavigationTriggered = false;
+
+  // ── Sequential request flow ─────────────────────────────────────────────
+  // readyForDashboard becomes true right after the BLE Name step finishes
+  // (success OR failure) — this is the single signal the scan screen uses
+  // to navigate to the Dashboard screen.
+  bool readyForDashboard = false;
+
+  bool isBleNameLoading = false;
+  bool isDashboardLoading = false;
+  bool isCellVoltageLoading = false;
+
+  String? bleNameError;
+  String? dashboardError;
+  String? cellVoltageError;
+
+  Completer<bool>? _bleNameCompleter;
+  Completer<bool>? _dashboardCompleter;
+  Completer<bool>? _cellVoltageCompleter;
 
   final List<BMSParsedPacket> packetLog = [];
 
@@ -52,7 +69,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   String? snCode;
 
   // ── Tracks the Data ID of the most recently sent request ──────────────────
-final Set<int> _pendingRequests = {};
+  final Set<int> _pendingRequests = {};
   BluetoothCharacteristic? _notifyChar;
   BluetoothCharacteristic? _writeChar;
   StreamSubscription? _notifySub;
@@ -213,14 +230,16 @@ final Set<int> _pendingRequests = {};
         debugPrint('✅ RX Parsed: ${packet.typeName}');
         addDebugLog('✅ Parsed: ${packet.typeName}');
         addDebugLog(
-  '✅ Response received: 0x${result.packet!.dataId.toRadixString(16).toUpperCase()}'
-);
-        
+          '✅ Response received: 0x${result.packet!.dataId.toRadixString(16).toUpperCase()}',
+        );
 
         if (packet.isCellVoltageResponse) {
           addDebugLog('🔋 Cell Voltage Response received');
           latestCellVoltage = packet;
           notifyListeners();
+          if (_cellVoltageCompleter != null && !_cellVoltageCompleter!.isCompleted) {
+            _cellVoltageCompleter!.complete(true);
+          }
 
         } else if (packet.isDashboardResponse) {
           addDebugLog('📊 Dashboard Response received — CRC passed');
@@ -235,15 +254,11 @@ final Set<int> _pendingRequests = {};
           if (packet.firmwareVersion != null) firmwareVersion = packet.firmwareVersion;
 
           if (batterySerial == null || batterySerial!.trim().isEmpty) {
-            addDebugLog('⚠️ batterySerial is NULL/EMPTY after extraction — '
-                'navigation will NOT trigger');
+            addDebugLog('⚠️ batterySerial is NULL/EMPTY after extraction');
           } else {
-            addDebugLog('✅ batterySerial set: "$batterySerial" — '
-                'navigation should trigger now');
+            addDebugLog('✅ batterySerial set: "$batterySerial"');
           }
 
-          // Dashboard parsed + CRC passed → this is what unblocks navigation
-          // on the scan screen via the dashboardReady flag.
           if (!dashboardReady) {
             dashboardReady = true;
             debugPrint('🚀 Dashboard Ready');
@@ -252,6 +267,10 @@ final Set<int> _pendingRequests = {};
 
           notifyListeners();
 
+          if (_dashboardCompleter != null && !_dashboardCompleter!.isCompleted) {
+            _dashboardCompleter!.complete(true);
+          }
+
         } else if (packet.isBleNameResponse) {
           if (packet.bleName != null) {
             bleName = packet.bleName;
@@ -259,6 +278,9 @@ final Set<int> _pendingRequests = {};
             addDebugLog('📋 BLE Name: $bleName');
           }
           notifyListeners();
+          if (_bleNameCompleter != null && !_bleNameCompleter!.isCompleted) {
+            _bleNameCompleter!.complete(true);
+          }
 
         } else if (packet.isDeviceInfo) {
           addDebugLog('ℹ️ Device info packet: 0x${packet.dataId.toRadixString(16)}');
@@ -303,13 +325,13 @@ final Set<int> _pendingRequests = {};
   }) async {
     if (_writeChar == null) return;
 
-   if (sentDataId != null) {
-  _pendingRequests.add(sentDataId);
+    if (sentDataId != null) {
+      _pendingRequests.add(sentDataId);
 
-  addDebugLog(
-    '📤 Pending Requests: ${_pendingRequests.map((e) => "0x${e.toRadixString(16).toUpperCase()}").join(", ")}'
-  );
-}
+      addDebugLog(
+        '📤 Pending Requests: ${_pendingRequests.map((e) => "0x${e.toRadixString(16).toUpperCase()}").join(", ")}',
+      );
+    }
 
     final bool useWithoutResponse = _writeChar!.properties.writeWithoutResponse;
     debugPrint('📤 TX${logName != null ? " ($logName)" : ""} : ${_toHex(packetBytes)}');
@@ -412,7 +434,7 @@ final Set<int> _pendingRequests = {};
       state = BMSConnectionState.ready;
       isConnecting = false;
       notifyListeners();
-      _requestBleNameThenStartPolling();
+      _startDataSequence();
     } else {
       addDebugLog('❌ ACK validation FAILED — '
           'expected=${_toHex(expectedAck)} received=${_toHex(receivedAck)}');
@@ -423,26 +445,127 @@ final Set<int> _pendingRequests = {};
     }
   }
 
-  Future<void> _requestBleNameThenStartPolling() async {
-    await requestBleName();
-    await Future.delayed(const Duration(milliseconds: 500));
-    addDebugLog('▶️ Starting poll cycle (dashboard + cell voltage every 5s)');
-    _startPolling();
+  // ─────────────────────────────────────────────────────────────────────────
+  // SEQUENTIAL DATA FETCH: BLE Name → Dashboard → Cell Voltages
+  // ─────────────────────────────────────────────────────────────────────────
+  //
+  // Flow:
+  //   1. ACK validated → request BLE Name.
+  //   2. Whether BLE Name succeeds or fails, `readyForDashboard` is set so
+  //      the scan screen navigates to the Dashboard screen.
+  //   3. If BLE Name FAILED  -> stop here. Dashboard screen shows the BLE
+  //      Name error and the Dashboard / Cell Voltage sections never start
+  //      loading (they stay in their initial "waiting" state).
+  //   4. If BLE Name SUCCEEDED -> request Dashboard packet (Dashboard
+  //      screen shows a loading indicator for that section until it
+  //      arrives or times out).
+  //   5. If Dashboard FAILED -> stop here (Cell Voltage section stays
+  //      "waiting").
+  //   6. If Dashboard SUCCEEDED -> request Cell Voltage packet (loading
+  //      indicator shown until it arrives or times out).
+  Future<void> _startDataSequence() async {
+    addDebugLog('▶️ ACK validated — requesting BLE name…');
+
+    final bleOk = await _sendAndWait(
+      send: requestBleName,
+      name: 'BLE Name',
+      setCompleter: (c) => _bleNameCompleter = c,
+      setLoading: (v) => isBleNameLoading = v,
+      setError: (v) => bleNameError = v,
+    );
+
+    // Navigate to the Dashboard screen regardless of the outcome — any
+    // BLE Name error will be displayed there instead of on the scan screen.
+    readyForDashboard = true;
+    notifyListeners();
+
+    if (!bleOk) {
+      addDebugLog('❌ BLE Name failed — stopping sequence, error shown on dashboard');
+      return;
+    }
+
+    final dashOk = await _sendAndWait(
+      send: requestDashboard,
+      name: 'Dashboard',
+      setCompleter: (c) => _dashboardCompleter = c,
+      setLoading: (v) => isDashboardLoading = v,
+      setError: (v) => dashboardError = v,
+    );
+    if (!dashOk) {
+      addDebugLog('❌ Dashboard packet failed — stopping sequence');
+      return;
+    }
+
+    final cellOk = await _sendAndWait(
+      send: requestCellVoltages,
+      name: 'Cell Voltage',
+      setCompleter: (c) => _cellVoltageCompleter = c,
+      setLoading: (v) => isCellVoltageLoading = v,
+      setError: (v) => cellVoltageError = v,
+    );
+    if (!cellOk) {
+      addDebugLog('❌ Cell Voltage packet failed — stopping sequence');
+      return;
+    }
+
+    addDebugLog('✅ Sequential data fetch complete — all packets received');
+  }
+/// Re-requests cell voltages outside the initial sequence (e.g. when the
+  /// Cells screen opens or the user pulls to refresh). Goes through the
+  /// same loading/error tracking as the initial sequence so both screens
+  /// stay in sync.
+  Future<void> refreshCellVoltages() async {
+    await _sendAndWait(
+      send: requestCellVoltages,
+      name: 'Cell Voltage',
+      setCompleter: (c) => _cellVoltageCompleter = c,
+      setLoading: (v) => isCellVoltageLoading = v,
+      setError: (v) => cellVoltageError = v,
+    );
+  }
+  /// Sends a request and waits (with timeout) for the matching response to
+  /// arrive via the notify-listener, which completes the relevant Completer.
+  Future<bool> _sendAndWait({
+    required Future<void> Function() send,
+    required String name,
+    required void Function(Completer<bool>) setCompleter,
+    required void Function(bool) setLoading,
+    required void Function(String?) setError,
+  }) async {
+    final completer = Completer<bool>();
+    setCompleter(completer);
+    setLoading(true);
+    setError(null);
+    notifyListeners();
+
+    try {
+      await send();
+    } catch (e) {
+      setLoading(false);
+      setError('$name packet failed to send: $e');
+      addDebugLog('❌ $name packet send failed: $e');
+      notifyListeners();
+      return false;
+    }
+
+    final success = await completer.future;
+
+    setLoading(false);
+    if (!success) {
+      setError('$name packet failed to receive');
+      addDebugLog('❌ $name packet receive FAILED');
+    } else {
+      addDebugLog('✅ $name packet received successfully');
+    }
+    notifyListeners();
+    return success;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // POLLING
+  // POLLING (disabled — replaced by sequential one-shot fetch above)
   // ─────────────────────────────────────────────────────────────────────────
   void _startPolling() {
-    _stopPolling();
-    _doPollCycle();
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _doPollCycle());
-  }
-
-  Future<void> _doPollCycle() async {
-    await requestDashboard();
-    await Future.delayed(const Duration(seconds: 1));
-    await requestCellVoltages();
+    return;
   }
 
   void _stopPolling() {
@@ -540,6 +663,18 @@ final Set<int> _pendingRequests = {};
     _pendingRequests.clear();
     dashboardReady    = false;
     dashboardNavigationTriggered = false;
+
+    readyForDashboard      = false;
+    isBleNameLoading       = false;
+    isDashboardLoading     = false;
+    isCellVoltageLoading   = false;
+    bleNameError           = null;
+    dashboardError         = null;
+    cellVoltageError       = null;
+    _bleNameCompleter      = null;
+    _dashboardCompleter    = null;
+    _cellVoltageCompleter  = null;
+
     _ackTimer?.cancel();
     _stopPolling();
     // Note: _debugLogs is intentionally NOT cleared on new session, so you
@@ -557,7 +692,7 @@ final Set<int> _pendingRequests = {};
     device = null;
     isConnecting = false;
     _pendingRequests.clear();
-      }
+  }
 
   @override
   void dispose() {

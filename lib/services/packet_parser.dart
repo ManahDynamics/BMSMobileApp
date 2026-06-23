@@ -348,8 +348,8 @@ debugPrint('✅ CRC16 OK [Dashboard Response]');
     // CRC-16 over bytes[1..84] — NOT YET CONFIRMED, see note above.
    final List<int> crcData = bytes.sublist(1, BMSProtocol.cellCrcHigh);
 final int computedCrc   = BMSCrcService.calculateCRC16(crcData);
-final int receivedCrc   = ((bytes[BMSProtocol.cellCrcHigh] & 0xFF) << 8) |
-                            (bytes[BMSProtocol.cellCrcLow]  & 0xFF);
+final int receivedCrc   = ((bytes[BMSProtocol.cellCrcLow]  & 0xFF) << 8) |
+                            (bytes[BMSProtocol.cellCrcHigh] & 0xFF);
 
 debugPrint('🔍 CellVoltage CRC check:'
     ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'

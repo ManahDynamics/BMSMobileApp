@@ -302,11 +302,33 @@ void _showDisconnectDialog() {
             // ── Device Header ─────────────────────────────────────────────
            // ── Device Header ─────────────────────────────────────────────
 _DeviceHeader(
-  batteryType: batteryType,
-  serialNo: serialNo,
-  onDisconnect: _showDisconnectDialog,
-),
+              batteryType: batteryType,
+              serialNo: serialNo,
+              onDisconnect: _showDisconnectDialog,
+            ),
 
+            if (svc.isBleNameLoading)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text('Fetching device name...',
+                    style: TextStyle(fontSize: 12, color: Colors.black54)),
+              )
+            else if (svc.bleNameError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.error_outline, size: 14, color: Colors.red.shade700),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(svc.bleNameError!,
+                          style: TextStyle(fontSize: 12, color: Colors.red.shade700)),
+                    ),
+                  ],
+                ),
+              ),
+
+            const SizedBox(height: 8),
 const SizedBox(height: 8),
 
 // ── Connected Pill + Disconnect Button (Same Line) ─────────────
@@ -371,16 +393,24 @@ Row(
             _gap16,
 
             // ── Battery Card ──────────────────────────────────────────────
-            _BatteryCard(
-              soc: soc,
-              statusCode: dash?.batteryStatusCode ?? 0x02,
-              capacity: capacityDisplay,
-              status: batteryStatus,
-              isCharging: isCharging,
-              health: health,
-              healthGood: healthGood,
-              cycles: cyclesDisplay,
-            ), 
+           // ── Battery Card (with loading/error state) ─────────────────
+            if (svc.isDashboardLoading)
+              const _LoadingSection(text: 'Loading dashboard data...')
+            else if (svc.dashboardError != null)
+              _ErrorSection(message: svc.dashboardError!)
+            else if (svc.bleNameError != null)
+              const _ErrorSection(message: 'Dashboard data unavailable — BLE Name step failed.')
+            else
+              _BatteryCard(
+                soc: soc,
+                statusCode: dash?.batteryStatusCode ?? 0x02,
+                capacity: capacityDisplay,
+                status: batteryStatus,
+                isCharging: isCharging,
+                health: health,
+                healthGood: healthGood,
+                cycles: cyclesDisplay,
+              ),
     
             _gap16,
 
@@ -418,19 +448,26 @@ Row(
 
             const SizedBox(height: 20),
 
-            // ── Cell Summary ──────────────────────────────────────────────
-            _CellSummary(
-              cellCount: cellCount,
-              avgVoltage: avgVoltage,
-              voltDiff: voltDiff,
-              minVoltage: minVoltage,
-              maxVoltage: maxVoltage,
-              cellVoltages: cellVoltages,
-              maxVoltageNo: maxVoltageNo,
-              minVoltageNo: minVoltageNo,
-              onViewMore: () => Navigator.push(
-                  context, SlideRoute(page: CellsScreen(service: widget.service))),
-            ),
+            // ── Cell Summary (with loading/error state) ──────────────────
+            if (svc.isCellVoltageLoading)
+              const _LoadingSection(text: 'Loading cell voltage data...')
+            else if (svc.cellVoltageError != null)
+              _ErrorSection(message: svc.cellVoltageError!)
+            else if (svc.dashboardError != null || svc.bleNameError != null)
+              const _ErrorSection(message: 'Cell voltage data unavailable.')
+            else
+              _CellSummary(
+                cellCount: cellCount,
+                avgVoltage: avgVoltage,
+                voltDiff: voltDiff,
+                minVoltage: minVoltage,
+                maxVoltage: maxVoltage,
+                cellVoltages: cellVoltages,
+                maxVoltageNo: maxVoltageNo,
+                minVoltageNo: minVoltageNo,
+                onViewMore: () => Navigator.push(
+                    context, SlideRoute(page: CellsScreen(service: widget.service))),
+              ),
 
             _gap16,
 
@@ -931,7 +968,61 @@ class _CellSummary extends StatelessWidget {
     );
   }
 }
+// ==================== LOADING SECTION ====================
+class _LoadingSection extends StatelessWidget {
+  final String text;
+  const _LoadingSection({required this.text});
 
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const CircularProgressIndicator(strokeWidth: 2.5, color: _green),
+          const SizedBox(height: 12),
+          Text(text, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+        ],
+      ),
+    );
+  }
+}
+
+// ==================== ERROR SECTION ====================
+class _ErrorSection extends StatelessWidget {
+  final String message;
+  const _ErrorSection({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.error_outline, color: Colors.red.shade700),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message,
+                style: TextStyle(fontSize: 13, color: Colors.red.shade700)),
+          ),
+        ],
+      ),
+    );
+  }
+}
 // ==================== ALERT ITEM MODEL ====================
 class _AlertItem {
   final String title, time;

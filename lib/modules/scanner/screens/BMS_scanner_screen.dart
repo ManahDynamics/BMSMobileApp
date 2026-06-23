@@ -171,33 +171,19 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
 
  void _onServiceChanged() {
   if (!mounted) return;
-   debugPrint(
-    'dashboardReady=${widget.service.dashboardReady}',
-  );
+  debugPrint('state=${widget.service.state}');
 
   setState(() {});
 
-  if (widget.service.dashboardReady) {
+  if (widget.service.readyForDashboard && !_dashboardOpened) {
+    _dashboardOpened = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         _navigateToDashboard();
       }
     });
   }
-
-if (widget.service.dashboardReady &&
-    !_dashboardOpened) {
-
-  _dashboardOpened = true;
-
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    if (mounted) {
-      _navigateToDashboard();
-    }
-  });
 }
-}
-
   void _listenScan() {
     _scanSub?.cancel();
     _scanStateSub?.cancel();
