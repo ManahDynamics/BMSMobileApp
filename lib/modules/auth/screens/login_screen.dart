@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'package:bmsmobileapp/core/theme/app_colors.dart';
 // import 'package:bmsmobileapp/core/theme/app_spacing.dart';
@@ -193,26 +194,35 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<Map<String, String>> _getDeviceInfo() async {
     final deviceInfo = DeviceInfoPlugin();
 
+    // Request permission on iOS before fetching FCM token
+    if (Platform.isIOS) {
+      await FirebaseMessaging.instance.requestPermission();
+    }
+
+    // Get real FCM push notification token
+    final deviceToken =
+        await FirebaseMessaging.instance.getToken() ?? 'unknown';
+
     if (Platform.isAndroid) {
       final android = await deviceInfo.androidInfo;
       return {
         'deviceId': android.id,
         'devicePlatform': 'android',
-        'deviceToken': android.id,
+        'deviceToken': deviceToken, // ← real FCM token
       };
     } else if (Platform.isIOS) {
       final ios = await deviceInfo.iosInfo;
       return {
         'deviceId': ios.identifierForVendor ?? 'unknown',
         'devicePlatform': 'ios',
-        'deviceToken': ios.identifierForVendor ?? 'unknown',
+        'deviceToken': deviceToken, // ← real FCM token
       };
     }
 
     return {
       'deviceId': 'unknown',
       'devicePlatform': 'unknown',
-      'deviceToken': 'unknown',
+      'deviceToken': deviceToken,
     };
   }
 
@@ -277,7 +287,6 @@ class _LoginScreenState extends State<LoginScreen> {
           if (refreshToken != null && refreshToken.isNotEmpty) {
             await _tokenService.saveRefreshToken(refreshToken);
           }
-        } else {
         }
 
         if (!mounted) return;
