@@ -466,23 +466,23 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _startDataSequence() async {
     addDebugLog('▶️ ACK validated — requesting BLE name…');
 
-    final bleOk = await _sendAndWait(
-      send: requestBleName,
-      name: 'BLE Name',
-      setCompleter: (c) => _bleNameCompleter = c,
-      setLoading: (v) => isBleNameLoading = v,
-      setError: (v) => bleNameError = v,
-    );
+    // // final bleOk = await _sendAndWait(
+    // //   send: requestBleName,
+    // //   name: 'BLE Name',
+    // //   setCompleter: (c) => _bleNameCompleter = c,
+    // //   setLoading: (v) => isBleNameLoading = v,
+    // //   setError: (v) => bleNameError = v,
+    // // );
 
-    // Navigate to the Dashboard screen regardless of the outcome — any
-    // BLE Name error will be displayed there instead of on the scan screen.
-    readyForDashboard = true;
-    notifyListeners();
+    // // Navigate to the Dashboard screen regardless of the outcome — any
+    // // BLE Name error will be displayed there instead of on the scan screen.
+    // readyForDashboard = true;
+    // notifyListeners();
 
-    if (!bleOk) {
-      addDebugLog('❌ BLE Name failed — stopping sequence, error shown on dashboard');
-      return;
-    }
+    // if (!bleOk) {
+    //   addDebugLog('❌ BLE Name failed — stopping sequence, error shown on dashboard');
+    //   return;
+    // }
 
     final dashOk = await _sendAndWait(
       send: requestDashboard,
@@ -496,17 +496,17 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    final cellOk = await _sendAndWait(
-      send: requestCellVoltages,
-      name: 'Cell Voltage',
-      setCompleter: (c) => _cellVoltageCompleter = c,
-      setLoading: (v) => isCellVoltageLoading = v,
-      setError: (v) => cellVoltageError = v,
-    );
-    if (!cellOk) {
-      addDebugLog('❌ Cell Voltage packet failed — stopping sequence');
-      return;
-    }
+    // final cellOk = await _sendAndWait(
+    //   send: requestCellVoltages,
+    //   name: 'Cell Voltage',
+    //   setCompleter: (c) => _cellVoltageCompleter = c,
+    //   setLoading: (v) => isCellVoltageLoading = v,
+    //   setError: (v) => cellVoltageError = v,
+    // );
+    // if (!cellOk) {
+    //   addDebugLog('❌ Cell Voltage packet failed — stopping sequence');
+    //   return;
+    // }
 
     addDebugLog('✅ Sequential data fetch complete — all packets received');
   }
@@ -548,7 +548,13 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
       return false;
     }
 
-    final success = await completer.future;
+    final success = await completer.future.timeout(
+  const Duration(seconds: 10),
+  onTimeout: () {
+    addDebugLog('⏰ $name timed out after 10s');
+    return false;
+  },
+);
 
     setLoading(false);
     if (!success) {

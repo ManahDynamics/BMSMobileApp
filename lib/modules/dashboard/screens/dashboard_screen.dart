@@ -234,10 +234,10 @@ void _showDisconnectDialog() {
               'Dashboard',
               style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500),
             ),
-            Text(
-              deviceName,
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w400),
-            ),
+            // Text(
+            //   deviceName,
+            //   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w400),
+            // ),
             if (svc.bleName != null)
               Text(
                 svc.bleName!,
