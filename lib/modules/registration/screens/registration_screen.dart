@@ -1,10 +1,12 @@
 // lib/screens/register_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import 'package:bmsmobileapp/core/theme/app_colors.dart';
 import 'package:bmsmobileapp/core/theme/app_spacing.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
+import 'package:bmsmobileapp/services/device_token_service.dart'; // ← NEW
 import 'package:bmsmobileapp/modules/registration/models/registration_request.dart';
 import 'package:bmsmobileapp/modules/registration/services/registration_service.dart';
 
@@ -89,11 +91,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
     try {
       final bool isPhone = _isPhone(input);
 
+      // ─── Fetch real-time device info (token, id, platform) ───
+      final deviceInfo = await DeviceTokenService.getDeviceInfo();
+
       final request = RegisterRequest(
         fullName: fullName,
         password: password,
         email: isPhone ? null : input,
         mobileNo: isPhone ? input : null,
+        deviceToken: deviceInfo['deviceToken'],     // ← Real-time FCM token
+        deviceId: deviceInfo['deviceId'],           // ← Device ID
+        devicePlatform: deviceInfo['devicePlatform'], // ← android / ios / web
       );
 
       final response = await RegisterService.register(request);

@@ -1,6 +1,9 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'core/api/routes/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -8,9 +11,17 @@ import 'firebase_options.dart';
 
 import 'services/bluetooth_service.dart';
 import 'services/translation_service.dart';
+import 'services/device_token_service.dart'; // ← NEW
 
 /// Global bluetooth service - single instance used across the entire app
 final BMSBluetoothService bmsService = BMSBluetoothService();
+
+/// Background FCM message handler (must be a top-level function)
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  debugPrint('[FCM] Background message received: ${message.messageId}');
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +30,20 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  /// Register background message handler
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  /// Fetch and log real-time device token on app start (optional: for debugging)
+  final deviceInfo = await DeviceTokenService.getDeviceInfo();
+  debugPrint('[Main] Device Token   : ${deviceInfo['deviceToken']}');
+  debugPrint('[Main] Device ID      : ${deviceInfo['deviceId']}');
+  debugPrint('[Main] Device Platform: ${deviceInfo['devicePlatform']}');
+
+  /// Listen for foreground FCM messages
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    debugPrint('[FCM] Foreground message: ${message.notification?.title}');
+  });
 
   /// Load default language from Firestore and subscribe to realtime updates.
   await TranslationService.loadTranslations('en');
