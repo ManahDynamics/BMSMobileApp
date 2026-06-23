@@ -116,9 +116,9 @@ class BMSProtocol {
   static const int dashHardwareVersionEnd   = 98; // exclusive (19 bytes)
   static const int dashFirmwareVersionStart = 98;
   static const int dashFirmwareVersionEnd   = 117; // exclusive (19 bytes)
-  static const int dashCrcLow  = 117; // CRC-16 low byte
-static const int dashCrcHigh = 118; // CRC-16 high byte
-  static const int dashStopByte             = 119;
+  static const int dashCrcLowByte  = 117;  // low  byte of CRC16
+static const int dashCrcHighByte = 118;  // high byte of CRC16
+static const int dashStopByte    = 119;  // 0xBB
 
   // ── Cell Voltage Response Packet (88 bytes) ───────────────────────────────
   // Byte 0        : Start byte (0xAA)

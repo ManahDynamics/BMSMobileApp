@@ -230,24 +230,26 @@ class BMSPacketParser {
     // CRC byte itself).
     // CRC-16 Modbus (poly 0xA001, init 0xFFFF) over bytes[1..116].
 // Byte 117 = low byte, Byte 118 = high byte (confirmed: B9 13 → 0x13B9).
-final List<int> crcData = bytes.sublist(1, BMSProtocol.dashCrcLow);
-final int computedCrc   = BMSCrcService.calculateCRC16(crcData);
-final int receivedCrc   = ((bytes[BMSProtocol.dashCrcHigh] & 0xFF) << 8) |
-                            (bytes[BMSProtocol.dashCrcLow]  & 0xFF);
+// CRC16-CCITT over bytes[1..116] inclusive
+final List<int> crcData  = bytes.sublist(1, BMSProtocol.dashCrcLowByte); // 1 to 116
+final int computedCrc    = BMSCrcService.calculateCRC16(crcData);
 
-debugPrint('🔍 Dashboard CRC check:'
+final int receivedCrcLow  = bytes[BMSProtocol.dashCrcLowByte]  & 0xFF; // 0xB9
+final int receivedCrcHigh = bytes[BMSProtocol.dashCrcHighByte] & 0xFF; // 0x13
+final int receivedCrc     = (receivedCrcHigh << 8) | receivedCrcLow;   // 0x13B9
+
+debugPrint('🔍 Dashboard CRC:'
     ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
     ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}');
 
 if (computedCrc != receivedCrc) {
   return BMSParseResult.failure(
     BMSParseError.crcMismatch,
-    errorDetail: 'Dashboard CRC16 mismatch. '
-        'Computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
-        'Received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
+    errorDetail: 'computed=0x${computedCrc.toRadixString(16).toUpperCase()}'
+        ' received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
   );
 }
-debugPrint('✅ CRC16 OK [Dashboard Response]');
+debugPrint('✅ CRC16 OK [Dashboard]');
 
     // ── ASCII fields ────────────────────────────────────────────────────────
     final batteryType     = _decodeAscii(bytes, BMSProtocol.dashBatteryTypeStart,     BMSProtocol.dashBatteryTypeEnd);
