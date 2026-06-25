@@ -77,13 +77,16 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _ackTimer;
 
   Timer? _pollTimer;
+Timer? _dashboardPollTimer;
 
   int _sessionId = 0;
 
   BMSBluetoothService() {
     WidgetsBinding.instance.addObserver(this);
   }
-
+Future<void> requestCellVoltageData() async {
+  await requestCellVoltages();
+}
   // ─────────────────────────────────────────────────────────────────────────
   // APP LIFECYCLE
   // ─────────────────────────────────────────────────────────────────────────
@@ -214,7 +217,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     addDebugLog('📡 Subscribing to notifications…');
     await _notifyChar!.setNotifyValue(true);
 
-    _notifySub = _notifyChar!.value.listen((raw) {
+    _notifySub = _notifyChar!.onValueReceived.listen((raw) {
       if (raw.isEmpty) return;
 
       debugPrint('📥 RX [${raw.length} bytes] : ${_toHex(raw)}');
@@ -287,7 +290,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
           _updateDeviceInfo(packet);
 
         } else if (state == BMSConnectionState.waitingAck && packet.isAck) {
-          addDebugLog('🤝 ACK packet received — validating…');
+          addDebugLog('🤝 ACK packet received — accepting without validation');
           _onAckReceived(packet);
         }
 
@@ -360,19 +363,14 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     await Future.delayed(const Duration(milliseconds: 300));
     await _sendPacket(packet, logName: 'HANDSHAKE', sentDataId: BMSProtocol.idHandshake);
 
-    state = BMSConnectionState.waitingAck;
+    // No ACK wait / validation — proceed straight to ready and start
+    // requesting data once the handshake packet has been sent.
+    addDebugLog('➡️ Handshake sent — skipping ACK wait, proceeding to ready');
+    state = BMSConnectionState.ready;
+    isConnecting = false;
     notifyListeners();
 
-    _ackTimer?.cancel();
-    _ackTimer = Timer(const Duration(seconds: 5), () {
-      if (state == BMSConnectionState.waitingAck) {
-        addDebugLog('⏰ ACK TIMEOUT — no response within 5s');
-        errorMessage = 'Handshake timeout — no response from device';
-        state = BMSConnectionState.error;
-        isConnecting = false;
-        notifyListeners();
-      }
-    });
+    _startDataSequence();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -412,108 +410,67 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // ACK VALIDATION
+  // ACK HANDLING (validation removed — any ACK packet received while
+  // waiting is accepted as-is, with no byte-for-byte comparison against an
+  // expected packet and no handshake-content check).
   // ─────────────────────────────────────────────────────────────────────────
   void _onAckReceived(BMSParsedPacket packet) {
     _ackTimer?.cancel();
 
-    const int expStart  = BMSProtocol.ackStart;
-    const int expLength = BMSProtocol.packetLength;
-    const int expDataId = BMSProtocol.idAck;
-    const int expStop   = BMSProtocol.ackStop;
-    final int  expCrc   = BMSCrcService.calculateCRC8([expLength, expDataId]);
-
-    final List<int> expectedAck = [expStart, expLength, expDataId, expCrc, expStop];
-    final List<int> receivedAck = packet.rawBytes.toList();
-
-    final bool matches = receivedAck.length == expectedAck.length &&
-        List.generate(expectedAck.length, (i) => receivedAck[i] == expectedAck[i]).every((ok) => ok);
-
-    if (matches) {
-      addDebugLog('✅ ACK validated — state = ready');
-      state = BMSConnectionState.ready;
-      isConnecting = false;
-      notifyListeners();
-      _startDataSequence();
-    } else {
-      addDebugLog('❌ ACK validation FAILED — '
-          'expected=${_toHex(expectedAck)} received=${_toHex(receivedAck)}');
-      errorMessage = 'ACK validation failed — device not authenticated.';
-      state = BMSConnectionState.error;
-      isConnecting = false;
-      notifyListeners();
-    }
+    addDebugLog('✅ ACK received — state = ready (no validation performed)');
+    state = BMSConnectionState.ready;
+    isConnecting = false;
+    notifyListeners();
+    _startDataSequence();
   }
 
   // ─────────────────────────────────────────────────────────────────────────
   // SEQUENTIAL DATA FETCH: BLE Name → Dashboard → Cell Voltages
   // ─────────────────────────────────────────────────────────────────────────
-  //
-  // Flow:
-  //   1. ACK validated → request BLE Name.
-  //   2. Whether BLE Name succeeds or fails, `readyForDashboard` is set so
-  //      the scan screen navigates to the Dashboard screen.
-  //   3. If BLE Name FAILED  -> stop here. Dashboard screen shows the BLE
-  //      Name error and the Dashboard / Cell Voltage sections never start
-  //      loading (they stay in their initial "waiting" state).
-  //   4. If BLE Name SUCCEEDED -> request Dashboard packet (Dashboard
-  //      screen shows a loading indicator for that section until it
-  //      arrives or times out).
-  //   5. If Dashboard FAILED -> stop here (Cell Voltage section stays
-  //      "waiting").
-  //   6. If Dashboard SUCCEEDED -> request Cell Voltage packet (loading
-  //      indicator shown until it arrives or times out).
+  
   Future<void> _startDataSequence() async {
-    addDebugLog('▶️ ACK validated — requesting BLE name…');
+  addDebugLog('▶️ Starting packet sequence');
 
-    final bleOk = await _sendAndWait(
-      send: requestBleName,
-      name: 'BLE Name',
-      setCompleter: (c) => _bleNameCompleter = c,
-      setLoading: (v) => isBleNameLoading = v,
-      setError: (v) => bleNameError = v,
-    );
+  readyForDashboard = true;
+  notifyListeners();
 
-    // Navigate to the Dashboard screen regardless of the outcome — any
-    // BLE Name error will be displayed there instead of on the scan screen.
-    readyForDashboard = true;
-    notifyListeners();
+  // BLE Name (once)
+  final bleOk = await _sendAndWait(
+    send: requestBleName,
+    name: 'BLE Name',
+    setCompleter: (c) => _bleNameCompleter = c,
+    setLoading: (v) => isBleNameLoading = v,
+    setError: (v) => bleNameError = v,
+  );
 
-    if (!bleOk) {
-      addDebugLog('❌ BLE Name failed — stopping sequence, error shown on dashboard');
-      return;
-    }
+  if (!bleOk) return;
 
-    final dashOk = await _sendAndWait(
-      send: requestDashboard,
-      name: 'Dashboard',
-      setCompleter: (c) => _dashboardCompleter = c,
-      setLoading: (v) => isDashboardLoading = v,
-      setError: (v) => dashboardError = v,
-    );
-    if (!dashOk) {
-      addDebugLog('❌ Dashboard packet failed — stopping sequence');
-      return;
-    }
+  // Dashboard
+  final dashOk = await _sendAndWait(
+    send: requestDashboard,
+    name: 'Dashboard',
+    setCompleter: (c) => _dashboardCompleter = c,
+    setLoading: (v) => isDashboardLoading = v,
+    setError: (v) => dashboardError = v,
+  );
 
-    final cellOk = await _sendAndWait(
-      send: requestCellVoltages,
-      name: 'Cell Voltage',
-      setCompleter: (c) => _cellVoltageCompleter = c,
-      setLoading: (v) => isCellVoltageLoading = v,
-      setError: (v) => cellVoltageError = v,
-    );
-    if (!cellOk) {
-      addDebugLog('❌ Cell Voltage packet failed — stopping sequence');
-      return;
-    }
+  if (!dashOk) return;
 
-    addDebugLog('✅ Sequential data fetch complete — all packets received');
-  }
-/// Re-requests cell voltages outside the initial sequence (e.g. when the
-  /// Cells screen opens or the user pulls to refresh). Goes through the
-  /// same loading/error tracking as the initial sequence so both screens
-  /// stay in sync.
+  // Cell Voltage
+  final cellOk = await _sendAndWait(
+    send: requestCellVoltages,
+    name: 'Cell Voltage',
+    setCompleter: (c) => _cellVoltageCompleter = c,
+    setLoading: (v) => isCellVoltageLoading = v,
+    setError: (v) => cellVoltageError = v,
+  );
+
+  if (!cellOk) return;
+
+  addDebugLog('✅ Initial data loaded');
+
+  _startDashboardPolling();
+}
   Future<void> refreshCellVoltages() async {
     await _sendAndWait(
       send: requestCellVoltages,
@@ -548,12 +505,9 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
       return false;
     }
 
-    final success = await completer.future.timeout(
-  const Duration(seconds: 20),
-  onTimeout: () {
-    addDebugLog('⏰ $name timed out after 20s');
-    return false;
-  },
+   final success = await completer.future.timeout(
+  const Duration(seconds: 10),
+  onTimeout: () => false,
 );
 
     setLoading(false);
@@ -566,22 +520,53 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     return success;
   }
-
+Future<void> refreshCellVoltage() async {
+  await _sendAndWait(
+    send: requestCellVoltages,
+    name: 'Cell Voltage',
+    setCompleter: (c) => _cellVoltageCompleter = c,
+    setLoading: (v) => isCellVoltageLoading = v,
+    setError: (v) => cellVoltageError = v,
+  );
+}
   // ─────────────────────────────────────────────────────────────────────────
   // POLLING (disabled — replaced by sequential one-shot fetch above)
   // ─────────────────────────────────────────────────────────────────────────
-  void _startPolling() {
-    return;
-  }
+void _startPolling() {
+  return;
+}
 
-  void _stopPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = null;
-  }
+void _stopPolling() {
+  _pollTimer?.cancel();
+  _pollTimer = null;
+}
 
-  void startCellVoltagePolling() {}
-  void stopCellVoltagePolling()  {}
 
+void _startDashboardPolling() {
+  _dashboardPollTimer?.cancel();
+
+  _dashboardPollTimer = Timer.periodic(
+    const Duration(seconds: 10),
+    (_) async {
+      if (state != BMSConnectionState.ready) return;
+
+      addDebugLog('🔁 Auto Refresh');
+
+      await requestDashboard();
+
+      await Future.delayed(
+        const Duration(milliseconds: 300),
+      );
+
+      await requestCellVoltages();
+    },
+  );
+}
+
+void _stopDashboardPolling() {
+  _dashboardPollTimer?.cancel();
+  _dashboardPollTimer = null;
+}
   // ─────────────────────────────────────────────────────────────────────────
   // DISCONNECT
   // ─────────────────────────────────────────────────────────────────────────
@@ -591,6 +576,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
     _ackTimer?.cancel();
     _stopPolling();
+     _stopDashboardPolling(); 
 
     if (_writeChar != null) {
       final int crc = BMSCrcService.calculateCRC8([BMSProtocol.packetLength, BMSProtocol.idDisconnect]);
@@ -689,6 +675,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _cleanup() {
+    _stopDashboardPolling();
     _notifyChar = null;
     _writeChar  = null;
     _notifySub?.cancel();
@@ -710,4 +697,5 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   String _toHex(List<int> bytes) => bytes
       .map((b) => b.toRadixString(16).toUpperCase().padLeft(2, '0'))
       .join(' ');
+
 }

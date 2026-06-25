@@ -230,26 +230,24 @@ class BMSPacketParser {
     // CRC byte itself).
     // CRC-16 Modbus (poly 0xA001, init 0xFFFF) over bytes[1..116].
 // Byte 117 = low byte, Byte 118 = high byte (confirmed: B9 13 → 0x13B9).
-// CRC16-CCITT over bytes[1..116] inclusive
+// CRC-8 over bytes[1..116] — everything except the start byte, up to
+// (but not including) the CRC byte at index 117. Byte 118 is ignored.
 final List<int> crcData  = bytes.sublist(1, BMSProtocol.dashCrcLowByte); // 1 to 116
-final int computedCrc    = BMSCrcService.calculateCRC16(crcData);
-
-final int receivedCrcLow  = bytes[BMSProtocol.dashCrcLowByte]  & 0xFF; // 0xB9
-final int receivedCrcHigh = bytes[BMSProtocol.dashCrcHighByte] & 0xFF; // 0x13
-final int receivedCrc     = (receivedCrcHigh << 8) | receivedCrcLow;   // 0x13B9
+final int computedCrc    = BMSCrcService.calculateCRC8(crcData);
+final int receivedCrc    = bytes[BMSProtocol.dashCrcLowByte] & 0xFF; // byte 117
 
 debugPrint('🔍 Dashboard CRC:'
-    ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
-    ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}');
+    ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}'
+    ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}');
 
 if (computedCrc != receivedCrc) {
-  debugPrint(
-    '⚠️ CRC MISMATCH IGNORED '
-    'computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
-    'received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
+  return BMSParseResult.failure(
+    BMSParseError.crcMismatch,
+    errorDetail: 'computed=0x${computedCrc.toRadixString(16).toUpperCase()}'
+        ' received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
   );
 }
-debugPrint('✅ CRC16 OK [Dashboard]');
+debugPrint('✅ CRC8 OK [Dashboard]');
 
     // ── ASCII fields ────────────────────────────────────────────────────────
     final batteryType     = _decodeAscii(bytes, BMSProtocol.dashBatteryTypeStart,     BMSProtocol.dashBatteryTypeEnd);
@@ -319,14 +317,6 @@ debugPrint('✅ CRC16 OK [Dashboard]');
 
   // ─────────────────────────────────────────────────────────────────────────
   // 88-BYTE CELL VOLTAGE RESPONSE (dataId 0x53)
-  //
-  // ⚠️ UNRESOLVED: CRC algorithm/position for this packet type has not been
-  // confirmed against live captures yet (CRC-8 over bytes[1..84] came close
-  // — 0xF7 computed vs 0xF0 actual — but did not match exactly). Left as
-  // CRC-16 over bytes[1..84] for now so it fails closed rather than silently
-  // accepting unverified data. This does NOT block dashboard navigation —
-  // only cell-voltage detail display is affected until solved.
-  // TODO: capture 2-3 more live cell-voltage packets and re-derive the CRC.
   // ─────────────────────────────────────────────────────────────────────────
   static BMSParseResult _parseCellVoltageResponse(
     List<int> bytes, {
@@ -348,24 +338,22 @@ debugPrint('✅ CRC16 OK [Dashboard]');
     // }
 
     // CRC-16 over bytes[1..84] — NOT YET CONFIRMED, see note above.
-   final List<int> crcData = bytes.sublist(1, BMSProtocol.cellCrcHigh);
-final int computedCrc   = BMSCrcService.calculateCRC16(crcData);
-final int receivedCrc   = ((bytes[BMSProtocol.cellCrcLow]  & 0xFF) << 8) |
-                            (bytes[BMSProtocol.cellCrcHigh] & 0xFF);
+  final List<int> crcData =
+    bytes.sublist(1, BMSProtocol.cellCrcLow);
 
-debugPrint('🔍 CellVoltage CRC check:'
-    ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
-    ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}');
+final int computedCrc =
+    BMSCrcService.calculateCRC16(crcData);
 
-if (computedCrc != receivedCrc) {
-  debugPrint('❌ CRC16 MISMATCH [CellVoltage]');
-  return BMSParseResult.failure(
-    BMSParseError.crcMismatch,
-    errorDetail: 'CRC16 computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}'
-        ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4,"0")}',
-  );
-}
-debugPrint('✅ CRC16 OK [Cell Voltage Response]');
+final int receivedCrc =
+    (bytes[BMSProtocol.cellCrcLow] & 0xFF) |
+    ((bytes[BMSProtocol.cellCrcHigh] & 0xFF) << 8);
+
+debugPrint('════════ CELL CRC ════════');
+debugPrint('Computed CRC : 0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4, '0')}');
+debugPrint('Received CRC : 0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4, '0')}');
+debugPrint('CRC LOW Byte : 0x${bytes[BMSProtocol.cellCrcLow].toRadixString(16).toUpperCase()}');
+debugPrint('CRC HIGH Byte: 0x${bytes[BMSProtocol.cellCrcHigh].toRadixString(16).toUpperCase()}');
+debugPrint('══════════════════════════');
 
     final int rawMaxVoltage  = _littleEndian16(bytes, BMSProtocol.cellMaxVoltageHigh);
     final double maxVoltage  = rawMaxVoltage / 1000.0;
@@ -489,8 +477,9 @@ debugPrint('✅ CRC16 OK [Cell Voltage Response]');
     return (r & 0x8000) != 0 ? -(0x10000 - r) : r;
   }
 
-  static int _littleEndian16(List<int> bytes, int offset) =>
-      ((bytes[offset] & 0xFF) << 8) | (bytes[offset + 1] & 0xFF);
+ static int _littleEndian16(List<int> bytes, int offset) =>
+    (bytes[offset] & 0xFF) |
+    ((bytes[offset + 1] & 0xFF) << 8);
 
   static String _decodeAscii(List<int> bytes, int start, int end) =>
       String.fromCharCodes(

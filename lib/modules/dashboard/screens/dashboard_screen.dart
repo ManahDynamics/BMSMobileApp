@@ -137,171 +137,147 @@ void _showDisconnectDialog() {
     ),
   );
 }
-  @override
-  Widget build(BuildContext context) {
-    final svc = widget.service;
-    final dash = svc.latestDashboard;
-    final cell = svc.latestCellVoltage;
+ @override
+Widget build(BuildContext context) {
+  final svc = widget.service;
 
-    // Device Info
-    final String deviceName  = svc.bleName ?? svc.device?.name ?? 'BMS Device';
-    final String batteryType = svc.batteryType ?? dash?.batteryType ?? '-';
-    final String serialNo    = svc.batterySerial ?? dash?.batterySerial ?? '-';
+  return ListenableBuilder(
+    listenable: svc,
+    builder: (context, _) {
+      final dash = svc.latestDashboard;
+      final cell = svc.latestCellVoltage;
 
-    // Dashboard Data
-    final int soc                = dash?.soc ?? 0;
-    final String batteryStatus   = dash?.batteryStatusLabel ?? 'N/A';
-    final bool isCharging        = dash?.batteryStatusCode == 0x01;
-    final String capacityDisplay = dash?.capacityDisplay ?? '0.0 Ah';
-    final String health          = dash?.healthLabel ?? 'N/A';
-    final bool healthGood        = dash?.healthCode == 0x01;
+      // Device Info
+      final String deviceName  = svc.bleName ?? svc.device?.name ?? 'BMS Device';
+      final String batteryType = svc.batteryType ?? dash?.batteryType ?? '-';
+      final String serialNo    = svc.batterySerial ?? dash?.batterySerial ?? '-';
 
-    final String voltageDisplay = dash?.voltageDisplay ?? '0.0 V';
-    final String currentDisplay = dash?.currentDisplay ?? '0.0 A';
-    final String tempDisplay    = dash?.temperatureDisplay ?? '0 °C';
-    final String powerDisplay   = dash?.powerDisplay ?? '0 Kw';
-    final String cyclesDisplay  = dash?.chargeCyclesDisplay ?? '0';
+      // Dashboard Data
+      final int soc                = dash?.soc ?? 0;
+      final String batteryStatus   = dash?.batteryStatusLabel ?? 'N/A';
+      final bool isCharging        = dash?.batteryStatusCode == 0x01;
+      final String capacityDisplay = dash?.capacityDisplay ?? '0.0 Ah';
+      final String health          = dash?.healthLabel ?? 'N/A';
+      final bool healthGood        = dash?.healthCode == 0x01;
 
-    final int cellCount       = dash?.totalCells ?? cell?.cellTotalCells ?? 0;
-    final String avgVoltage   = dash?.avgCellVoltageDisplay ?? '0.00 v';
-    final String voltDiff     = dash?.voltageDiffDisplay ?? '0.00 v';
-    final String minVoltage   = dash?.minCellVoltageDisplay ?? '0.000 V';
-    final String maxVoltage   = dash?.maxCellVoltageDisplay ?? '0.000 V';
+      final String voltageDisplay = dash?.voltageDisplay ?? '0.0 V';
+      final String currentDisplay = dash?.currentDisplay ?? '0.0 A';
+      final String tempDisplay    = dash?.temperatureDisplay ?? '0 °C';
+      final String powerDisplay   = dash?.powerDisplay ?? '0 Kw';
+      final String cyclesDisplay  = dash?.chargeCyclesDisplay ?? '0';
 
-    final List<double> cellVoltages = cell?.cellVoltages ?? [];
-    final int? maxVoltageNo         = cell?.cellMaxVoltageNo;
-    final int? minVoltageNo         = cell?.cellMinVoltageNo;
+      final int cellCount       = dash?.totalCells ?? cell?.cellTotalCells ?? 0;
+      final String avgVoltage   = dash?.avgCellVoltageDisplay ?? '0.00 v';
+      final String voltDiff     = dash?.voltageDiffDisplay ?? '0.00 v';
+      final String minVoltage   = dash?.minCellVoltageDisplay ?? '0.000 V';
+      final String maxVoltage   = dash?.maxCellVoltageDisplay ?? '0.000 V';
 
-    // Alerts derived from packet data
-    List<_AlertItem> _buildAlerts(
-  double? temp,
-  int? statusCode,
-  int soc, [
-  double? voltageDiff,
-]) {
-  final List<_AlertItem> items = [];
+      final List<double> cellVoltages = cell?.cellVoltages ?? [];
+      final int? maxVoltageNo         = cell?.cellMaxVoltageNo;
+      final int? minVoltageNo         = cell?.cellMinVoltageNo;
 
-  if (temp != null && temp > 45) {
-    items.add(_AlertItem(
-      title: 'Over Temperature',
-      time: _nowTime(),
-    ));
-  }
-  if (soc <= 10) {
-    items.add(_AlertItem(
-      title: 'Low Battery',
-      time: _nowTime(),
-    ));
-  }
-  if (temp != null && temp < 0) {
-    items.add(_AlertItem(
-      title: 'Under Temperature',
-      time: _nowTime(),
-    ));
-  }
-  if (voltageDiff != null && voltageDiff > 0.1) {
-    items.add(_AlertItem(
-      title: 'Cell Imbalance',
-      time: _nowTime(),
-    ));
-  }
-  return items;
-}final List<_AlertItem> alerts = dash == null
-    ? <_AlertItem>[]
-    : _buildAlerts(
-        dash.temperature,
-        dash.batteryStatusCode,
-        soc,
-        dash.voltageDiff,
-      );
-    return Scaffold(
-      backgroundColor: Colors.white,
-      drawer: AppDrawer(activeRoute: '/dashboard', service: widget.service),
-      appBar: AppBar(
-        backgroundColor: _green,
-        elevation: 0,
-        centerTitle: true,
-        leading: Builder(
-          builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_rounded, color: Colors.white),
-            onPressed: () => Scaffold.of(ctx).openDrawer(),
-          ),
-        ),
-        // ── UPDATED: Page name + device name ─────────────────────────────
-        title: Column(
-          children: [
-            const Text(
-              'Dashboard',
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500),
+      // Alerts derived from packet data
+      List<_AlertItem> _buildAlerts(
+        double? temp,
+        int? statusCode,
+        int soc, [
+        double? voltageDiff,
+      ]) {
+        final List<_AlertItem> items = [];
+
+        if (temp != null && temp > 45) {
+          items.add(_AlertItem(title: 'Over Temperature', time: _nowTime()));
+        }
+        if (soc <= 10) {
+          items.add(_AlertItem(title: 'Low Battery', time: _nowTime()));
+        }
+        if (temp != null && temp < 0) {
+          items.add(_AlertItem(title: 'Under Temperature', time: _nowTime()));
+        }
+        if (voltageDiff != null && voltageDiff > 0.1) {
+          items.add(_AlertItem(title: 'Cell Imbalance', time: _nowTime()));
+        }
+        return items;
+      }
+
+      final List<_AlertItem> alerts = dash == null
+          ? <_AlertItem>[]
+          : _buildAlerts(
+              dash.temperature,
+              dash.batteryStatusCode,
+              soc,
+              dash.voltageDiff,
+            );
+
+      return Scaffold(
+        backgroundColor: Colors.white,
+        drawer: AppDrawer(activeRoute: '/dashboard', service: widget.service),
+        appBar: AppBar(
+          backgroundColor: _green,
+          elevation: 0,
+          centerTitle: true,
+          leading: Builder(
+            builder: (ctx) => IconButton(
+              icon: const Icon(Icons.menu_rounded, color: Colors.white),
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
             ),
-            // Text(
-            //   deviceName,
-            //   style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w400),
-            // ),
-            if (svc.bleName != null)
-              Text(
-                svc.bleName!,
-                style: const TextStyle(color: Colors.white60, fontSize: 11),
-              ),
-          ],
-        ),
-        actions: [
-          Stack(
+          ),
+          title: Column(
             children: [
-              IconButton(
-                icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
-                onPressed: () {},
+              const Text(
+                'Dashboard',
+                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500),
               ),
-              if (alerts.isNotEmpty)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(3),
-                    decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                    child: Text('${alerts.length}',
-                        style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
-                  ),
+              if (svc.bleName != null)
+                Text(
+                  svc.bleName!,
+                  style: const TextStyle(color: Colors.white60, fontSize: 11),
                 ),
             ],
           ),
-          // ── UPDATED: Three-dots popup menu ────────────────────────────
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.white),
-            color: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            onSelected: (value) {
-              if (value == 'edit_profile') {
-              } else if (value == 'forget_password') {
-              } else if (value == 'logout') {
-                _showDisconnectDialog();
-              }
-            },
-            itemBuilder: (ctx) => const [
-              PopupMenuItem(
-                value: 'edit_profile',
-                child: Text('Edit Profile'),
-              ),
-              PopupMenuItem(
-                value: 'forget_password',
-                child: Text('Forget Password'),
-              ),
-              PopupMenuItem(
-                value: 'logout',
-                child: Text('Logout'),
-              ),
-            ],
-          ),
-        ],
-      ),
-      body: ListenableBuilder(
-        listenable: svc,
-        builder: (context, _) => ListView(
+          actions: [
+            Stack(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
+                  onPressed: () {},
+                ),
+                if (alerts.isNotEmpty)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                      child: Text('${alerts.length}',
+                          style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+              ],
+            ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: Colors.white),
+              color: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              onSelected: (value) {
+                if (value == 'edit_profile') {
+                } else if (value == 'forget_password') {
+                } else if (value == 'logout') {
+                  _showDisconnectDialog();
+                }
+              },
+              itemBuilder: (ctx) => const [
+                PopupMenuItem(value: 'edit_profile', child: Text('Edit Profile')),
+                PopupMenuItem(value: 'forget_password', child: Text('Forget Password')),
+                PopupMenuItem(value: 'logout', child: Text('Logout')),
+              ],
+            ),
+          ],
+        ),
+        body: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           children: [
-            // ── Device Header ─────────────────────────────────────────────
-           // ── Device Header ─────────────────────────────────────────────
-_DeviceHeader(
+            _DeviceHeader(
               batteryType: batteryType,
               serialNo: serialNo,
               onDisconnect: _showDisconnectDialog,
@@ -329,71 +305,53 @@ _DeviceHeader(
               ),
 
             const SizedBox(height: 8),
-const SizedBox(height: 8),
+            const SizedBox(height: 8),
 
-// ── Connected Pill + Disconnect Button (Same Line) ─────────────
-Row(
-  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-  crossAxisAlignment: CrossAxisAlignment.center,
-  children: [
-    // Connected Green Pill
-    Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 239, 242, 240),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: _green,  // Using your app's green
-          width: 2.5,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            'Connected',
-            style: TextStyle(
-              color: _green,
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: const Color.fromARGB(255, 239, 242, 240),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _green, width: 2.5),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Connected',
+                        style: TextStyle(color: _green, fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(color: _green, shape: BoxShape.circle),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton(
+                  onPressed: _showDisconnectDialog,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Disconnect',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 6),
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: _green,
-              shape: BoxShape.circle,
-            ),
-          ),
-        ],
-      ),
-    ),
-
-    // Disconnect Button (Orange)
-    ElevatedButton(
-      onPressed: _showDisconnectDialog,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: _orange,
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        elevation: 0,
-      ),
-      child: const Text(
-        'Disconnect',
-        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-      ),
-    ),
-  ],
-),
             _gap16,
 
-            // ── Battery Card ──────────────────────────────────────────────
-           // ── Battery Card (with loading/error state) ─────────────────
             if (svc.isDashboardLoading)
               const _LoadingSection(text: 'Loading dashboard data...')
             else if (svc.dashboardError != null)
@@ -411,10 +369,9 @@ Row(
                 healthGood: healthGood,
                 cycles: cyclesDisplay,
               ),
-    
+
             _gap16,
 
-            // ── Metric Cards ──────────────────────────────────────────────
             Row(
               children: [
                 Expanded(child: _MetricCard(label: 'Voltage', value: voltageDisplay, iconLabel: 'V')),
@@ -448,7 +405,6 @@ Row(
 
             const SizedBox(height: 20),
 
-            // ── Cell Summary (with loading/error state) ──────────────────
             if (svc.isCellVoltageLoading)
               const _LoadingSection(text: 'Loading cell voltage data...')
             else if (svc.cellVoltageError != null)
@@ -471,14 +427,13 @@ Row(
 
             _gap16,
 
-            // ── Active Alerts ─────────────────────────────────────────────
             _AlertsCard(alerts: alerts),
           ],
         ),
-      ),
-    );
-  }
-
+      );
+    },
+  );
+}
   String _nowTime() {
     final now = DateTime.now();
     final h = now.hour > 12 ? now.hour - 12 : now.hour == 0 ? 12 : now.hour;
@@ -665,6 +620,8 @@ class _BatteryCardState extends State<_BatteryCard> with SingleTickerProviderSta
                       ],
                     ),
                     const Spacer(),
+                  Container(width: 1, color: Colors.white24),
+
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -876,37 +833,63 @@ class _CellSummary extends StatelessWidget {
           ],
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 4),
 
         // Graph container
         Container(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+          padding: const EdgeInsets.fromLTRB(0, 8 , 0, 10),
           child: Column(
             children: [
-              SizedBox(
-                height: 90,
-                child: isScrollable
-                    ? SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: List.generate(
-                            cellVoltages.length,
-                            (i) => _buildBar(i, cellVoltages, maxVoltageNo, minVoltageNo),
-                          ),
-                        ),
-                      )
-                    : Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: List.generate(
-                          cellVoltages.length,
-                          (i) => Expanded(
-                            child: _buildBar(i, cellVoltages, maxVoltageNo, minVoltageNo,
-                                isExpanded: true),
-                          ),
-                        ),
-                      ),
+             SizedBox(
+  height: 130,
+  width:double.infinity,
+  child: Row(
+    children: [
+
+      // LEFT ARROW
+      const SizedBox(
+  width: 18,
+  child: Icon(
+    Icons.chevron_left,
+    size: 18,
+    color: Colors.grey,
+  ),
+),
+
+      // GRAPH
+      Expanded(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+        child: SizedBox(
+  height: 150,
+  child: Row(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: List.generate(
+              cellVoltages.length,
+              (i) => _buildBar(
+                i,
+                cellVoltages,
+                maxVoltageNo,
+                minVoltageNo,
               ),
+            ),
+            ),
+          ),
+        ),
+      ),
+      
+     // RIGHT ARROW
+      const SizedBox(
+  width: 18,
+  child: Icon(
+    Icons.chevron_right,
+    size: 18,
+    color: Colors.grey,
+  ),
+),
+    ],
+  ),
+),
 
               const SizedBox(height: 10),
 
@@ -927,46 +910,75 @@ class _CellSummary extends StatelessWidget {
     );
   }
 
-  Widget _buildBar(int index, List<double> voltages, int? maxNo, int? minNo,
-      {bool isExpanded = false}) {
-    final double v = voltages[index];
-    final bool isMax = (index + 1) == maxNo;
-    final bool isMin = (index + 1) == minNo;
-    final bool isLow = v < 3.01;
+ Widget _buildBar(
+  int index,
+  List<double> voltages,
+  int? maxNo,
+  int? minNo,
+) {
+  final double v = voltages[index];
 
-    final double height = 20 + ((v - 3.0) * 50).clamp(0.0, 55.0);
+  final bool isMax = (index + 1) == maxNo;
+  final bool isMin = (index + 1) == minNo;
 
-    final Color barColor = isLow
-        ? Colors.red.shade400
-        : isMax
-            ? _green
-            : isMin
-                ? Colors.orange.shade400
-                : _green.withOpacity(0.85);
+ final double height =
+    45 + ((v - 3.0) * 60).clamp(0.0, 40.0);
 
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isExpanded ? 2 : 3),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          Text(_truncate2(v),
-              style: const TextStyle(fontSize: 8, color: Colors.black54)),
-          const SizedBox(height: 2),
-          Container(
-            width: isExpanded ? null : 10,
-            height: height,
-            decoration: BoxDecoration(
-              color: barColor,
-              borderRadius: BorderRadius.circular(2),
+  final Color color =
+      isMax
+          ? const Color(0xFF0B6645)
+          : isMin
+              ? Colors.orange
+              : const Color(0xFF0B6645);
+
+  return SizedBox(
+    width: 28,
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+
+        // Voltage exactly above bar
+        Text(
+          v.toStringAsFixed(2),
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 8,
+            color: Colors.black54,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+
+        const SizedBox(height: 2),
+
+        // Bar
+        Container(
+          width: 20,
+          height: height,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+
+        const SizedBox(height: 2),
+
+        // Cell Number centered exactly below bar
+        SizedBox(
+          width: 20,
+          child: Text(
+            'C${(index + 1).toString().padLeft(2, '0')}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.w600,
+              color: Colors.black54,
             ),
           ),
-          const SizedBox(height: 2),
-          Text('C${(index + 1).toString().padLeft(2, '0')}',
-              style: const TextStyle(fontSize: 8, color: Colors.black45)),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
 }
 // ==================== LOADING SECTION ====================
 class _LoadingSection extends StatelessWidget {
@@ -976,7 +988,6 @@ class _LoadingSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 32),
       decoration: BoxDecoration(
         color: const Color(0xFFF5F5F5),
@@ -1002,7 +1013,6 @@ class _ErrorSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       decoration: BoxDecoration(
         color: Colors.red.shade50,

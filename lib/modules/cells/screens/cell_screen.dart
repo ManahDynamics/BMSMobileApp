@@ -32,6 +32,7 @@ class _CellsScreenState extends State<CellsScreen> {
   static const primaryGreen = Color(0xFF1B6B3A);
   static const cardBlue     = Color(0xFF3A6EAC);
   static const titleGreyBg  = Color(0xFFEEEEEE);
+  static const poorAmber    = Color(0xFFB8860B); // dark goldenrod — matches reference "Poor" color
 
   SortType _sortBy = SortType.cellNo;
   List<CellData> _sortedCells = [];
@@ -39,15 +40,18 @@ class _CellsScreenState extends State<CellsScreen> {
 
   String tr(String key) => TranslationService.t(key);
 
-  @override
-  void initState() {
-    super.initState();
-    TranslationService.instance.addListener(_onChanged);
-    widget.service.addListener(_onChanged);
-    _sortCells();
-    // ── Request fresh cell voltage data the moment this screen opens ──────
-    widget.service.refreshCellVoltages();
-  }
+ @override
+void initState() {
+  super.initState();
+
+  TranslationService.instance.addListener(_onChanged);
+  widget.service.addListener(_onChanged);
+  _sortCells();
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+widget.service.requestCellVoltages();
+  });
+}
 
   void _onChanged() {
     if (mounted) setState(() => _sortCells());
@@ -106,7 +110,7 @@ class _CellsScreenState extends State<CellsScreen> {
   }
 
   ({String text, Color color}) _cellStatus(double v) =>
-      v < 3.2 ? (text: 'Poor', color: Colors.orange) : (text: 'Good', color: primaryGreen);
+      v < 3.2 ? (text: 'Poor', color: poorAmber) : (text: 'Good', color: primaryGreen);
 
   // ── Single combined summary container with 4 equal tiles ────────────────
   Widget _summaryTile({
@@ -115,6 +119,7 @@ class _CellsScreenState extends State<CellsScreen> {
     String? sub,
     bool isBalancing = false,
     bool balancingActive = false,
+    bool isTotalCells = false,
   }) =>
       Expanded(
         child: Padding(
@@ -134,11 +139,14 @@ class _CellsScreenState extends State<CellsScreen> {
                   child: isBalancing
                       ? const Icon(Icons.balance_rounded,
                           color: Colors.white, size: 14)
-                      : const Text('V',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold)),
+                      : isTotalCells
+                          ? const Icon(Icons.battery_std_rounded,
+                              color: Colors.white, size: 16)
+                          : const Text('V',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 5),
@@ -289,6 +297,7 @@ class _CellsScreenState extends State<CellsScreen> {
                     _summaryTile(
                     label: 'Total Cells',
                     value: '$_totalCells',
+                    isTotalCells: true,
                     ),
                      Container(width: 1, color: Colors.white24),
                     _summaryTile(
@@ -318,7 +327,7 @@ class _CellsScreenState extends State<CellsScreen> {
                           ? '${_avgVoltage!.toStringAsFixed(1)} V'
                           : '– V',
                     ),
-                  
+
                   ],
                 ),
               ),
@@ -390,8 +399,8 @@ class _CellsScreenState extends State<CellsScreen> {
                         final cell   = _sortedCells[index];
                         final status = _cellStatus(cell.voltage);
                         final bool isPoor   = cell.voltage < 3.2;
-                        final bool isMaxCell = cell.no == maxCellNo;
-                        final bool isMinCell = cell.no == minCellNo;
+                        // maxCellNo / minCellNo retained for summary card use
+                        // only — no per-row dot indicator (matches reference UI).
 
                         // Bar fill: 3.0–4.2V → 0–8 bars
                         final int filledBars =
@@ -403,26 +412,29 @@ class _CellsScreenState extends State<CellsScreen> {
                           children: [
                             Padding(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 11),
+                                  horizontal: 14, vertical: 10),
                               child: Row(
                                 children: [
                                   // Cell number
                                   SizedBox(
-                                    width: 52,
+                                    width: 54,
                                     child: Text(
                                       'Cell ${cell.no.toString().padLeft(2, '0')}',
                                       style: const TextStyle(
                                           fontWeight: FontWeight.w500,
-                                          fontSize: 13),
+                                          fontSize: 13,
+                                          color: Colors.black87),
                                     ),
                                   ),
 
                                   // Voltage value
                                   SizedBox(
-                                    width: 68,
+                                    width: 64,
                                     child: Text(
                                       '${cell.voltage.toStringAsFixed(3)} V',
-                                      style: const TextStyle(fontSize: 13),
+                                      style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Colors.black54),
                                     ),
                                   ),
 
@@ -435,11 +447,11 @@ class _CellsScreenState extends State<CellsScreen> {
                                           width: 10,
                                           height: 15,
                                           margin: const EdgeInsets.only(
-                                              right: 2),
+                                              right: 3),
                                           decoration: BoxDecoration(
                                             color: filled
                                                 ? (isPoor
-                                                    ? Colors.orange
+                                                    ? poorAmber
                                                     : primaryGreen)
                                                 : Colors.grey.shade300,
                                             borderRadius:
@@ -450,56 +462,39 @@ class _CellsScreenState extends State<CellsScreen> {
                                     ),
                                   ),
 
-                                  const SizedBox(width: 6),
-
-                                  // ── Red dot for max cell ──────────
-                                  if (isMaxCell)
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      margin: const EdgeInsets.only(right: 4),
-                                      decoration: const BoxDecoration(
-                                          color: Colors.red,
-                                          shape: BoxShape.circle),
-                                    )
-                                  else if (isMinCell)
-                                    Container(
-                                      width: 8,
-                                      height: 8,
-                                      margin: const EdgeInsets.only(right: 4),
-                                      decoration: const BoxDecoration(
-                                          color: Colors.orange,
-                                          shape: BoxShape.circle),
-                                    )
-                                  else
-                                    const SizedBox(width: 12),
+                                  const SizedBox(width: 10),
 
                                   // Status text
-                                  Text(
-                                    status.text,
-                                    style: TextStyle(
-                                        color: status.color,
-                                        fontWeight: FontWeight.w500,
-                                        fontSize: 13),
+                                  SizedBox(
+                                    width: 36,
+                                    child: Text(
+                                      status.text,
+                                      textAlign: TextAlign.left,
+                                      style: TextStyle(
+                                          color: status.color,
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 13),
+                                    ),
                                   ),
 
-                                  // Balancing badge
+                                  // Balancing badge — grey circle "B"
                                   if (cell.balancingActive) ...[
-                                    const SizedBox(width: 5),
+                                    const SizedBox(width: 4),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 5, vertical: 1),
+                                      width: 18,
+                                      height: 18,
                                       decoration: BoxDecoration(
-                                        color: primaryGreen,
-                                        borderRadius:
-                                            BorderRadius.circular(4),
+                                        color: Colors.grey.shade300,
+                                        shape: BoxShape.circle,
                                       ),
-                                      child: const Text('B',
-                                          style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 11,
-                                              fontWeight:
-                                                  FontWeight.bold)),
+                                      child: const Center(
+                                        child: Text('B',
+                                            style: TextStyle(
+                                                color: Colors.black54,
+                                                fontSize: 10,
+                                                fontWeight:
+                                                    FontWeight.bold)),
+                                      ),
                                     ),
                                   ],
                                 ],
