@@ -7,11 +7,12 @@ import 'package:http/http.dart' as http;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import 'package:bmsmobileapp/core/theme/app_colors.dart';
-// import 'package:bmsmobileapp/core/theme/app_spacing.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/token_service.dart';
+import 'package:bmsmobileapp/services/local_auth_db.dart';
 import 'package:bmsmobileapp/modules/auth/models/login_request.dart';
 import 'package:bmsmobileapp/modules/auth/models/login_response.dart';
 import 'package:bmsmobileapp/modules/registration/screens/registration_screen.dart';
@@ -45,6 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final LayerLink _layerLink = LayerLink();
 
   final TokenService _tokenService = TokenService();
+  final LocalAuthDB _localAuthDB = LocalAuthDB();
 
   @override
   void initState() {
@@ -71,11 +73,15 @@ class _LoginScreenState extends State<LoginScreen> {
     final isLoggedIn = await _tokenService.isLoggedIn();
     if (isLoggedIn && mounted) {
       Future.delayed(Duration.zero, () {
-        if (mounted) {
-          Navigator.pushReplacementNamed(context, '/connect');
-        }
+        if (mounted) Navigator.pushReplacementNamed(context, '/connect');
       });
     }
+  }
+
+  Future<bool> _isOnline() async {
+    final connectivityResult = await Connectivity().checkConnectivity();
+    return connectivityResult.contains(ConnectivityResult.mobile) ||
+           connectivityResult.contains(ConnectivityResult.wifi);
   }
 
   @override
@@ -118,28 +124,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       return InkWell(
                         onTap: () async {
                           setState(() => _selectedLanguage = lang);
-                          await TranslationService.loadTranslations(
-                            _langCodeMap[lang]!,
-                          );
+                          await TranslationService.loadTranslations(_langCodeMap[lang]!);
                           _removeOverlay();
                         },
                         child: Container(
                           width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          color: isSelected
-                              ? Colors.grey.shade100
-                              : Colors.white,
-                          child: Text(
-                            lang,
-                            style: TextStyle(
-                              fontWeight: isSelected
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
-                            ),
-                          ),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          color: isSelected ? Colors.grey.shade100 : Colors.white,
+                          child: Text(lang, style: TextStyle(fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400)),
                         ),
                       );
                     }).toList(),
@@ -171,17 +163,9 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               const Icon(Icons.language, color: Colors.white, size: 16),
               const SizedBox(width: 6),
-              Text(
-                _selectedLanguage,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              Text(_selectedLanguage, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500)),
               const SizedBox(width: 4),
-              const Icon(Icons.keyboard_arrow_down,
-                  color: Colors.white, size: 18),
+              const Icon(Icons.keyboard_arrow_down, color: Colors.white, size: 18),
             ],
           ),
         ),
@@ -189,51 +173,34 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ─── Device Info ───────────────────────────────────────────────────────────
-
   Future<Map<String, String>> _getDeviceInfo() async {
     final deviceInfo = DeviceInfoPlugin();
-
-    // Request permission on iOS before fetching FCM token
     if (Platform.isIOS) {
       await FirebaseMessaging.instance.requestPermission();
     }
 
-    // Get real FCM push notification token
-    final deviceToken =
-        await FirebaseMessaging.instance.getToken() ?? 'unknown';
+    final deviceToken = await FirebaseMessaging.instance.getToken() ?? 'unknown';
 
     if (Platform.isAndroid) {
       final android = await deviceInfo.androidInfo;
-      return {
-        'deviceId': android.id,
-        'devicePlatform': 'android',
-        'deviceToken': deviceToken, // ← real FCM token
-      };
+      return {'deviceId': android.id, 'devicePlatform': 'android', 'deviceToken': deviceToken};
     } else if (Platform.isIOS) {
       final ios = await deviceInfo.iosInfo;
-      return {
-        'deviceId': ios.identifierForVendor ?? 'unknown',
-        'devicePlatform': 'ios',
-        'deviceToken': deviceToken, // ← real FCM token
-      };
+      return {'deviceId': ios.identifierForVendor ?? 'unknown', 'devicePlatform': 'ios', 'deviceToken': deviceToken};
     }
 
-    return {
-      'deviceId': 'unknown',
-      'devicePlatform': 'unknown',
-      'deviceToken': deviceToken,
-    };
+    return {'deviceId': 'unknown', 'devicePlatform': 'unknown', 'deviceToken': deviceToken};
   }
 
-  // ─── Login Handler ─────────────────────────────────────────────────────────
-
   Future<void> _handleLogin() async {
-    if (_emailController.text.trim().isEmpty) {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty) {
       setState(() => _errorMessage = 'Please enter your email');
       return;
     }
-    if (_passwordController.text.isEmpty) {
+    if (password.isEmpty) {
       setState(() => _errorMessage = 'Please enter your password');
       return;
     }
@@ -244,305 +211,103 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final deviceInfo = await _getDeviceInfo();
-
-      final loginRequest = LoginRequest(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-        deviceId: deviceInfo['deviceId']!,
-        devicePlatform: deviceInfo['devicePlatform']!,
-        deviceToken: deviceInfo['deviceToken']!,
-      );
-
-      final response = await http.post(
-        Uri.parse('http://15.207.26.224:3030/api/auth/login'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode(loginRequest.toJson()),
-      ).timeout(
-        const Duration(seconds: 30),
-        onTimeout: () =>
-            throw Exception('Request timed out. Please try again.'),
-      );
-
-      final Map<String, dynamic> rawJson = jsonDecode(response.body);
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final loginResponse = LoginResponse.fromJson(rawJson);
-
-        final name = loginResponse.name ?? 'User';
-        final email =
-            loginResponse.email ?? _emailController.text.trim();
-        final userId = loginResponse.userId ?? '';
-        final accessToken = loginResponse.accessToken;
-        final refreshToken = loginResponse.refreshToken;
-
-        if (accessToken != null && accessToken.isNotEmpty) {
-          await _tokenService.saveToken(accessToken);
-          await _tokenService.saveUserEmail(email);
-          await _tokenService.saveUserName(name);
-          if (userId.isNotEmpty) await _tokenService.saveUserId(userId);
-          if (refreshToken != null && refreshToken.isNotEmpty) {
-            await _tokenService.saveRefreshToken(refreshToken);
-          }
-        }
-
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Welcome back, $name!'),
-            backgroundColor: const Color(0xFF5E93D4),
-            behavior: SnackBarBehavior.floating,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-
-        Navigator.pushReplacementNamed(context, '/connect');
+      final isOnline = await _isOnline();
+      if (isOnline) {
+        await _loginOnline(email, password);
       } else {
-        final serverMessage = rawJson['message']?.toString() ??
-            rawJson['error']?.toString() ??
-            'Login failed. Please try again.';
-        setState(() => _errorMessage = serverMessage);
+        await _loginOffline(email, password);
       }
     } on SocketException {
-      setState(() =>
-          _errorMessage = 'No internet connection. Please check your network.');
-    } on FormatException {
-      setState(() => _errorMessage =
-          'Unexpected server response. Please contact support.');
+      setState(() => _errorMessage = 'No internet. Trying offline...');
+      await _loginOffline(email, password);
     } catch (e) {
-      setState(
-          () => _errorMessage = e.toString().replaceFirst('Exception: ', ''));
+      setState(() => _errorMessage = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // ─── Build ─────────────────────────────────────────────────────────────────
+  Future<void> _loginOnline(String email, String password) async {
+    final deviceInfo = await _getDeviceInfo();
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // Decorative circles
-            Positioned(
-              top: -60,
-              right: -60,
-              child: Container(
-                width: 360,
-                height: 360,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.07),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 80,
-              left: -80,
-              child: Container(
-                width: 220,
-                height: 220,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.06),
-                ),
-              ),
-            ),
-
-            SingleChildScrollView(
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-
-                  // Language dropdown
-                  Padding(
-                    padding: const EdgeInsets.only(right: 20),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _buildLanguageDropdown(),
-                    ),
-                  ),
-
-                  const SizedBox(height: 28),
-
-                  // Logo
-                  Container(
-                    width: 110,
-                    height: 110,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.18),
-                          blurRadius: 20,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(22),
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: SvgPicture.asset(
-                          'assets/images/logo.svg',
-                          width: 120,
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 22),
-
-                  // App title
-                  Text(
-                    TranslationService.t('login.app_title'),
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      color: AppColors.textLight,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    TranslationService.t('login.app_subtitle'),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: AppColors.textLightSecondary,
-                    ),
-                  ),
-
-                  const SizedBox(height: 36),
-
-                  // Login form card
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 20),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 32,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(15),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.12),
-                          blurRadius: 15,
-                          offset: const Offset(0, 6),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Email field
-                        _buildInputField(
-                          controller: _emailController,
-                          hint: TranslationService.t('login.email_or_phone'),
-                          icon: Icons.email_rounded,
-                          keyboardType: TextInputType.emailAddress,
-                        ),
-
-                        const SizedBox(height: 16),
-
-                        // Password field
-                        _buildInputField(
-                          controller: _passwordController,
-                          hint: TranslationService.t('login.password'),
-                          icon: Icons.lock_rounded,
-                          obscureText: _obscurePassword,
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              color: Colors.grey,
-                            ),
-                            onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            ),
-                          ),
-                          // FIX: pass true to indicate this field triggers login on submit
-                          isLastField: true,
-                        ),
-
-                        const SizedBox(height: 8),
-
-                        // Forgot password
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: GestureDetector(
-                            onTap: _isLoading
-                                ? null
-                                : () => Navigator.push(
-                                      context,
-                                      SlideRoute(
-                                        page: const ForgotPasswordScreen(),
-                                      ),
-                                    ),
-                            child: Text(
-                              TranslationService.t('login.forgot_password'),
-                              style: TextStyle(
-                                color: AppColors.primaryBlue,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        if (_errorMessage != null) ...[
-                          const SizedBox(height: 12),
-                          _buildErrorMessage(),
-                        ],
-
-                        const SizedBox(height: 16),
-
-                        // Login button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: ElevatedButton(
-                            onPressed: _isLoading ? null : _handleLogin,
-                            child: _isLoading
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 2.5,
-                                    ),
-                                  )
-                                : Text(TranslationService.t('login.login')),
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        // Divider + Register
-                        _buildDividerAndRegister(),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 40),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
+    final loginRequest = LoginRequest(
+      email: email,
+      password: password,
+      deviceId: deviceInfo['deviceId']!,
+      devicePlatform: deviceInfo['devicePlatform']!,
+      deviceToken: deviceInfo['deviceToken']!,
     );
+
+    final response = await http.post(
+      Uri.parse('http://15.207.26.224:3030/api/auth/login'),
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+      body: jsonEncode(loginRequest.toJson()),
+    ).timeout(const Duration(seconds: 30));
+
+    final Map<String, dynamic> rawJson = jsonDecode(response.body);
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final loginResponse = LoginResponse.fromJson(rawJson);
+
+      final name = loginResponse.name ?? 'User';
+      final userEmail = loginResponse.email ?? email;
+      final userId = loginResponse.userId ?? '';
+      final accessToken = loginResponse.accessToken;
+      final refreshToken = loginResponse.refreshToken;
+
+      if (accessToken != null && accessToken.isNotEmpty) {
+        await _tokenService.saveToken(accessToken);
+        await _tokenService.saveUserEmail(userEmail);
+        await _tokenService.saveUserName(name);
+        if (userId.isNotEmpty) await _tokenService.saveUserId(userId);
+        if (refreshToken != null && refreshToken.isNotEmpty) {
+          await _tokenService.saveRefreshToken(refreshToken);
+        }
+      }
+
+      // Save for offline
+      await _localAuthDB.saveUser(
+        email: userEmail,
+        password: password,
+        name: name,
+        userId: userId,
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Welcome back, $name!'), backgroundColor: const Color(0xFF5E93D4), behavior: SnackBarBehavior.floating),
+      );
+
+      Navigator.pushReplacementNamed(context, '/connect');
+    } else {
+      final msg = rawJson['message'] ?? rawJson['error'] ?? 'Login failed';
+      setState(() => _errorMessage = msg.toString());
+    }
   }
 
-  // FIX: changed onSubmitted from VoidCallback? to ValueChanged<String>?
-  // so it matches TextField's expected signature: void Function(String)
+  Future<void> _loginOffline(String email, String password) async {
+    final user = await _localAuthDB.loginOffline(email, password);
+
+    if (user != null) {
+      await _tokenService.saveUserEmail(email);
+      await _tokenService.saveUserName(user['name'] ?? 'User');
+      if (user['user_id'] != null) {
+        await _tokenService.saveUserId(user['user_id']);
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('✅ Logged in offline'), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating),
+      );
+
+      Navigator.pushReplacementNamed(context, '/connect');
+    } else {
+      setState(() => _errorMessage = 'Invalid email or password (Offline)');
+    }
+  }
+
   Widget _buildInputField({
     required TextEditingController controller,
     required String hint,
@@ -550,20 +315,15 @@ class _LoginScreenState extends State<LoginScreen> {
     bool obscureText = false,
     Widget? suffixIcon,
     TextInputType? keyboardType,
-    bool isLastField = false,        // replaces the old VoidCallback? onSubmitted
+    bool isLastField = false,
   }) {
     return Container(
-      decoration: BoxDecoration(
-        color: AppColors.inputBackground,
-        borderRadius: BorderRadius.circular(10),
-      ),
+      decoration: BoxDecoration(color: AppColors.inputBackground, borderRadius: BorderRadius.circular(10)),
       child: TextField(
         controller: controller,
         obscureText: obscureText,
         keyboardType: keyboardType,
-        textInputAction:
-            isLastField ? TextInputAction.done : TextInputAction.next,
-        // ValueChanged<String> — receives the submitted string, ignores it
+        textInputAction: isLastField ? TextInputAction.done : TextInputAction.next,
         onSubmitted: isLastField ? (_) => _handleLogin() : null,
         decoration: InputDecoration(
           hintText: hint,
@@ -578,21 +338,12 @@ class _LoginScreenState extends State<LoginScreen> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.red.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.red.shade200),
-      ),
+      decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.red.shade200)),
       child: Row(
         children: [
           Icon(Icons.error_outline, color: AppColors.error, size: 16),
           const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _errorMessage!,
-              style: TextStyle(color: AppColors.error, fontSize: 13),
-            ),
-          ),
+          Expanded(child: Text(_errorMessage!, style: TextStyle(color: AppColors.error, fontSize: 13))),
         ],
       ),
     );
@@ -604,10 +355,7 @@ class _LoginScreenState extends State<LoginScreen> {
         Row(
           children: [
             Expanded(child: Divider(color: Colors.grey.shade300)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text('or', style: TextStyle(color: Colors.grey[500])),
-            ),
+            const Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('or', style: TextStyle(color: Colors.grey))),
             Expanded(child: Divider(color: Colors.grey.shade300)),
           ],
         ),
@@ -616,30 +364,92 @@ class _LoginScreenState extends State<LoginScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                TranslationService.t('login.no_account_prefix'),
-                style: TextStyle(color: Colors.grey[600], fontSize: 12),
-              ),
+              Text(TranslationService.t('login.no_account_prefix'), style: TextStyle(color: Colors.grey[600], fontSize: 12)),
               const SizedBox(width: 4),
               GestureDetector(
-                onTap: _isLoading
-                    ? null
-                    : () => Navigator.push(
-                          context,
-                          SlideRoute(page: const RegisterScreen()),
-                        ),
-                child: Text(
-                  TranslationService.t('login.register_here'),
-                  style: TextStyle(
-                    color: AppColors.primaryBlue,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                onTap: _isLoading ? null : () => Navigator.push(context, SlideRoute(page: const RegisterScreen())),
+                child: Text(TranslationService.t('login.register_here'), style: TextStyle(color: AppColors.primaryBlue, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned(top: -60, right: -60, child: Container(width: 360, height: 360, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.07)))),
+            Positioned(bottom: 80, left: -80, child: Container(width: 220, height: 220, decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withOpacity(0.06)))),
+
+            SingleChildScrollView(
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
+                  Padding(padding: const EdgeInsets.only(right: 20), child: Align(alignment: Alignment.centerRight, child: _buildLanguageDropdown())),
+                  const SizedBox(height: 28),
+
+                  Container(
+                    width: 110,
+                    height: 110,
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.18), blurRadius: 20, offset: const Offset(0, 6))]),
+                    child: ClipRRect(borderRadius: BorderRadius.circular(22), child: Padding(padding: const EdgeInsets.all(12), child: SvgPicture.asset('assets/images/logo.svg', width: 120))),
+                  ),
+
+                  const SizedBox(height: 22),
+                  Text(TranslationService.t('login.app_title'), style: theme.textTheme.headlineMedium?.copyWith(color: AppColors.textLight)),
+                  const SizedBox(height: 6),
+                  Text(TranslationService.t('login.app_subtitle'), style: theme.textTheme.bodyMedium?.copyWith(color: AppColors.textLightSecondary)),
+                  const SizedBox(height: 36),
+
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                    decoration: BoxDecoration(color: AppColors.cardBackground, borderRadius: BorderRadius.circular(15), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 15, offset: const Offset(0, 6))]),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildInputField(controller: _emailController, hint: TranslationService.t('login.email_or_phone'), icon: Icons.email_rounded, keyboardType: TextInputType.emailAddress),
+                        const SizedBox(height: 16),
+                        _buildInputField(
+                          controller: _passwordController,
+                          hint: TranslationService.t('login.password'),
+                          icon: Icons.lock_rounded,
+                          obscureText: _obscurePassword,
+                          suffixIcon: IconButton(icon: Icon(_obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined, color: Colors.grey), onPressed: () => setState(() => _obscurePassword = !_obscurePassword)),
+                          isLastField: true,
+                        ),
+                        const SizedBox(height: 8),
+                        Align(alignment: Alignment.centerRight, child: GestureDetector(onTap: _isLoading ? null : () => Navigator.push(context, SlideRoute(page: const ForgotPasswordScreen())), child: Text(TranslationService.t('login.forgot_password'), style: TextStyle(color: AppColors.primaryBlue, fontSize: 13, fontWeight: FontWeight.w600)))),
+                        if (_errorMessage != null) ...[const SizedBox(height: 12), _buildErrorMessage()],
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: ElevatedButton(
+                            onPressed: _isLoading ? null : _handleLogin,
+                            child: _isLoading ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5)) : Text(TranslationService.t('login.login')),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        _buildDividerAndRegister(),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
