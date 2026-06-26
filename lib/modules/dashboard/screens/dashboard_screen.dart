@@ -30,6 +30,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // Tracks the last map we cached so we don't write on every rebuild
   Map<String, dynamic>? _lastCachedDash;
   Map<String, dynamic>? _lastCachedCell;
+  String? _lastCachedDeviceName;
+  
+  // Cached data for offline display
+  Map<String, dynamic>? _cachedDashboard;
+  Map<String, dynamic>? _cachedCellVoltage;
+  String? _cachedDeviceName;
+  bool _isFromCache = false;
 
   String tr(String k) => TranslationService.t(k);
 
@@ -110,6 +117,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // ── Cache BMS data whenever the service notifies ──────────────────────────
 
+  /// Caches the device name
+  Future<void> _cacheDeviceNameIfNew() async {
+    final name = widget.service.bleName;
+    if (name == null || name.isEmpty) return;
+
+    if (name != _lastCachedDeviceName) {
+      _lastCachedDeviceName = name;
+      await _localAuthDB.saveDeviceName(name);
+      
+      setState(() {
+        _cachedDeviceName = name;
+        _isFromCache = false;
+      });
+    }
+  }
+
   /// Converts dashboard model to a plain map and caches it.
   Future<void> _cacheDashboardIfNew() async {
     final dash = widget.service.latestDashboard;
@@ -143,6 +166,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (map.toString() != _lastCachedDash.toString()) {
       _lastCachedDash = map;
       await _localAuthDB.saveDashboard(map);
+      
+      // Also update cached dashboard for display
+      setState(() {
+        _cachedDashboard = map;
+        _isFromCache = false;
+      });
     }
   }
 
@@ -166,7 +195,110 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (map.toString() != _lastCachedCell.toString()) {
       _lastCachedCell = map;
       await _localAuthDB.saveCellVoltage(map);
+      
+      // Also update cached cell voltage for display
+      setState(() {
+        _cachedCellVoltage = map;
+        _isFromCache = false;
+      });
     }
+  }
+
+  // ── Load from cache when BLE data is unavailable ─────────────────────────
+
+  Future<void> _loadFromCache() async {
+    final cachedDash = await _localAuthDB.getCachedDashboard();
+    final cachedCell = await _localAuthDB.getCachedCellVoltage();
+    final cachedName = await _localAuthDB.getCachedDeviceName();
+    
+    if (!mounted) return;
+    
+    setState(() {
+      if (cachedDash != null) {
+        _cachedDashboard = cachedDash;
+        _isFromCache = true;
+      }
+      if (cachedCell != null) {
+        _cachedCellVoltage = cachedCell;
+        _isFromCache = true;
+      }
+      if (cachedName != null && cachedName.isNotEmpty) {
+        _cachedDeviceName = cachedName;
+        _isFromCache = true;
+      }
+    });
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // Try to load cached data initially
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      // If BLE has data, use it, otherwise load from cache
+      if (widget.service.latestDashboard == null || 
+          widget.service.latestCellVoltage == null ||
+          widget.service.bleName == null) {
+        _loadFromCache();
+      }
+    });
+  }
+
+  // ── Accessors (live BLE first, cached fallback) ──────────────────────────
+
+  String get _effectiveDeviceName {
+    final liveName = widget.service.bleName;
+    if (liveName != null && liveName.isNotEmpty) {
+      return liveName;
+    }
+    return _cachedDeviceName ?? widget.service.device?.name ?? 'BMS Device';
+  }
+
+  Map<String, dynamic>? get _effectiveDashboard {
+    final live = widget.service.latestDashboard;
+    if (live != null) {
+      // Convert live model to map for consistent access
+      return {
+        'soc'               : live.soc,
+        'batteryStatusCode' : live.batteryStatusCode,
+        'batteryStatusLabel': live.batteryStatusLabel,
+        'batteryType'       : live.batteryType,
+        'batterySerial'     : live.batterySerial,
+        'capacityDisplay'   : live.capacityDisplay,
+        'healthLabel'       : live.healthLabel,
+        'healthCode'        : live.healthCode,
+        'voltageDisplay'    : live.voltageDisplay,
+        'currentDisplay'    : live.currentDisplay,
+        'temperatureDisplay': live.temperatureDisplay,
+        'powerDisplay'      : live.powerDisplay,
+        'chargeCyclesDisplay': live.chargeCyclesDisplay,
+        'totalCells'        : live.totalCells,
+        'avgCellVoltageDisplay' : live.avgCellVoltageDisplay,
+        'voltageDiffDisplay'    : live.voltageDiffDisplay,
+        'minCellVoltageDisplay' : live.minCellVoltageDisplay,
+        'maxCellVoltageDisplay' : live.maxCellVoltageDisplay,
+        'temperature'       : live.temperature,
+        'voltageDiff'       : live.voltageDiff,
+      };
+    }
+    return _cachedDashboard;
+  }
+
+  Map<String, dynamic>? get _effectiveCellVoltage {
+    final live = widget.service.latestCellVoltage;
+    if (live != null) {
+      return {
+        'cellVoltages'       : live.cellVoltages,
+        'cellTotalCells'     : live.cellTotalCells,
+        'cellMaxVoltage'     : live.cellMaxVoltage,
+        'cellMaxVoltageNo'   : live.cellMaxVoltageNo,
+        'cellMinVoltage'     : live.cellMinVoltage,
+        'cellMinVoltageNo'   : live.cellMinVoltageNo,
+        'cellAvgVoltage'     : live.cellAvgVoltage,
+        'cellBalancing'      : live.cellBalancing,
+        'cellBalancingActive': live.cellBalancingActive,
+      };
+    }
+    return _cachedCellVoltage;
   }
 
   @override
@@ -177,40 +309,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
       listenable: svc,
       builder: (context, _) {
         // ── Cache in background whenever data arrives ──────────────────
+        _cacheDeviceNameIfNew();
         _cacheDashboardIfNew();
         _cacheCellVoltageIfNew();
 
-        final dash = svc.latestDashboard;
-        final cell = svc.latestCellVoltage;
+        // Get effective data (live or cached)
+        final deviceName = _effectiveDeviceName;
+        final dashMap = _effectiveDashboard;
+        final cellMap = _effectiveCellVoltage;
 
         // ── Device Info ────────────────────────────────────────────────
-        final String deviceName  = svc.bleName ?? svc.device?.name ?? 'BMS Device';
-        final String batteryType = svc.batteryType ?? dash?.batteryType ?? '-';
-        final String serialNo    = svc.batterySerial ?? dash?.batterySerial ?? '-';
+        final String batteryType = svc.batteryType ?? dashMap?['batteryType'] ?? '-';
+        final String serialNo    = svc.batterySerial ?? dashMap?['batterySerial'] ?? '-';
 
         // ── Dashboard Data ─────────────────────────────────────────────
-        final int    soc              = dash?.soc ?? 0;
-        final String batteryStatus    = dash?.batteryStatusLabel ?? 'N/A';
-        final bool   isCharging       = dash?.batteryStatusCode == 0x01;
-        final String capacityDisplay  = dash?.capacityDisplay ?? '0.0 Ah';
-        final String health           = dash?.healthLabel ?? 'N/A';
-        final bool   healthGood       = dash?.healthCode == 0x01;
+        final int    soc              = dashMap?['soc'] ?? 0;
+        final String batteryStatus    = dashMap?['batteryStatusLabel'] ?? 'N/A';
+        final bool   isCharging       = dashMap?['batteryStatusCode'] == 0x01;
+        final String capacityDisplay  = dashMap?['capacityDisplay'] ?? '0.0 Ah';
+        final String health           = dashMap?['healthLabel'] ?? 'N/A';
+        final bool   healthGood       = dashMap?['healthCode'] == 0x01;
 
-        final String voltageDisplay = dash?.voltageDisplay    ?? '0.0 V';
-        final String currentDisplay = dash?.currentDisplay    ?? '0.0 A';
-        final String tempDisplay    = dash?.temperatureDisplay ?? '0 °C';
-        final String powerDisplay   = dash?.powerDisplay      ?? '0 Kw';
-        final String cyclesDisplay  = dash?.chargeCyclesDisplay ?? '0';
+        final String voltageDisplay = dashMap?['voltageDisplay']    ?? '0.0 V';
+        final String currentDisplay = dashMap?['currentDisplay']    ?? '0.0 A';
+        final String tempDisplay    = dashMap?['temperatureDisplay'] ?? '0 °C';
+        final String powerDisplay   = dashMap?['powerDisplay']      ?? '0 Kw';
+        final String cyclesDisplay  = dashMap?['chargeCyclesDisplay'] ?? '0';
 
-        final int    cellCount   = dash?.totalCells ?? cell?.cellTotalCells ?? 0;
-        final String avgVoltage  = dash?.avgCellVoltageDisplay   ?? '0.00 v';
-        final String voltDiff    = dash?.voltageDiffDisplay      ?? '0.00 v';
-        final String minVoltage  = dash?.minCellVoltageDisplay   ?? '0.000 V';
-        final String maxVoltage  = dash?.maxCellVoltageDisplay   ?? '0.000 V';
+        final int    cellCount   = dashMap?['totalCells'] ?? cellMap?['cellTotalCells'] ?? 0;
+        final String avgVoltage  = dashMap?['avgCellVoltageDisplay']   ?? '0.00 v';
+        final String voltDiff    = dashMap?['voltageDiffDisplay']      ?? '0.00 v';
+        final String minVoltage  = dashMap?['minCellVoltageDisplay']   ?? '0.000 V';
+        final String maxVoltage  = dashMap?['maxCellVoltageDisplay']   ?? '0.000 V';
 
-        final List<double> cellVoltages = cell?.cellVoltages ?? [];
-        final int? maxVoltageNo         = cell?.cellMaxVoltageNo;
-        final int? minVoltageNo         = cell?.cellMinVoltageNo;
+        final List<double> cellVoltages = (cellMap?['cellVoltages'] as List?)?.cast<double>() ?? [];
+        final int? maxVoltageNo         = cellMap?['cellMaxVoltageNo'] as int?;
+        final int? minVoltageNo         = cellMap?['cellMinVoltageNo'] as int?;
 
         // ── Build alerts from live BMS data ────────────────────────────
         List<_AlertItem> buildAlerts(
@@ -235,13 +369,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           return items;
         }
 
-        final alerts = dash == null
+        final alerts = dashMap == null
             ? <_AlertItem>[]
             : buildAlerts(
-                dash.temperature,
-                dash.batteryStatusCode,
+                dashMap['temperature'] as double?,
+                dashMap['batteryStatusCode'] as int?,
                 soc,
-                dash.voltageDiff,
+                dashMap['voltageDiff'] as double?,
               );
 
         // ── Cache alerts whenever they change ──────────────────────────
@@ -252,6 +386,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 .toList(),
           );
         }
+
+        final bool hasData = dashMap != null || cellMap != null;
 
         return Scaffold(
           backgroundColor: Colors.white,
@@ -273,8 +409,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         color     : Colors.white,
                         fontSize  : 18,
                         fontWeight: FontWeight.w500)),
-                if (svc.bleName != null)
-                  Text(svc.bleName!,
+                if (deviceName.isNotEmpty)
+                  Text(deviceName,
                       style: const TextStyle(color: Colors.white60, fontSize: 11)),
               ],
             ),
@@ -321,19 +457,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             children: [
+              // ── Offline cache banner ───────────────────────────────────
+              if (_isFromCache && !hasData)
+                Container(
+                  width  : double.infinity,
+                  margin : const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color       : Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border      : Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.wifi_off,
+                          size: 14, color: Colors.orange.shade800),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Offline — showing last cached data',
+                          style: TextStyle(
+                              fontSize: 12, color: Colors.orange.shade900),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               _DeviceHeader(
                 batteryType : batteryType,
                 serialNo    : serialNo,
                 onDisconnect: _showDisconnectDialog,
               ),
 
-              if (svc.isBleNameLoading)
+              if (svc.isBleNameLoading && !_isFromCache)
                 const Padding(
                   padding: EdgeInsets.only(top: 4),
                   child: Text('Fetching device name…',
                       style: TextStyle(fontSize: 12, color: Colors.black54)),
                 )
-              else if (svc.bleNameError != null)
+              else if (svc.bleNameError != null && !_isFromCache)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Row(
@@ -346,6 +510,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             style: TextStyle(
                                 fontSize: 12, color: Colors.red.shade700)),
                       ),
+                    ],
+                  ),
+                )
+              else if (_isFromCache && _cachedDeviceName != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      Icon(Icons.history,
+                          size: 14, color: Colors.orange.shade700),
+                      const SizedBox(width: 4),
+                      // Expanded(
+                      //   child: Text('Device name from cache: $_cachedDeviceName',
+                      //       style: TextStyle(
+                      //           fontSize: 12, color: Colors.orange.shade700)),
+                      // ),
                     ],
                   ),
                 ),
@@ -401,18 +581,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               _gap16,
 
-              if (svc.isDashboardLoading)
+              if (svc.isDashboardLoading && !_isFromCache)
                 const _LoadingSection(text: 'Loading dashboard data…')
-              else if (svc.dashboardError != null)
+              else if (svc.dashboardError != null && !_isFromCache)
                 _ErrorSection(message: svc.dashboardError!)
-              else if (svc.bleNameError != null)
-                const _ErrorSection(
-                    message:
-                        'Dashboard data unavailable — BLE Name step failed.')
-              else
+              else if (!hasData && !_isFromCache)
+                Column(
+                  children: [
+                    const _ErrorSection(
+                        message: 'No data available. Try loading from cache.'),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      icon: const Icon(Icons.history),
+                      label: const Text('Load cached data'),
+                      onPressed: _loadFromCache,
+                    ),
+                  ],
+                )
+              else if (hasData)
                 _BatteryCard(
                   soc        : soc,
-                  statusCode : dash?.batteryStatusCode ?? 0x02,
+                  statusCode : dashMap?['batteryStatusCode'] ?? 0x02,
                   capacity   : capacityDisplay,
                   status     : batteryStatus,
                   isCharging : isCharging,
@@ -459,14 +648,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               const SizedBox(height: 20),
 
-              if (svc.isCellVoltageLoading)
+              if (svc.isCellVoltageLoading && !_isFromCache)
                 const _LoadingSection(text: 'Loading cell voltage data…')
-              else if (svc.cellVoltageError != null)
+              else if (svc.cellVoltageError != null && !_isFromCache)
                 _ErrorSection(message: svc.cellVoltageError!)
-              else if (svc.dashboardError != null || svc.bleNameError != null)
-                const _ErrorSection(
-                    message: 'Cell voltage data unavailable.')
-              else
+              else if (!hasData && !_isFromCache)
+                const SizedBox.shrink()
+              else if (hasData)
                 _CellSummary(
                   cellCount   : cellCount,
                   avgVoltage  : avgVoltage,
