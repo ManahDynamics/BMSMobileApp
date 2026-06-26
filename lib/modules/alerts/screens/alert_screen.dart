@@ -7,6 +7,7 @@ import 'package:bmsmobileapp/utils/slide_route.dart';
 import '../../../modules/scanner/screens/BMS_scanner_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
+import 'package:bmsmobileapp/services/local_auth_db.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data model
@@ -126,6 +127,32 @@ IconData _statusIcon(String raw) {
   return Icons.check_circle_outline_rounded;
 }
 
+/// Converts a cached alert map (saved by DashboardScreen via
+/// `LocalAuthDB.saveAlerts`) into an [AlertItem] so it can be rendered using
+/// the same card/list widgets as the static demo alerts below.
+AlertItem _cachedMapToAlertItem(Map<String, dynamic> m) {
+  final title = (m['title'] ?? 'Alert').toString();
+  final time = (m['time'] ?? '').toString();
+
+  // Slightly higher severity for thermal / battery-critical events.
+  final lower = title.toLowerCase();
+  final isHigh = lower.contains('over temperature') ||
+      lower.contains('under temperature') ||
+      lower.contains('low battery');
+
+  return AlertItem(
+    titleKey: title, // raw text — TranslationService falls back to the key
+    descriptionKey: 'live_alert_from_device',
+    time: time,
+    severityKey: isHigh ? 'severity_high' : 'severity_medium',
+    severityRaw: isHigh ? 'High' : 'Medium',
+    statusKey: 'status_active',
+    statusRaw: 'Active',
+    dateGroupKey: 'date_today',
+    dateGroupLabel: 'Today',
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared alert card
 // ─────────────────────────────────────────────────────────────────────────────
@@ -217,7 +244,7 @@ Widget buildAlertCard(AlertItem alert, {bool showStatus = false, required String
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ALERTS SCREEN (Now Stateful)
+// ALERTS SCREEN (Now Stateful + offline-cache aware)
 // ─────────────────────────────────────────────────────────────────────────────
 class AlertsScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -229,27 +256,73 @@ class AlertsScreen extends StatefulWidget {
 }
 
 class _AlertsScreenState extends State<AlertsScreen> {
+  final LocalAuthDB _localAuthDB = LocalAuthDB();
+
   String tr(String key) => TranslationService.t(key);
 
-  // Listen to translation changes
+  // ── Cached / live alert state ────────────────────────────────────────────
+  List<AlertItem> _liveAlerts = [];
+  DateTime? _lastSync;
+  bool _isOffline = false;
+  bool _isLoadingCache = true;
+
+  // Listen to translation + BLE service changes
   @override
   void initState() {
     super.initState();
     TranslationService.instance.addListener(_onTranslationsChanged);
+    widget.service.addListener(_onServiceChanged);
+    _loadCachedAlerts();
   }
 
   void _onTranslationsChanged() {
     if (mounted) setState(() {});
   }
 
+  void _onServiceChanged() {
+    if (!mounted) return;
+    // Whenever fresh BLE data arrives, refresh from the latest cache too,
+    // since DashboardScreen writes new alerts into LocalAuthDB as data changes.
+    _loadCachedAlerts();
+  }
+
   @override
   void dispose() {
     TranslationService.instance.removeListener(_onTranslationsChanged);
+    widget.service.removeListener(_onServiceChanged);
     super.dispose();
   }
 
-  List<AlertItem> get _active =>
-      _allAlerts.where((a) => a.statusRaw == 'Active').toList();
+  /// Pulls cached alerts (written by DashboardScreen) + last sync time from
+  /// LocalAuthDB, and figures out whether we're currently showing stale
+  /// (offline) data based on whether the BLE service has live dashboard data.
+  Future<void> _loadCachedAlerts() async {
+    final cached = await _localAuthDB.getCachedAlerts();
+    final syncTime = await _localAuthDB.getLastSyncTime();
+    if (!mounted) return;
+
+    setState(() {
+      _liveAlerts = (cached ?? []).map(_cachedMapToAlertItem).toList();
+      _lastSync = syncTime;
+      _isOffline = widget.service.latestDashboard == null;
+      _isLoadingCache = false;
+    });
+  }
+
+  String _formatSyncTime(DateTime? dt) {
+    if (dt == null) return 'unknown time';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  // Real (live/cached) alerts take priority; static demo data fills in the rest.
+  List<AlertItem> get _active => [
+        ..._liveAlerts,
+        ..._allAlerts.where((a) => a.statusRaw == 'Active'),
+      ];
   List<AlertItem> get _warnings =>
       _allAlerts.where((a) => a.statusRaw == 'Warning').toList();
   List<AlertItem> get _cleared =>
@@ -327,18 +400,23 @@ class _AlertsScreenState extends State<AlertsScreen> {
             const SizedBox(height: 3),
             Row(children: [
               Text(
-                tr('connected'),
-                style: const TextStyle(
+                _isOffline ? tr('disconnected') : tr('connected'),
+                style: TextStyle(
                     fontSize: 13,
-                    color: Color(0xFF1B6B3A),
+                    color: _isOffline
+                        ? const Color(0xFFD4621A)
+                        : const Color(0xFF1B6B3A),
                     fontWeight: FontWeight.w500),
               ),
               const SizedBox(width: 6),
               Container(
                   width: 8,
                   height: 8,
-                  decoration: const BoxDecoration(
-                      color: Color(0xFF1B6B3A), shape: BoxShape.circle)),
+                  decoration: BoxDecoration(
+                      color: _isOffline
+                          ? const Color(0xFFD4621A)
+                          : const Color(0xFF1B6B3A),
+                      shape: BoxShape.circle)),
             ]),
           ],
         ),
@@ -358,6 +436,33 @@ class _AlertsScreenState extends State<AlertsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  // ── Offline / cache banner ───────────────────────────────────────────────
+  Widget _buildOfflineBanner() {
+    if (_isLoadingCache || !_isOffline) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.wifi_off, size: 14, color: Colors.orange.shade800),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Offline — showing alerts from ${_formatSyncTime(_lastSync)}',
+              style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -384,74 +489,84 @@ class _AlertsScreenState extends State<AlertsScreen> {
           ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDeviceHeader(context),
-            const SizedBox(height: 16),
-            _buildSummaryBar(),
-            const SizedBox(height: 20),
-            _buildSectionHeader(
-              '${tr('active_alerts')} (${_active.length})',
-              showViewAll: true,
-              context: context,
-            ),
-            const SizedBox(height: 10),
-            ..._active.map((a) => buildAlertCard(a, tr: tr)),
-            const SizedBox(height: 10),
-            _buildSectionHeader('${tr('warnings')} (${_warnings.length})'),
-            const SizedBox(height: 10),
-            ..._warnings.map((a) => buildAlertCard(a, tr: tr)),
-            const SizedBox(height: 10),
-            _buildSectionHeader('${tr('cleared_alerts')} (${_cleared.length})'),
-            const SizedBox(height: 10),
-            ..._cleared.map((a) => buildAlertCard(a, tr: tr)),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 45,
-              child: OutlinedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  SlideRoute(page: AlertHistoryScreen(service: widget.service)),
-                ),
-                icon: const Icon(Icons.calendar_month_outlined, size: 20),
-                label: Text(
-                  tr('alert_history'),
-                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.black87,
-                  side: const BorderSide(color: Color(0xFFCCCCCC)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
+      body: RefreshIndicator(
+        onRefresh: _loadCachedAlerts,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildDeviceHeader(context),
+              const SizedBox(height: 16),
+              _buildOfflineBanner(),
+              _buildSummaryBar(),
+              const SizedBox(height: 20),
+              _buildSectionHeader(
+                '${tr('active_alerts')} (${_active.length})',
+                showViewAll: true,
+                context: context,
               ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF5F5F5),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE0E0E0)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline_rounded, color: Colors.grey[500], size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      tr('alerts_support_note'),
-                      style: const TextStyle(fontSize: 12, color: Colors.black54),
-                    ),
+              const SizedBox(height: 10),
+              if (_isLoadingCache)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else
+                ..._active.map((a) => buildAlertCard(a, tr: tr)),
+              const SizedBox(height: 10),
+              _buildSectionHeader('${tr('warnings')} (${_warnings.length})'),
+              const SizedBox(height: 10),
+              ..._warnings.map((a) => buildAlertCard(a, tr: tr)),
+              const SizedBox(height: 10),
+              _buildSectionHeader('${tr('cleared_alerts')} (${_cleared.length})'),
+              const SizedBox(height: 10),
+              ..._cleared.map((a) => buildAlertCard(a, tr: tr)),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 45,
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.push(
+                    context,
+                    SlideRoute(page: AlertHistoryScreen(service: widget.service)),
                   ),
-                ],
+                  icon: const Icon(Icons.calendar_month_outlined, size: 20),
+                  label: Text(
+                    tr('alert_history'),
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.black87,
+                    side: const BorderSide(color: Color(0xFFCCCCCC)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-          ],
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF5F5F5),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFE0E0E0)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline_rounded, color: Colors.grey[500], size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        tr('alerts_support_note'),
+                        style: const TextStyle(fontSize: 12, color: Colors.black54),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
         ),
       ),
     );
@@ -459,6 +574,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   // ... (_buildSummaryBar, _summaryItem, _divider, _buildSectionHeader remain same)
   Widget _buildSummaryBar() {
+    final totalCount = _allAlerts.length + _liveAlerts.length;
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -468,7 +584,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
       child: IntrinsicHeight(
         child: Row(
           children: [
-            _summaryItem(Icons.notifications_outlined, tr('alerts_label'), _allAlerts.length.toString()),
+            _summaryItem(Icons.notifications_outlined, tr('alerts_label'), totalCount.toString()),
             _divider(),
             _summaryItem(Icons.warning_amber_rounded, tr('status_active'), _active.length.toString()),
             _divider(),
@@ -538,7 +654,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ALERT HISTORY SCREEN (Also Updated)
+// ALERT HISTORY SCREEN (Also Updated — now includes cached/live alerts)
 // ─────────────────────────────────────────────────────────────────────────────
 class AlertHistoryScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -550,16 +666,29 @@ class AlertHistoryScreen extends StatefulWidget {
 }
 
 class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
+  final LocalAuthDB _localAuthDB = LocalAuthDB();
+
   String tr(String key) => TranslationService.t(key);
+
+  List<AlertItem> _liveAlerts = [];
 
   @override
   void initState() {
     super.initState();
     TranslationService.instance.addListener(_onTranslationsChanged);
+    _loadCachedAlerts();
   }
 
   void _onTranslationsChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _loadCachedAlerts() async {
+    final cached = await _localAuthDB.getCachedAlerts();
+    if (!mounted) return;
+    setState(() {
+      _liveAlerts = (cached ?? []).map(_cachedMapToAlertItem).toList();
+    });
   }
 
   @override
@@ -591,8 +720,10 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
         'Low': tr('severity_low'),
       };
 
+  List<AlertItem> get _combinedAlerts => [..._liveAlerts, ..._allAlerts];
+
   List<AlertItem> get _filtered {
-    var list = List<AlertItem>.from(_allAlerts);
+    var list = List<AlertItem>.from(_combinedAlerts);
     if (_selectedTabRaw != _tabAll) {
       final map = {
         _tabActive: 'Active',

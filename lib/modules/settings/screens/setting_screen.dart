@@ -1,3 +1,4 @@
+// lib/screens/settings_screen.dart
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:bmsmobileapp/utils/slide_route.dart';
 import '../../../modules/scanner/screens/BMS_scanner_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
+import 'package:bmsmobileapp/services/local_auth_db.dart';
 
 class SettingsScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -17,6 +19,8 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  final LocalAuthDB _localAuthDB = LocalAuthDB();
+
   bool isConnected = true;
   bool isLocked = true;
 
@@ -28,6 +32,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int dischargeCurrentLimit = 100;
   int shortCircuitDelay = 100;
   double cellBalancingVoltage = 0.03;
+
+  // ── Offline-cache state ───────────────────────────────────────────────────
+  bool _isOffline = false;
+  bool _isLoadingCache = true;
+  DateTime? _lastSync;
 
   String _selectedLanguage = 'English';
   final Map<String, String> _langCodeMap = {
@@ -42,25 +51,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return TranslationService.t(key);
   }
 
-  // ── Listen to TranslationService changes ─────────────────────────────────
+  // ── Listen to TranslationService + BLE service changes ───────────────────
   @override
   void initState() {
     super.initState();
     TranslationService.instance.addListener(_onTranslationsChanged);
+    widget.service.addListener(_onServiceChanged);
     _selectedLanguage = _languageDisplayName(TranslationService.language);
+    _loadCachedSettings();
   }
 
   void _onTranslationsChanged() {
     if (mounted) setState(() {});
   }
 
+  void _onServiceChanged() {
+    if (!mounted) return;
+    setState(() {
+      _isOffline = widget.service.latestDashboard == null;
+      isConnected = !_isOffline;
+    });
+  }
+
   @override
   void dispose() {
     TranslationService.instance.removeListener(_onTranslationsChanged);
+    widget.service.removeListener(_onServiceChanged);
     _removeOverlay();
     super.dispose();
   }
   // ── END ───────────────────────────────────────────────────────────────────
+
+  // ── Offline cache: load / persist ─────────────────────────────────────────
+
+  /// Loads previously cached protection-parameter settings from LocalAuthDB
+  /// (if any) so the screen still shows the user's last-known configuration
+  /// when the device is offline / not yet connected over BLE.
+  Future<void> _loadCachedSettings() async {
+    final cached = await _localAuthDB.getCachedSettings();
+    final syncTime = await _localAuthDB.getLastSyncTime();
+    if (!mounted) return;
+
+    if (cached != null) {
+      setState(() {
+        chargeCutoffVoltage =
+            (cached['chargeCutoffVoltage'] as num?)?.toDouble() ?? chargeCutoffVoltage;
+        dischargeCutoffVoltage =
+            (cached['dischargeCutoffVoltage'] as num?)?.toDouble() ?? dischargeCutoffVoltage;
+        tempMin = (cached['tempMin'] as num?)?.toInt() ?? tempMin;
+        tempMax = (cached['tempMax'] as num?)?.toInt() ?? tempMax;
+        chargeCurrentLimit =
+            (cached['chargeCurrentLimit'] as num?)?.toInt() ?? chargeCurrentLimit;
+        dischargeCurrentLimit =
+            (cached['dischargeCurrentLimit'] as num?)?.toInt() ?? dischargeCurrentLimit;
+        shortCircuitDelay =
+            (cached['shortCircuitDelay'] as num?)?.toInt() ?? shortCircuitDelay;
+        cellBalancingVoltage =
+            (cached['cellBalancingVoltage'] as num?)?.toDouble() ?? cellBalancingVoltage;
+      });
+    }
+
+    setState(() {
+      _lastSync = syncTime;
+      _isOffline = widget.service.latestDashboard == null;
+      isConnected = !_isOffline;
+      _isLoadingCache = false;
+    });
+  }
+
+  /// Persists the current protection-parameter settings to LocalAuthDB so
+  /// they survive app restarts and remain available offline.
+  Future<void> _persistSettings() async {
+    await _localAuthDB.saveSettings({
+      'chargeCutoffVoltage': chargeCutoffVoltage,
+      'dischargeCutoffVoltage': dischargeCutoffVoltage,
+      'tempMin': tempMin,
+      'tempMax': tempMax,
+      'chargeCurrentLimit': chargeCurrentLimit,
+      'dischargeCurrentLimit': dischargeCurrentLimit,
+      'shortCircuitDelay': shortCircuitDelay,
+      'cellBalancingVoltage': cellBalancingVoltage,
+    });
+  }
+
+  String _formatSyncTime(DateTime? dt) {
+    if (dt == null) return 'unknown time';
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
+    if (diff.inDays < 1) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
 
   void _removeOverlay() {
     _overlayEntry?.remove();
@@ -301,6 +382,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final val = double.tryParse(controller.text);
               if (val != null) {
                 onSave(val);
+                _persistSettings();
                 Navigator.pop(context);
               }
             },
@@ -344,6 +426,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final val = int.tryParse(controller.text);
               if (val != null) {
                 onSave(val);
+                _persistSettings();
                 Navigator.pop(context);
               }
             },
@@ -378,258 +461,294 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
       drawer: AppDrawer(activeRoute: '/settings', service: widget.service),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDeviceCard(),
-            const SizedBox(height: 20),
+      body: _isLoadingCache
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadCachedSettings,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildDeviceCard(),
+                    const SizedBox(height: 12),
+                    _buildOfflineBanner(),
 
-            // Language Selector
-            Row(
-              children: [
-                Text(
-                  tr('change_language'),
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(width: 12),
-                CompositedTransformTarget(
-                  link: _layerLink,
-                  child: GestureDetector(
-                    onTap: _showLanguageOverlay,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    // Language Selector
+                    Row(
+                      children: [
+                        Text(
+                          tr('change_language'),
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                        ),
+                        const SizedBox(width: 12),
+                        CompositedTransformTarget(
+                          link: _layerLink,
+                          child: GestureDetector(
+                            onTap: _showLanguageOverlay,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.grey.shade400),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.language, size: 20, color: Colors.black87),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    _selectedLanguage,
+                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                                  ),
+                                  const Icon(Icons.arrow_drop_down_rounded, size: 24),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+                    if (isLocked) _buildLockBanner(),
+                    if (isLocked) const SizedBox(height: 16),
+
+                    Text(
+                      tr('protection_parameters'),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+
+                    _buildParameterCard(
+                      icon: Icons.battery_charging_full_rounded,
+                      title: tr('charge_cutoff_voltage'),
+                      subtitle: tr('charge_cutoff_voltage_desc'),
+                      value: '${chargeCutoffVoltage.toStringAsFixed(2)} V',
+                      onTap: isLocked
+                          ? null
+                          : () => _editDoubleParam(
+                              tr('charge_cutoff_voltage'),
+                              chargeCutoffVoltage,
+                              'V',
+                              (v) => setState(() => chargeCutoffVoltage = v),
+                            ),
+                    ),
+                    _buildParameterCard(
+                      icon: Icons.battery_alert_rounded,
+                      title: tr('discharge_cutoff_voltage'),
+                      subtitle: tr('discharge_cutoff_voltage_desc'),
+                      value: '${dischargeCutoffVoltage.toStringAsFixed(2)} V',
+                      onTap: isLocked
+                          ? null
+                          : () => _editDoubleParam(
+                              tr('discharge_cutoff_voltage'),
+                              dischargeCutoffVoltage,
+                              'V',
+                              (v) => setState(() => dischargeCutoffVoltage = v),
+                            ),
+                    ),
+                    _buildParameterCard(
+                      icon: Icons.thermostat_rounded,
+                      title: tr('temperature_limit'),
+                      subtitle: tr('temperature_limit_desc'),
+                      value: '$tempMin   $tempMax °C',
+                      onTap: isLocked ? null : () {},
+                    ),
+                    _buildParameterCard(
+                      icon: Icons.electric_bolt_rounded,
+                      title: tr('charge_current_limit'),
+                      subtitle: tr('charge_current_limit_desc'),
+                      value: '$chargeCurrentLimit A',
+                      onTap: isLocked
+                          ? null
+                          : () => _editIntParam(
+                              tr('charge_current_limit'),
+                              chargeCurrentLimit,
+                              'A',
+                              (v) => setState(() => chargeCurrentLimit = v),
+                            ),
+                    ),
+                    _buildParameterCard(
+                      icon: Icons.electric_bolt_outlined,
+                      title: tr('discharge_current_limit'),
+                      subtitle: tr('discharge_current_limit_desc'),
+                      value: '$dischargeCurrentLimit A',
+                      onTap: isLocked
+                          ? null
+                          : () => _editIntParam(
+                              tr('discharge_current_limit'),
+                              dischargeCurrentLimit,
+                              'A',
+                              (v) => setState(() => dischargeCurrentLimit = v),
+                            ),
+                    ),
+                    _buildParameterCard(
+                      icon: Icons.timer_rounded,
+                      title: tr('short_circuit_delay'),
+                      subtitle: tr('short_circuit_delay_desc'),
+                      value: '$shortCircuitDelay ms',
+                      onTap: isLocked
+                          ? null
+                          : () => _editIntParam(
+                              tr('short_circuit_delay'),
+                              shortCircuitDelay,
+                              'ms',
+                              (v) => setState(() => shortCircuitDelay = v),
+                            ),
+                    ),
+                    _buildParameterCard(
+                      icon: Icons.balance_rounded,
+                      title: tr('cell_balancing_voltage'),
+                      subtitle: tr('cell_balancing_voltage_desc'),
+                      value: '${cellBalancingVoltage.toStringAsFixed(2)} V',
+                      onTap: isLocked
+                          ? null
+                          : () => _editDoubleParam(
+                              tr('cell_balancing_voltage'),
+                              cellBalancingVoltage,
+                              'V',
+                              (v) => setState(() => cellBalancingVoltage = v),
+                            ),
+                    ),
+
+                    const SizedBox(height: 20),
+                    Text(
+                      tr('reset_options'),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildResetButton(
+                            icon: Icons.refresh_rounded,
+                            label: tr('reset_warnings'),
+                            sublabel: tr('reset_warnings_desc'),
+                            onTap: () => _showResetConfirmation(
+                              tr('reset_warnings'),
+                              tr('reset_warnings_confirm'),
+                              () => ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(tr('warnings_cleared'))),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: _buildResetButton(
+                            icon: Icons.check_circle_outline_rounded,
+                            label: tr('reset_counters'),
+                            sublabel: tr('reset_counters_desc'),
+                            onTap: () => _showResetConfirmation(
+                              tr('reset_counters'),
+                              tr('reset_counters_confirm'),
+                              () => ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(tr('counters_reset'))),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: 190,
+                      child: _buildResetButton(
+                        icon: Icons.settings_backup_restore_rounded,
+                        label: tr('factory_reset'),
+                        sublabel: tr('factory_reset_desc'),
+                        onTap: () => _showResetConfirmation(
+                          tr('factory_reset'),
+                          tr('factory_reset_confirm'),
+                          () {
+                            setState(() {
+                              chargeCutoffVoltage = 3.65;
+                              dischargeCutoffVoltage = 2.80;
+                              tempMin = -10;
+                              tempMax = 60;
+                              chargeCurrentLimit = 50;
+                              dischargeCurrentLimit = 100;
+                              shortCircuitDelay = 100;
+                              cellBalancingVoltage = 0.03;
+                            });
+                            _persistSettings();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(tr('factory_reset_complete'))),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade400),
-                        borderRadius: BorderRadius.circular(20),
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.grey.shade300),
                       ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.language, size: 20, color: Colors.black87),
+                          Icon(Icons.info_outline_rounded, color: Colors.grey.shade600, size: 18),
                           const SizedBox(width: 8),
-                          Text(
-                            _selectedLanguage,
-                            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                          Expanded(
+                            child: Text(
+                              tr('settings_warning'),
+                              style: const TextStyle(fontSize: 12, color: Colors.black54),
+                            ),
                           ),
-                          const Icon(Icons.arrow_drop_down_rounded, size: 24),
                         ],
                       ),
                     ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-            if (isLocked) _buildLockBanner(),
-            if (isLocked) const SizedBox(height: 16),
-
-            Text(
-              tr('protection_parameters'),
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            _buildParameterCard(
-              icon: Icons.battery_charging_full_rounded,
-              title: tr('charge_cutoff_voltage'),
-              subtitle: tr('charge_cutoff_voltage_desc'),
-              value: '${chargeCutoffVoltage.toStringAsFixed(2)} V',
-              onTap: isLocked
-                  ? null
-                  : () => _editDoubleParam(
-                      tr('charge_cutoff_voltage'),
-                      chargeCutoffVoltage,
-                      'V',
-                      (v) => setState(() => chargeCutoffVoltage = v),
-                    ),
-            ),
-            _buildParameterCard(
-              icon: Icons.battery_alert_rounded,
-              title: tr('discharge_cutoff_voltage'),
-              subtitle: tr('discharge_cutoff_voltage_desc'),
-              value: '${dischargeCutoffVoltage.toStringAsFixed(2)} V',
-              onTap: isLocked
-                  ? null
-                  : () => _editDoubleParam(
-                      tr('discharge_cutoff_voltage'),
-                      dischargeCutoffVoltage,
-                      'V',
-                      (v) => setState(() => dischargeCutoffVoltage = v),
-                    ),
-            ),
-            _buildParameterCard(
-              icon: Icons.thermostat_rounded,
-              title: tr('temperature_limit'),
-              subtitle: tr('temperature_limit_desc'),
-              value: '$tempMin   $tempMax °C',
-              onTap: isLocked ? null : () {},
-            ),
-            _buildParameterCard(
-              icon: Icons.electric_bolt_rounded,
-              title: tr('charge_current_limit'),
-              subtitle: tr('charge_current_limit_desc'),
-              value: '$chargeCurrentLimit A',
-              onTap: isLocked
-                  ? null
-                  : () => _editIntParam(
-                      tr('charge_current_limit'),
-                      chargeCurrentLimit,
-                      'A',
-                      (v) => setState(() => chargeCurrentLimit = v),
-                    ),
-            ),
-            _buildParameterCard(
-              icon: Icons.electric_bolt_outlined,
-              title: tr('discharge_current_limit'),
-              subtitle: tr('discharge_current_limit_desc'),
-              value: '$dischargeCurrentLimit A',
-              onTap: isLocked
-                  ? null
-                  : () => _editIntParam(
-                      tr('discharge_current_limit'),
-                      dischargeCurrentLimit,
-                      'A',
-                      (v) => setState(() => dischargeCurrentLimit = v),
-                    ),
-            ),
-            _buildParameterCard(
-              icon: Icons.timer_rounded,
-              title: tr('short_circuit_delay'),
-              subtitle: tr('short_circuit_delay_desc'),
-              value: '$shortCircuitDelay ms',
-              onTap: isLocked
-                  ? null
-                  : () => _editIntParam(
-                      tr('short_circuit_delay'),
-                      shortCircuitDelay,
-                      'ms',
-                      (v) => setState(() => shortCircuitDelay = v),
-                    ),
-            ),
-            _buildParameterCard(
-              icon: Icons.balance_rounded,
-              title: tr('cell_balancing_voltage'),
-              subtitle: tr('cell_balancing_voltage_desc'),
-              value: '${cellBalancingVoltage.toStringAsFixed(2)} V',
-              onTap: isLocked
-                  ? null
-                  : () => _editDoubleParam(
-                      tr('cell_balancing_voltage'),
-                      cellBalancingVoltage,
-                      'V',
-                      (v) => setState(() => cellBalancingVoltage = v),
-                    ),
-            ),
-
-            const SizedBox(height: 20),
-            Text(
-              tr('reset_options'),
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _buildResetButton(
-                    icon: Icons.refresh_rounded,
-                    label: tr('reset_warnings'),
-                    sublabel: tr('reset_warnings_desc'),
-                    onTap: () => _showResetConfirmation(
-                      tr('reset_warnings'),
-                      tr('reset_warnings_confirm'),
-                      () => ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(tr('warnings_cleared'))),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _buildResetButton(
-                    icon: Icons.check_circle_outline_rounded,
-                    label: tr('reset_counters'),
-                    sublabel: tr('reset_counters_desc'),
-                    onTap: () => _showResetConfirmation(
-                      tr('reset_counters'),
-                      tr('reset_counters_confirm'),
-                      () => ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(tr('counters_reset'))),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            SizedBox(
-              width: 190,
-              child: _buildResetButton(
-                icon: Icons.settings_backup_restore_rounded,
-                label: tr('factory_reset'),
-                sublabel: tr('factory_reset_desc'),
-                onTap: () => _showResetConfirmation(
-                  tr('factory_reset'),
-                  tr('factory_reset_confirm'),
-                  () {
-                    setState(() {
-                      chargeCutoffVoltage = 3.65;
-                      dischargeCutoffVoltage = 2.80;
-                      tempMin = -10;
-                      tempMax = 60;
-                      chargeCurrentLimit = 50;
-                      dischargeCurrentLimit = 100;
-                      shortCircuitDelay = 100;
-                      cellBalancingVoltage = 0.03;
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(tr('factory_reset_complete'))),
-                    );
-                  },
+                    const SizedBox(height: 24),
+                  ],
                 ),
               ),
             ),
-
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.info_outline_rounded, color: Colors.grey.shade600, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      tr('settings_warning'),
-                      style: const TextStyle(fontSize: 12, color: Colors.black54),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
-      ),
     );
   }
 
   // ── Widget Builders ────────────────────────────────────────────────────────
+
+  /// Banner shown when settings are being displayed from local cache because
+  /// the BLE device isn't currently connected / providing live data.
+  Widget _buildOfflineBanner() {
+    if (!_isOffline) return const SizedBox.shrink();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.wifi_off, size: 14, color: Colors.orange.shade800),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Offline — showing settings cached from ${_formatSyncTime(_lastSync)}',
+              style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildDeviceCard() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
