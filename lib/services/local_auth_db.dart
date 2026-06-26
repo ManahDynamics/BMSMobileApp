@@ -11,6 +11,7 @@ class LocalAuthDB {
   static const _keyAlerts        = 'bms_cached_alerts';
   static const _keySettings      = 'bms_cached_settings';
   static const _keyLastSync      = 'bms_last_sync';
+  static const _keyDeviceName    = 'bms_cached_device_name';
 
   // ────────────────────────────────────────────────────────────────────────────
   // AUTH
@@ -59,6 +60,13 @@ class LocalAuthDB {
   // BMS DATA CACHE
   // ────────────────────────────────────────────────────────────────────────────
 
+  /// Cache the device name
+  Future<void> saveDeviceName(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyDeviceName, name);
+    await _updateSyncTime(prefs);
+  }
+
   /// Cache the raw dashboard JSON map received from the BMS service.
   Future<void> saveDashboard(Map<String, dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
@@ -86,6 +94,11 @@ class LocalAuthDB {
   }
 
   // ── Getters ─────────────────────────────────────────────────────────────────
+
+  Future<String?> getCachedDeviceName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyDeviceName);
+  }
 
   Future<Map<String, dynamic>?> getCachedDashboard() async {
     return _getMap(_keyDashboard);
@@ -141,5 +154,6 @@ class LocalAuthDB {
     await prefs.remove(_keyAlerts);
     await prefs.remove(_keySettings);
     await prefs.remove(_keyLastSync);
+    await prefs.remove(_keyDeviceName);
   }
 }
