@@ -248,7 +248,18 @@ Future<void> requestCellVoltageData() async {
           addDebugLog('📊 Dashboard Response received — CRC passed');
           addDebugLog('   Battery Serial = "${packet.batterySerial}"');
 
-          latestDashboard = packet;
+          // Dashboard packet now also carries the cell voltage data, so it
+          // doubles as the source for latestCellVoltage. This is why the
+          // initial sequence and dashboard polling no longer send a
+          // separate cell-voltage request — the Cell Details screen's own
+          // requestCellVoltages()/refreshCellVoltages() calls are untouched
+          // and still use the dedicated cell-voltage request/response.
+          latestDashboard   = packet;
+          latestCellVoltage = packet;
+
+          if (_cellVoltageCompleter != null && !_cellVoltageCompleter!.isCompleted) {
+            _cellVoltageCompleter!.complete(true);
+          }
 
           if (packet.batteryType     != null) batteryType     = packet.batteryType;
           if (packet.batterySerial   != null) batterySerial   = packet.batterySerial;
@@ -425,7 +436,9 @@ Future<void> requestCellVoltageData() async {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SEQUENTIAL DATA FETCH: BLE Name → Dashboard → Cell Voltages
+  // SEQUENTIAL DATA FETCH: BLE Name → Dashboard
+  // (Dashboard response packet now also carries cell voltage data, so no
+  // separate cell-voltage step is needed here.)
   // ─────────────────────────────────────────────────────────────────────────
   
   Future<void> _startDataSequence() async {
@@ -455,17 +468,6 @@ Future<void> requestCellVoltageData() async {
   );
 
   if (!dashOk) return;
-
-  // Cell Voltage
-  final cellOk = await _sendAndWait(
-    send: requestCellVoltages,
-    name: 'Cell Voltage',
-    setCompleter: (c) => _cellVoltageCompleter = c,
-    setLoading: (v) => isCellVoltageLoading = v,
-    setError: (v) => cellVoltageError = v,
-  );
-
-  if (!cellOk) return;
 
   addDebugLog('✅ Initial data loaded');
 
@@ -546,19 +548,13 @@ void _startDashboardPolling() {
   _dashboardPollTimer?.cancel();
 
   _dashboardPollTimer = Timer.periodic(
-    const Duration(seconds: 10),
+    const Duration(seconds: 5),
     (_) async {
       if (state != BMSConnectionState.ready) return;
 
       addDebugLog('🔁 Auto Refresh');
 
       await requestDashboard();
-
-      await Future.delayed(
-        const Duration(milliseconds: 300),
-      );
-
-      await requestCellVoltages();
     },
   );
 }

@@ -60,7 +60,7 @@ class _CellsScreenState extends State<CellsScreen> {
     _sortCells();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      widget.service.requestCellVoltages();
+      widget.service.refreshCellVoltages();
 
       // If BLE already has no data, try loading from cache immediately
       if (widget.service.latestCellVoltage == null) {
@@ -342,7 +342,24 @@ class _CellsScreenState extends State<CellsScreen> {
           ),
         ],
       ),
-      body: Padding(
+      body: widget.service.isCellVoltageLoading
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    strokeWidth: 2.5,
+                    color: primaryGreen,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Loading cell details…',
+                    style: TextStyle(fontSize: 14, color: Colors.black54),
+                  ),
+                ],
+              ),
+            )
+          : Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -592,20 +609,46 @@ class _CellsScreenState extends State<CellsScreen> {
                   : Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const CircularProgressIndicator(
-                              color: primaryGreen),
-                          const SizedBox(height: 16),
-                          const Text('Waiting for cell data…',
-                              style: TextStyle(color: Colors.black54)),
-                          const SizedBox(height: 12),
-                          // Offer to load from cache
-                          TextButton.icon(
-                            icon   : const Icon(Icons.history),
-                            label  : const Text('Load cached data'),
-                            onPressed: _loadFromCache,
-                          ),
-                        ],
+                        children: widget.service.cellVoltageError != null
+                            ? [
+                                Icon(Icons.error_outline,
+                                    color: Colors.red.shade400,
+                                    size: 36),
+                                const SizedBox(height: 12),
+                                Text(
+                                  widget.service.cellVoltageError!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                      color: Colors.black54),
+                                ),
+                                const SizedBox(height: 12),
+                                TextButton.icon(
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('Retry'),
+                                  onPressed: () => widget.service
+                                      .refreshCellVoltages(),
+                                ),
+                                TextButton.icon(
+                                  icon: const Icon(Icons.history),
+                                  label: const Text('Load cached data'),
+                                  onPressed: _loadFromCache,
+                                ),
+                              ]
+                            : [
+                                const CircularProgressIndicator(
+                                    color: primaryGreen),
+                                const SizedBox(height: 16),
+                                const Text('Waiting for cell data…',
+                                    style: TextStyle(
+                                        color: Colors.black54)),
+                                const SizedBox(height: 12),
+                                // Offer to load from cache
+                                TextButton.icon(
+                                  icon: const Icon(Icons.history),
+                                  label: const Text('Load cached data'),
+                                  onPressed: _loadFromCache,
+                                ),
+                              ],
                       ),
                     ),
             ),

@@ -160,6 +160,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       'maxCellVoltageDisplay' : dash.maxCellVoltageDisplay,
       'temperature'       : dash.temperature,
       'voltageDiff'       : dash.voltageDiff,
+      'warningAlerts'     : dash.warningAlerts,
+      'faultAlerts'       : dash.faultAlerts,
+      'clearedAlerts'     : dash.clearedAlerts,
+      'totalAlerts'       : dash.totalAlerts,
     };
 
     // Only write if something changed
@@ -175,28 +179,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  /// Converts cell voltage model to a plain map and caches it.
+  /// Converts cell voltage model to a plain map and caches it./// Converts cell voltage data (now embedded in the Dashboard packet) to a
+  /// plain map and caches it.
   Future<void> _cacheCellVoltageIfNew() async {
-    final cell = widget.service.latestCellVoltage;
-    if (cell == null) return;
+    final dash = widget.service.latestDashboard;
+    if (dash == null || dash.cellVoltages == null || dash.cellVoltages!.isEmpty) return;
+
+    final voltages = dash.cellVoltages!;
+    int? maxNo, minNo;
+    if (dash.maxCellVoltage != null) {
+      final i = voltages.indexWhere((v) => v == dash.maxCellVoltage);
+      if (i >= 0) maxNo = i + 1;
+    }
+    if (dash.minCellVoltage != null) {
+      final i = voltages.indexWhere((v) => v == dash.minCellVoltage);
+      if (i >= 0) minNo = i + 1;
+    }
 
     final map = <String, dynamic>{
-      'cellVoltages'       : cell.cellVoltages,
-      'cellTotalCells'     : cell.cellTotalCells,
-      'cellMaxVoltage'     : cell.cellMaxVoltage,
-      'cellMaxVoltageNo'   : cell.cellMaxVoltageNo,
-      'cellMinVoltage'     : cell.cellMinVoltage,
-      'cellMinVoltageNo'   : cell.cellMinVoltageNo,
-      'cellAvgVoltage'     : cell.cellAvgVoltage,
-      'cellBalancing'      : cell.cellBalancing,
-      'cellBalancingActive': cell.cellBalancingActive,
+      'cellVoltages'    : voltages,
+      'cellTotalCells'  : dash.totalCells,
+      'cellMaxVoltage'  : dash.maxCellVoltage,
+      'cellMaxVoltageNo': maxNo,
+      'cellMinVoltage'  : dash.minCellVoltage,
+      'cellMinVoltageNo': minNo,
+      'cellAvgVoltage'  : dash.avgCellVoltage,
     };
 
     if (map.toString() != _lastCachedCell.toString()) {
       _lastCachedCell = map;
       await _localAuthDB.saveCellVoltage(map);
-      
-      // Also update cached cell voltage for display
+
       setState(() {
         _cachedCellVoltage = map;
         _isFromCache = false;
@@ -234,9 +247,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     // Try to load cached data initially
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // If BLE has data, use it, otherwise load from cache
-      if (widget.service.latestDashboard == null || 
-          widget.service.latestCellVoltage == null ||
+      // If BLE has data, use it, otherwise load from cache.
+      // Cell voltages now come from the Dashboard packet itself, so we no
+      // longer check latestCellVoltage here.
+      if (widget.service.latestDashboard == null ||
           widget.service.bleName == null) {
         _loadFromCache();
       }
@@ -278,24 +292,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
         'maxCellVoltageDisplay' : live.maxCellVoltageDisplay,
         'temperature'       : live.temperature,
         'voltageDiff'       : live.voltageDiff,
+        'warningAlerts'     : live.warningAlerts,
+        'faultAlerts'       : live.faultAlerts,
+        'clearedAlerts'     : live.clearedAlerts,
+        'totalAlerts'       : live.totalAlerts,
       };
     }
     return _cachedDashboard;
   }
 
   Map<String, dynamic>? get _effectiveCellVoltage {
-    final live = widget.service.latestCellVoltage;
-    if (live != null) {
+    final live = widget.service.latestDashboard;
+    if (live != null && live.cellVoltages != null && live.cellVoltages!.isNotEmpty) {
+      final voltages = live.cellVoltages!;
+      int? maxNo, minNo;
+      if (live.maxCellVoltage != null) {
+        final i = voltages.indexWhere((v) => v == live.maxCellVoltage);
+        if (i >= 0) maxNo = i + 1;
+      }
+      if (live.minCellVoltage != null) {
+        final i = voltages.indexWhere((v) => v == live.minCellVoltage);
+        if (i >= 0) minNo = i + 1;
+      }
       return {
-        'cellVoltages'       : live.cellVoltages,
-        'cellTotalCells'     : live.cellTotalCells,
-        'cellMaxVoltage'     : live.cellMaxVoltage,
-        'cellMaxVoltageNo'   : live.cellMaxVoltageNo,
-        'cellMinVoltage'     : live.cellMinVoltage,
-        'cellMinVoltageNo'   : live.cellMinVoltageNo,
-        'cellAvgVoltage'     : live.cellAvgVoltage,
-        'cellBalancing'      : live.cellBalancing,
-        'cellBalancingActive': live.cellBalancingActive,
+        'cellVoltages'    : voltages,
+        'cellTotalCells'  : live.totalCells,
+        'cellMaxVoltage'  : live.maxCellVoltage,
+        'cellMaxVoltageNo': maxNo,
+        'cellMinVoltage'  : live.minCellVoltage,
+        'cellMinVoltageNo': minNo,
+        'cellAvgVoltage'  : live.avgCellVoltage,
       };
     }
     return _cachedCellVoltage;
@@ -347,45 +373,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final int? minVoltageNo         = cellMap?['cellMinVoltageNo'] as int?;
 
         // ── Build alerts from live BMS data ────────────────────────────
-        List<_AlertItem> buildAlerts(
-          double? temp,
-          int? statusCode,
-          int soc, [
-          double? voltageDiff,
-        ]) {
-          final items = <_AlertItem>[];
-          if (temp != null && temp > 45) {
-            items.add(_AlertItem(title: 'Over Temperature', time: _nowTime()));
-          }
-          if (soc <= 10) {
-            items.add(_AlertItem(title: 'Low Battery', time: _nowTime()));
-          }
-          if (temp != null && temp < 0) {
-            items.add(_AlertItem(title: 'Under Temperature', time: _nowTime()));
-          }
-          if (voltageDiff != null && voltageDiff > 0.1) {
-            items.add(_AlertItem(title: 'Cell Imbalance', time: _nowTime()));
-          }
-          return items;
-        }
-
-        final alerts = dashMap == null
-            ? <_AlertItem>[]
-            : buildAlerts(
-                dashMap['temperature'] as double?,
-                dashMap['batteryStatusCode'] as int?,
-                soc,
-                dashMap['voltageDiff'] as double?,
-              );
-
-        // ── Cache alerts whenever they change ──────────────────────────
-        if (alerts.isNotEmpty) {
-          _localAuthDB.saveAlerts(
-            alerts
-                .map((a) => {'title': a.title, 'time': a.time})
-                .toList(),
-          );
-        }
+       final int warningAlertsCount = dashMap?['warningAlerts'] as int? ?? 0;
+        final int faultAlertsCount   = dashMap?['faultAlerts'] as int? ?? 0;
+        final int clearedAlertsCount = dashMap?['clearedAlerts'] as int? ?? 0;
+        final int totalAlertsCount   = dashMap?['totalAlerts'] as int? ??
+            (warningAlertsCount + faultAlertsCount + clearedAlertsCount);
 
         final bool hasData = dashMap != null || cellMap != null;
 
@@ -422,14 +414,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         color: Colors.white),
                     onPressed: () {},
                   ),
-                  if (alerts.isNotEmpty)
+                 if (totalAlertsCount > 0)
                     Positioned(
                       right: 8, top: 8,
                       child: Container(
                         padding   : const EdgeInsets.all(3),
                         decoration: const BoxDecoration(
                             color: Colors.red, shape: BoxShape.circle),
-                        child: Text('${alerts.length}',
+                        child: Text('$totalAlertsCount',
                             style: const TextStyle(
                                 color     : Colors.white,
                                 fontSize  : 9,
@@ -454,7 +446,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-          body: ListView(
+          body: svc.isDashboardLoading
+              ? const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: _green,
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'Loading dashboard details…',
+                        style: TextStyle(fontSize: 14, color: Colors.black54),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
             children: [
               // ── Offline cache banner ───────────────────────────────────
@@ -581,9 +590,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               _gap16,
 
-              if (svc.isDashboardLoading && !_isFromCache)
-                const _LoadingSection(text: 'Loading dashboard data…')
-              else if (svc.dashboardError != null && !_isFromCache)
+              if (svc.dashboardError != null && !_isFromCache)
                 _ErrorSection(message: svc.dashboardError!)
               else if (!hasData && !_isFromCache)
                 Column(
@@ -622,7 +629,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: _MetricCard(
                       label     : 'Current',
                       value     : currentDisplay,
-                      iconLabel : isCharging ? null : 'A',
+                      iconLabel : 'A',
                       isCharging: isCharging,
                     )),
                 ],
@@ -648,11 +655,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               const SizedBox(height: 20),
 
-              if (svc.isCellVoltageLoading && !_isFromCache)
-                const _LoadingSection(text: 'Loading cell voltage data…')
-              else if (svc.cellVoltageError != null && !_isFromCache)
-                _ErrorSection(message: svc.cellVoltageError!)
-              else if (!hasData && !_isFromCache)
+              if (!hasData && !_isFromCache)
                 const SizedBox.shrink()
               else if (hasData)
                 _CellSummary(
@@ -669,8 +672,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           page: CellsScreen(service: widget.service))),
                 ),
 
-              _gap16,
-              _AlertsCard(alerts: alerts),
+             _gap16,
+              _AlertsSummaryCard(
+                warningCount: warningAlertsCount,
+                faultCount  : faultAlertsCount,
+                clearedCount: clearedAlertsCount,
+              ),
             ],
           ),
         );
@@ -840,17 +847,31 @@ class _BatteryCardState extends State<_BatteryCard>
                     const Text('Battery Status',
                         style: TextStyle(color: Colors.white70, fontSize: 12)),
                     const Spacer(),
-                    SizedBox(
-                      width : 28, height: 28,
-                      child : widget.statusCode == 0x01
-                          ? Image.asset('assets/images/charging_icn_gif.gif',
-                              fit: BoxFit.contain)
-                          : widget.statusCode == 0x02
-                              ? Image.asset('assets/images/idle-battery.png',
-                                  fit: BoxFit.contain)
-                              : Image.asset('assets/images/load_connect.png',
-                                  fit: BoxFit.contain),
-                    ),
+                   SizedBox(
+  width: 28,
+  height: 28,
+  child: AnimatedSwitcher(
+    duration: const Duration(milliseconds: 250),
+    child: widget.statusCode == 0x01
+        ? Image.asset(
+            'assets/images/charging_icn_gif.gif',
+            key: const ValueKey('charging'),
+            gaplessPlayback: true,
+            fit: BoxFit.contain,
+          )
+        : widget.statusCode == 0x02
+            ? Image.asset(
+                'assets/images/idle-battery.png',
+                key: const ValueKey('idle'),
+                fit: BoxFit.contain,
+              )
+            : Image.asset(
+                'assets/images/load_connect.png',
+                key: const ValueKey('load'),
+                fit: BoxFit.contain,
+              ),
+  ),
+),
                   ],
                 ),
                 Text(widget.status,
@@ -865,8 +886,10 @@ class _BatteryCardState extends State<_BatteryCard>
                     style: const TextStyle(
                         color: Colors.white, fontSize: 14)),
                 const Divider(color: Colors.white24, height: 14),
-                Row(
-                  children: [
+               IntrinsicHeight(
+  child: Row(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -881,7 +904,11 @@ class _BatteryCardState extends State<_BatteryCard>
                       ],
                     ),
                     const Spacer(),
-                    Container(width: 1, color: Colors.white24),
+                    Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 14),
+                        width: 1,
+                        color: Colors.white30,
+                      ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
@@ -911,6 +938,7 @@ class _BatteryCardState extends State<_BatteryCard>
                     ),
                   ],
                 ),
+               ),
               ],
             ),
           ),
@@ -978,78 +1006,77 @@ class _MetricCard extends StatelessWidget {
           CircleAvatar(
             radius         : 18,
             backgroundColor: Colors.transparent,
-            child: isCharging
-                ? const Icon(Icons.bolt_rounded,
-                    color: Colors.green, size: 26)
-                : iconLabel != null
-                    ? Text(iconLabel!,
-                        style: const TextStyle(
-                            fontSize  : 18,
-                            fontWeight: FontWeight.bold,
-                            color     : Colors.grey))
-                    : Icon(icon, color: Colors.grey, size: 22),
+           child: iconLabel != null
+    ? Text(
+        iconLabel!,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+          color: Colors.grey,
+        ),
+      )
+    : Icon(
+        icon,
+        color: Colors.grey,
+        size: 22,
+      ),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label,
-                    style: const TextStyle(
-                        fontSize: 12, color: Colors.black54)),
-                const SizedBox(height: 2),
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(value,
-                          style: const TextStyle(
-                              fontSize  : 17,
-                              fontWeight: FontWeight.w600),
-                          overflow: TextOverflow.ellipsis),
-                    ),
-                    if (isCharging) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 3),
-                        decoration: BoxDecoration(
-                          color : Colors.green.shade50,
-                          border: Border.all(color: Colors.green.shade300),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.bolt_rounded,
-                                size : 10,
-                                color: Colors.green.shade600),
-                            const SizedBox(width: 2),
-                            Text('Charging',
-                                style: TextStyle(
-                                    fontSize  : 10,
-                                    color     : Colors.green.shade700,
-                                    fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ),
-                    ] else if (badge != null) ...[
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 7, vertical: 2),
-                        decoration: BoxDecoration(
-                          color       : Colors.grey[300],
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(badge!,
-                            style: const TextStyle(
-                                fontSize: 10, color: Colors.black54)),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
+            child:Column(
+  crossAxisAlignment: CrossAxisAlignment.start,
+  children: [
+
+    Row(
+      children: [
+
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
             ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+
+        if (isCharging)
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 6,
+              vertical: 2,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Colors.grey.shade400,
+              ),
+            ),
+            child: const Text(
+              "Charging",
+              style: TextStyle(
+                fontSize: 9,
+                color: Colors.black54,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+      ],
+    ),
+
+    const SizedBox(height: 4),
+
+    Text(
+      value,
+      style: const TextStyle(
+        fontSize: 17,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
+  ],
+)
           ),
         ],
       ),
@@ -1288,9 +1315,14 @@ class _AlertItem {
   const _AlertItem({required this.title, required this.time});
 }
 
-class _AlertsCard extends StatelessWidget {
-  final List<_AlertItem> alerts;
-  const _AlertsCard({required this.alerts});
+class _AlertsSummaryCard extends StatelessWidget {
+  final int warningCount, faultCount, clearedCount;
+
+  const _AlertsSummaryCard({
+    required this.warningCount,
+    required this.faultCount,
+    required this.clearedCount,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1298,123 +1330,80 @@ class _AlertsCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          children: [
-            const Icon(Icons.notifications_none_rounded, size: 20),
-            const SizedBox(width: 8),
-            const Text('Active Alerts',
+          children: const [
+            Icon(Icons.notifications_none_rounded, size: 20),
+            SizedBox(width: 8),
+            Text('Active Alerts',
                 style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-            const SizedBox(width: 6),
-            if (alerts.isNotEmpty)
-              Container(
-                padding   : const EdgeInsets.symmetric(
-                    horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color : Colors.red.shade50,
-                  border: Border.all(color: Colors.red.shade200),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  alerts.length.toString().padLeft(2, '0'),
-                  style: TextStyle(
-                      fontSize  : 11,
-                      color     : Colors.red.shade700,
-                      fontWeight: FontWeight.w600),
-                ),
-              ),
           ],
         ),
-        const SizedBox(height: 8),
-        if (alerts.isEmpty)
-          Container(
-            padding   : const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-                color       : const Color(0xFFF2F2F2),
-                borderRadius: BorderRadius.circular(10)),
-            child: Row(
-              children: [
-                const Icon(Icons.check_circle_rounded,
-                    color: Color(0xFF1B6B3A), size: 20),
-                const SizedBox(width: 10),
-                const Text('No Active Alerts',
-                    style: TextStyle(fontSize: 13, color: Colors.black87)),
-              ],
-            ),
-          )
-        else
-          Container(
-            decoration: BoxDecoration(
-              color       : Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border      : Border.all(color: Colors.grey.shade200),
-              boxShadow   : [
-                BoxShadow(
-                    color    : Colors.black.withOpacity(0.04),
-                    blurRadius: 6,
-                    offset   : const Offset(0, 2))
-              ],
-            ),
-            child: Column(
-              children: alerts.asMap().entries.map((entry) {
-                final i = entry.key;
-                final a = entry.value;
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 14, vertical: 12),
-                      child: Row(
-                        children: [
-                          Container(
-                            width : 36, height: 36,
-                            decoration: BoxDecoration(
-                                color      : Colors.grey.shade100,
-                                shape      : BoxShape.circle),
-                            child: Icon(Icons.warning_amber_rounded,
-                                color: Colors.orange.shade600, size: 20),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(a.title,
-                                    style: const TextStyle(
-                                        fontSize  : 13,
-                                        fontWeight: FontWeight.w600,
-                                        color     : Colors.black87)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(a.time,
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color   : Colors.grey[500])),
-                              const SizedBox(height: 4),
-                              Icon(Icons.chevron_right,
-                                  color: Colors.grey[400], size: 18),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (i < alerts.length - 1)
-                      Divider(
-                        height   : 1,
-                        thickness: 1,
-                        color    : Colors.grey.shade100,
-                        indent   : 14,
-                        endIndent: 14,
-                      ),
-                  ],
-                );
-              }).toList(),
-            ),
+        const SizedBox(height: 10),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
+          child: Column(
+            children: [
+              _alertRow(
+                icon: Icons.warning_amber_rounded,
+                iconColor: Colors.grey.shade600,
+                label: 'Warning Alerts',
+                count: warningCount,
+              ),
+              Divider(height: 1, thickness: 1, color: Colors.grey.shade100, indent: 14, endIndent: 14),
+              _alertRow(
+                icon: Icons.error_outline_rounded,
+                iconColor: Colors.grey.shade600,
+                label: 'Fault Alerts',
+                count: faultCount,
+              ),
+              Divider(height: 1, thickness: 1, color: Colors.grey.shade100, indent: 14, endIndent: 14),
+              _alertRow(
+                icon: Icons.check_circle_outline_rounded,
+                iconColor: Colors.grey.shade600,
+                label: 'Cleared Alerts',
+                count: clearedCount,
+              ),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _alertRow({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required int count,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label,
+                style: const TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87)),
+          ),
+          Text(count.toString().padLeft(2, '0'),
+              style: const TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+          const SizedBox(width: 4),
+          Icon(Icons.chevron_right, color: Colors.grey[400], size: 18),
+        ],
+      ),
     );
   }
 }

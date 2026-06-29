@@ -51,75 +51,85 @@ class BMSProtocol {
   static const int bleNameEnd            = 19; // exclusive (16 ASCII bytes)
   static const int bleNameCrcByte        = 19; // single CRC-8 byte
 
-  // ── Dashboard Response Packet (120 bytes) ─────────────────────────────────
+  // ── Dashboard Response Packet v2 (115 bytes) ──────────────────────────────
+  // ✅ CONFIRMED FROM LIVE CAPTURE (new firmware format — replaces the old
+  // 120-byte layout with software/hardware/firmware version strings).
+  //
   // Byte 0        : Start byte (0xAA)
-  // Byte 1        : Length (0x78)
+  // Byte 1        : Length (0x73 = 115)
   // Byte 2        : Data ID (0x52)
   // Bytes 3–19    : Battery Type (17 ASCII bytes)
-  // Byte 20       : SOC (0–100%)
-  // Byte 21       : Battery Status (0x01=Charging, 0x02=Idle, 0x03=Load Connected)
-  // Bytes 22–23   : Remaining Capacity (×0.1 Ah, big-endian)
-  // Bytes 24–25   : No of Charge/Discharge Cycles (big-endian)
-  // Byte 26       : Health (0x01=Good, 0x02=Poor)
-  // Bytes 27–28   : Total Voltage (×0.1 V, big-endian)
-  // Bytes 29–30   : Total Current (signed ×0.1 A, big-endian)
-  // Bytes 31–32   : Temperature (signed °C, big-endian)
-  // Bytes 33–34   : Power in KW (signed ×0.1 KW, big-endian)
-  // Byte 35       : Total Cells (min 6, max 24)
-  // Bytes 36–37   : Avg Cell Voltage (×0.001 V, big-endian)
-  // Bytes 38–39   : Voltage Difference (×0.001 V, big-endian)
-  // Bytes 40–41   : Max Cell Voltage (×0.001 V, big-endian)
-  // Bytes 42–43   : Min Cell Voltage (×0.001 V, big-endian)
-  // Bytes 44–59   : Battery Serial No (16 ASCII bytes)
-  // Bytes 60–78   : Software Version (19 ASCII bytes)
-  // Bytes 79–97   : Hardware Version (19 ASCII bytes)
-  // Bytes 98–116  : Firmware Version (19 ASCII bytes)
-  // Byte 117      : CRC-8 (single byte, computed over bytes[1..116])
-  // Byte 118      : Unknown/reserved — NOT part of CRC (purpose unconfirmed)
-  // Byte 119      : Stop byte (0xBB)
+  // Bytes 20–35   : Battery Serial No (16 ASCII bytes)
+  // Byte 36       : SOC (0–100%)
+  // Byte 37       : Battery Status (0x01=Charging, 0x02=Idle, 0x03=Load Connected)
+  // Bytes 38–39   : Remaining Capacity (×0.1 Ah, little-endian)
+  // Bytes 40–41   : No of Charge/Discharge Cycles (little-endian)
+  // Byte 42       : Health (0x01=Good, 0x02=Poor)
+  // Bytes 43–44   : Total Voltage (×0.1 V, little-endian)
+  // Bytes 45–46   : Total Current (signed ×0.1 A, little-endian)
+  // Bytes 47–48   : Temperature (signed °C, little-endian)
+  // Bytes 49–50   : Power in KW (signed ×0.1 KW, little-endian)
+  // Byte 51       : Total Cells (min 6, max 24)
+  // Bytes 52–99   : Cell 1–24 Voltage (×0.001 V each, 2 bytes/cell, little-endian,
+  //                 NO per-cell balancing byte in this format)
+  // Bytes 100–101 : Avg Cell Voltage (×0.001 V, little-endian)
+  // Bytes 102–103 : Voltage Difference (×0.001 V, little-endian)
+  // Bytes 104–105 : Max Cell Voltage (×0.001 V, little-endian)
+  // Bytes 106–107 : Min Cell Voltage (×0.001 V, little-endian)
+  // Byte 108      : Warning Alerts count (max 38)
+  // Byte 109      : Fault Alerts count (max 38)
+  // Byte 110      : Cleared Alerts count (max 38)
+  // Byte 111      : Total Alerts count (= Warning+Fault+Cleared; NOT covered by CRC)
+  // Bytes 112–113 : CRC-16/CCITT (poly 0x1021, init 0xFFFF), LITTLE-ENDIAN
+  //                 byte112=low, byte113=high. Computed over bytes[1..110]
+  //                 (Dart: sublist(1, 111)) — i.e. everything from Length
+  //                 through Cleared Alerts, explicitly EXCLUDING Total
+  //                 Alerts, the CRC bytes, and the stop byte.
+  // Byte 114      : Stop byte (0xBB)
   //
-  // ⚠️ CONFIRMED FROM LIVE CAPTURE: CRC is a single CRC-8 byte at index 117,
-  // NOT a 2-byte CRC-16 as previously assumed. Byte 118 is unrelated to CRC.
-  static const int dashboardResponseLength  = 120;
+  // ✅ CONFIRMED FROM LIVE CAPTURE: CRC16-CCITT(poly=0x1021, init=0xFFFF)
+  // over bytes[1:111] produces 0x1089 for the captured packet, matching
+  // byte112=0x89 (low) / byte113=0x10 (high) exactly.
+  static const int dashboardResponseLength  = 115;
 
   static const int dashBatteryTypeStart     = 3;
-  static const int dashBatteryTypeEnd       = 20; // exclusive (17 bytes)
-  static const int dashSocByte              = 20;
-  static const int dashBatteryStatusByte    = 21;
-  static const int dashCapacityHigh         = 22;
-  static const int dashCapacityLow          = 23;
-  static const int dashCyclesHigh           = 24;
-  static const int dashCyclesLow            = 25;
-  static const int dashHealthByte           = 26;
-  static const int dashVoltageHigh          = 27;
-  static const int dashVoltageLow           = 28;
-  static const int dashCurrentHigh          = 29;
-  static const int dashCurrentLow           = 30;
-  static const int dashTempHigh             = 31;
-  static const int dashTempLow              = 32;
-  static const int dashPowerHigh            = 33;
-  static const int dashPowerLow             = 34;
-  static const int dashTotalCellsByte       = 35;
-  static const int dashAvgVoltageHigh       = 36;
-  static const int dashAvgVoltageLow        = 37;
-  static const int dashVoltDiffHigh         = 38;
-  static const int dashVoltDiffLow          = 39;
-  static const int dashMaxVoltageHigh       = 40;
-  static const int dashMaxVoltageLow        = 41;
-  static const int dashMinVoltageHigh       = 42;
-  static const int dashMinVoltageLow        = 43;
-  static const int dashBatterySerialStart   = 44;
-  static const int dashBatterySerialEnd     = 60; // exclusive (16 bytes)
-  static const int dashSoftwareVersionStart = 60;
-  static const int dashSoftwareVersionEnd   = 79; // exclusive (19 bytes)
-  static const int dashHardwareVersionStart = 79;
-  static const int dashHardwareVersionEnd   = 98; // exclusive (19 bytes)
-  static const int dashFirmwareVersionStart = 98;
-  static const int dashFirmwareVersionEnd   = 117; // exclusive (19 bytes)
-  static const int dashCrcLowByte  = 117;  // low  byte of CRC16
-static const int dashCrcHighByte = 118;  // high byte of CRC16
-static const int dashStopByte    = 119;  // 0xBB
-
+  static const int dashBatteryTypeEnd       = 20;  // exclusive (17 bytes)
+  static const int dashBatterySerialStart   = 20;
+  static const int dashBatterySerialEnd     = 36;  // exclusive (16 bytes)
+  static const int dashSocByte              = 36;
+  static const int dashBatteryStatusByte    = 37;
+  static const int dashCapacityHigh         = 38;
+  static const int dashCapacityLow          = 39;
+  static const int dashCyclesHigh           = 40;
+  static const int dashCyclesLow            = 41;
+  static const int dashHealthByte           = 42;
+  static const int dashVoltageHigh          = 43;
+  static const int dashVoltageLow           = 44;
+  static const int dashCurrentHigh          = 45;
+  static const int dashCurrentLow           = 46;
+  static const int dashTempHigh             = 47;
+  static const int dashTempLow              = 48;
+  static const int dashPowerHigh            = 49;
+  static const int dashPowerLow             = 50;
+  static const int dashTotalCellsByte       = 51;
+  static const int dashCellDataStart        = 52;
+  static const int dashCellDataStride       = 2;   // 2 bytes/cell, NO balancing byte
+  static const int dashCellDataMaxCells     = 24;
+  static const int dashAvgVoltageHigh       = 100;
+  static const int dashAvgVoltageLow        = 101;
+  static const int dashVoltDiffHigh         = 102;
+  static const int dashVoltDiffLow          = 103;
+  static const int dashMaxVoltageHigh       = 104;
+  static const int dashMaxVoltageLow        = 105;
+  static const int dashMinVoltageHigh       = 106;
+  static const int dashMinVoltageLow        = 107;
+  static const int dashWarningAlertsByte    = 108;
+  static const int dashFaultAlertsByte      = 109;
+  static const int dashClearedAlertsByte    = 110;
+  static const int dashTotalAlertsByte      = 111;
+  static const int dashCrcLowByte           = 112;
+  static const int dashCrcHighByte          = 113;
+  static const int dashStopByte             = 114;
   // ── Cell Voltage Response Packet (88 bytes) ───────────────────────────────
   // Byte 0        : Start byte (0xAA)
   // Byte 1        : Length (0x58)
@@ -161,8 +171,8 @@ static const int dashStopByte    = 119;  // 0xBB
   static const int cellTotalCellsByte   = 12;
   static const int cellDataStart        = 13;
   static const int cellDataStride       = 3;
-  static const int cellCrcHigh          = 85;
-  static const int cellCrcLow           = 86;
+  static const int cellCrcLow           = 85;
+  static const int cellCrcHigh          = 86;
   static const int cellStopByte         = 87;  
 
   // ── Balancing values ──────────────────────────────────────────────────────

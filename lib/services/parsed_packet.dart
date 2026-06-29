@@ -39,6 +39,10 @@ class BMSParsedPacket {
   final double? maxCellVoltage;    // Bytes 40–41 (×0.001 V)
   final double? minCellVoltage;    // Bytes 42–43 (×0.001 V)
   final String? firmwareVersion;   // Bytes 98–116 (19 ASCII bytes)
+  final int? warningAlerts;        // Byte 108 (v2 dashboard only)
+  final int? faultAlerts;          // Byte 109 (v2 dashboard only)
+  final int? clearedAlerts;        // Byte 110 (v2 dashboard only)
+  final int? totalAlerts;          // Byte 111 (v2 dashboard only)
 
   // ── Cell Voltage Response fields (dataId == 0x53, 88-byte response) ───────
   final List<double>? cellVoltages;
@@ -87,6 +91,11 @@ class BMSParsedPacket {
     this.maxCellVoltage,
     this.minCellVoltage,
     this.firmwareVersion,
+    this.warningAlerts,
+    this.faultAlerts,
+    this.clearedAlerts,
+    this.totalAlerts,
+    
     // Cell voltage response
     this.cellVoltages,
     this.cellBalancing,
@@ -234,6 +243,10 @@ class BMSParsedPacket {
     double?          maxCellVoltage,
     double?          minCellVoltage,
     String?          firmwareVersion,
+    int?             warningAlerts,
+    int?             faultAlerts,
+    int?             clearedAlerts,
+    int?             totalAlerts,
     List<double>?    cellVoltages,
     List<bool>?      cellBalancing,
     double?          cellMaxVoltage,
@@ -275,6 +288,10 @@ class BMSParsedPacket {
       maxCellVoltage:      maxCellVoltage      ?? this.maxCellVoltage,
       minCellVoltage:      minCellVoltage      ?? this.minCellVoltage,
       firmwareVersion:     firmwareVersion     ?? this.firmwareVersion,
+      warningAlerts:       warningAlerts       ?? this.warningAlerts,
+      faultAlerts:         faultAlerts         ?? this.faultAlerts,
+      clearedAlerts:       clearedAlerts       ?? this.clearedAlerts,
+      totalAlerts:         totalAlerts         ?? this.totalAlerts,
       cellVoltages:        cellVoltages        ?? this.cellVoltages,
       cellBalancing:       cellBalancing       ?? this.cellBalancing,
       cellMaxVoltage:      cellMaxVoltage      ?? this.cellMaxVoltage,
