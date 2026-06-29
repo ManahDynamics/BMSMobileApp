@@ -77,16 +77,19 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _ackTimer;
 
   Timer? _pollTimer;
-Timer? _dashboardPollTimer;
+  Timer? _dashboardPollTimer;
+  Timer? _cellVoltagePollTimer;
 
   int _sessionId = 0;
 
   BMSBluetoothService() {
     WidgetsBinding.instance.addObserver(this);
   }
-Future<void> requestCellVoltageData() async {
-  await requestCellVoltages();
-}
+
+  Future<void> requestCellVoltageData() async {
+    await requestCellVoltages();
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // APP LIFECYCLE
   // ─────────────────────────────────────────────────────────────────────────
@@ -440,39 +443,42 @@ Future<void> requestCellVoltageData() async {
   // (Dashboard response packet now also carries cell voltage data, so no
   // separate cell-voltage step is needed here.)
   // ─────────────────────────────────────────────────────────────────────────
-  
+
   Future<void> _startDataSequence() async {
-  addDebugLog('▶️ Starting packet sequence');
+    addDebugLog('▶️ Starting packet sequence');
 
-  readyForDashboard = true;
-  notifyListeners();
+    readyForDashboard = true;
+    notifyListeners();
 
-  // BLE Name (once)
-  final bleOk = await _sendAndWait(
-    send: requestBleName,
-    name: 'BLE Name',
-    setCompleter: (c) => _bleNameCompleter = c,
-    setLoading: (v) => isBleNameLoading = v,
-    setError: (v) => bleNameError = v,
-  );
+    // BLE Name (once)
+    final bleOk = await _sendAndWait(
+      send: requestBleName,
+      name: 'BLE Name',
+      setCompleter: (c) => _bleNameCompleter = c,
+      setLoading: (v) => isBleNameLoading = v,
+      setError: (v) => bleNameError = v,
+    );
 
-  if (!bleOk) return;
+    if (!bleOk) return;
 
-  // Dashboard
-  final dashOk = await _sendAndWait(
-    send: requestDashboard,
-    name: 'Dashboard',
-    setCompleter: (c) => _dashboardCompleter = c,
-    setLoading: (v) => isDashboardLoading = v,
-    setError: (v) => dashboardError = v,
-  );
+    // Dashboard
+    final dashOk = await _sendAndWait(
+      send: requestDashboard,
+      name: 'Dashboard',
+      setCompleter: (c) => _dashboardCompleter = c,
+      setLoading: (v) => isDashboardLoading = v,
+      setError: (v) => dashboardError = v,
+    );
 
-  if (!dashOk) return;
+    if (!dashOk) return;
 
-  addDebugLog('✅ Initial data loaded');
+    addDebugLog('✅ Initial data loaded');
 
-  _startDashboardPolling();
-}
+    // Both pollers run independently from here on, regardless of which
+    // screen is currently on-screen — Dashboard packets and Cell Voltage
+    // packets are each requested on their own 5-second timer.
+  }
+
   Future<void> refreshCellVoltages() async {
     await _sendAndWait(
       send: requestCellVoltages,
@@ -482,6 +488,7 @@ Future<void> requestCellVoltageData() async {
       setError: (v) => cellVoltageError = v,
     );
   }
+
   /// Sends a request and waits (with timeout) for the matching response to
   /// arrive via the notify-listener, which completes the relevant Completer.
   Future<bool> _sendAndWait({
@@ -507,10 +514,11 @@ Future<void> requestCellVoltageData() async {
       return false;
     }
 
-   final success = await completer.future.timeout(
-  const Duration(seconds: 10),
-  onTimeout: () => false,
-);
+    final success = await completer.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => false,
+    
+    );
 
     setLoading(false);
     if (!success) {
@@ -522,46 +530,88 @@ Future<void> requestCellVoltageData() async {
     notifyListeners();
     return success;
   }
-Future<void> refreshCellVoltage() async {
-  await _sendAndWait(
-    send: requestCellVoltages,
-    name: 'Cell Voltage',
-    setCompleter: (c) => _cellVoltageCompleter = c,
-    setLoading: (v) => isCellVoltageLoading = v,
-    setError: (v) => cellVoltageError = v,
-  );
-}
+
+  Future<void> refreshCellVoltage() async {
+    await _sendAndWait(
+      send: requestCellVoltages,
+      name: 'Cell Voltage',
+      setCompleter: (c) => _cellVoltageCompleter = c,
+      setLoading: (v) => isCellVoltageLoading = v,
+      setError: (v) => cellVoltageError = v,
+    );
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
-  // POLLING (disabled — replaced by sequential one-shot fetch above)
+  // POLLING
   // ─────────────────────────────────────────────────────────────────────────
-void _startPolling() {
-  return;
+  void _startPolling() {
+    return;
+  }
+
+  void _stopPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
+  /// Polls the Dashboard request every 5 seconds while connection is ready.
+  /// Runs independently of the Cell Voltage poller and of which screen is
+  /// currently active.
+  void _startDashboardPolling() {
+    _dashboardPollTimer?.cancel();
+
+    _dashboardPollTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) async {
+        if (state != BMSConnectionState.ready) return;
+        if (isDashboardLoading) return; // avoid overlapping requests
+
+        addDebugLog('🔁 Auto Refresh (Dashboard)');
+        await requestDashboard();
+      },
+    );
+  }
+
+  void _stopDashboardPolling() {
+    _dashboardPollTimer?.cancel();
+    _dashboardPollTimer = null;
+  }
+
+  /// Polls the Cell Voltage request every 5 seconds while connection is
+  /// ready. Runs independently of the Dashboard poller and of which screen
+  /// is currently active.
+  void _startCellVoltagePolling() {
+    _cellVoltagePollTimer?.cancel();
+
+    _cellVoltagePollTimer = Timer.periodic(
+      const Duration(seconds: 10),
+      (_) async {
+        if (state != BMSConnectionState.ready) return;
+        if (isCellVoltageLoading) return; // avoid overlapping requests
+
+        addDebugLog('🔁 Auto Refresh (Cell Voltage)');
+        await requestCellVoltages();
+      },
+    );
+  }
+
+  void _stopCellVoltagePolling() {
+    _cellVoltagePollTimer?.cancel();
+    _cellVoltagePollTimer = null;
+  }
+
+void startDashboardPolling() {
+  _stopCellVoltagePolling();
+  _startDashboardPolling();
 }
 
-void _stopPolling() {
-  _pollTimer?.cancel();
-  _pollTimer = null;
+void startCellVoltagePolling() {
+  _stopDashboardPolling();
+  _startCellVoltagePolling();
 }
 
-
-void _startDashboardPolling() {
-  _dashboardPollTimer?.cancel();
-
-  _dashboardPollTimer = Timer.periodic(
-    const Duration(seconds: 5),
-    (_) async {
-      if (state != BMSConnectionState.ready) return;
-
-      addDebugLog('🔁 Auto Refresh');
-
-      await requestDashboard();
-    },
-  );
-}
-
-void _stopDashboardPolling() {
-  _dashboardPollTimer?.cancel();
-  _dashboardPollTimer = null;
+void stopAllPolling() {
+  _stopDashboardPolling();
+  _stopCellVoltagePolling();
 }
   // ─────────────────────────────────────────────────────────────────────────
   // DISCONNECT
@@ -572,7 +622,8 @@ void _stopDashboardPolling() {
 
     _ackTimer?.cancel();
     _stopPolling();
-     _stopDashboardPolling(); 
+    _stopDashboardPolling();
+    _stopCellVoltagePolling();
 
     if (_writeChar != null) {
       final int crc = BMSCrcService.calculateCRC8([BMSProtocol.packetLength, BMSProtocol.idDisconnect]);
@@ -672,6 +723,7 @@ void _stopDashboardPolling() {
 
   void _cleanup() {
     _stopDashboardPolling();
+    _stopCellVoltagePolling();
     _notifyChar = null;
     _writeChar  = null;
     _notifySub?.cancel();
@@ -687,6 +739,8 @@ void _stopDashboardPolling() {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _stopPolling();
+    _stopDashboardPolling();
+    _stopCellVoltagePolling();
     super.dispose();
   }
 

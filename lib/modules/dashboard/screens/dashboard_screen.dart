@@ -9,6 +9,7 @@ import '../../../modules/cells/screens/cell_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
+import 'package:provider/provider.dart';
 
 const _green  = Color(0xFF1B6B3A);
 const _blue   = Color(0xFF3A6EAC);
@@ -245,6 +246,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    Future.microtask(() {
+  context.read<BMSBluetoothService>().startDashboardPolling();
+});
     // Try to load cached data initially
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // If BLE has data, use it, otherwise load from cache.
@@ -793,6 +797,7 @@ class _BatteryCardState extends State<_BatteryCard>
   @override
   void dispose() {
     _blinkController.dispose();
+    context.read<BMSBluetoothService>().stopAllPolling();
     super.dispose();
   }
 

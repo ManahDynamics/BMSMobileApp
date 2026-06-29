@@ -18,6 +18,8 @@ import 'package:bmsmobileapp/modules/auth/models/login_response.dart';
 import 'package:bmsmobileapp/modules/registration/screens/registration_screen.dart';
 import 'package:bmsmobileapp/modules/forgotPassword/screens/forgot_password_screen.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
+import 'package:bmsmobileapp/services/google_auth_service.dart';
+
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -47,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   final TokenService  _tokenService  = TokenService();
   final LocalAuthDB   _localAuthDB   = LocalAuthDB();
-
+ final GoogleAuthService _googleAuthService = GoogleAuthService();
   @override
   void initState() {
     super.initState();
@@ -77,7 +79,98 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     }
   }
+Future<void> _handleGoogleLogin() async {
+  setState(() {
+    _isLoading = true;
+    _errorMessage = null;
+  });
 
+  try {
+    final googleResult = await _googleAuthService.signIn();
+
+    if (googleResult == null) {
+      return;
+    }
+
+    final deviceInfo = await _getDeviceInfo();
+
+    final response = await http.post(
+      Uri.parse('http://15.207.26.224:3030/api/auth/login'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({
+        "loginType": "google",
+        "googleIdToken": googleResult.firebaseIdToken,
+        "deviceId": deviceInfo["deviceId"],
+        "devicePlatform": deviceInfo["devicePlatform"],
+        "deviceToken": deviceInfo["deviceToken"],
+      }),
+    );
+
+    final Map<String, dynamic> rawJson = jsonDecode(response.body);
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final loginResponse = LoginResponse.fromJson(rawJson);
+
+      final name = loginResponse.name ?? "User";
+      final email = loginResponse.email ?? "";
+      final userId = loginResponse.userId ?? "";
+
+      if (loginResponse.accessToken != null &&
+          loginResponse.accessToken!.isNotEmpty) {
+        await _tokenService.saveToken(loginResponse.accessToken!);
+
+        await _tokenService.saveUserEmail(email);
+
+        await _tokenService.saveUserName(name);
+
+        if (userId.isNotEmpty) {
+          await _tokenService.saveUserId(userId);
+        }
+
+        if (loginResponse.refreshToken != null &&
+            loginResponse.refreshToken!.isNotEmpty) {
+          await _tokenService.saveRefreshToken(
+            loginResponse.refreshToken!,
+          );
+        }
+      }
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Welcome back, $name!"),
+          backgroundColor: const Color(0xFF5E93D4),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+
+      Navigator.pushReplacementNamed(context, '/connect');
+    } else {
+      setState(() {
+        _errorMessage =
+            rawJson["message"] ?? rawJson["error"] ?? "Google login failed";
+      });
+    }
+  } catch (e) {
+    setState(() {
+      _errorMessage = e.toString();
+    });
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+}
+
+void _continueAsGuest() {
+  Navigator.pushReplacementNamed(context, '/connect');
+}
   Future<bool> _isOnline() async {
     final result = await Connectivity().checkConnectivity();
     return result.contains(ConnectivityResult.mobile) ||
@@ -444,45 +537,103 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildDividerAndRegister() {
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(child: Divider(color: Colors.grey.shade300)),
-            const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text('or', style: TextStyle(color: Colors.grey))),
-            Expanded(child: Divider(color: Colors.grey.shade300)),
-          ],
+ Widget _buildDivider() {
+  return Row(
+    children: [
+      Expanded(
+        child: Divider(
+          color: Colors.grey.shade300,
         ),
-        const SizedBox(height: 16),
-        Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(TranslationService.t('login.no_account_prefix'),
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12)),
-              const SizedBox(width: 4),
-              GestureDetector(
-                onTap: _isLoading
-                    ? null
-                    : () => Navigator.push(
-                        context, SlideRoute(page: const RegisterScreen())),
-                child: Text(
-                  TranslationService.t('login.register_here'),
-                  style: TextStyle(
-                      color      : AppColors.primaryBlue,
-                      fontWeight : FontWeight.w600),
-                ),
-              ),
-            ],
+      ),
+      const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 12),
+        child: Text(
+          'OR',
+          style: TextStyle(
+            color: Colors.grey,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      Expanded(
+        child: Divider(
+          color: Colors.grey.shade300,
+        ),
+      ),
+    ],
+  );
+}
+Widget _buildGoogleButton() {
+  return SizedBox(
+    width: double.infinity,
+    height: 52,
+    child: OutlinedButton.icon(
+      onPressed: _isLoading ? null : _handleGoogleLogin,
+      icon: Image.asset(
+        'assets/images/google_logo.png',
+        width: 22,
+      ),
+      label: const Text(
+        'Continue with Google',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+  );
+}
+Widget _buildGuestButton() {
+  return SizedBox(
+    width: double.infinity,
+    height: 52,
+    child: OutlinedButton.icon(
+      onPressed: _isLoading ? null : _continueAsGuest,
+      icon: const Icon(Icons.person_outline),
+      label: const Text(
+        'Continue as Guest',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    ),
+  );
+}
+Widget _buildRegister() {
+  return Center(
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          TranslationService.t('login.no_account_prefix'),
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 12,
+          ),
+        ),
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: _isLoading
+              ? null
+              : () => Navigator.push(
+                    context,
+                    SlideRoute(
+                      page: const RegisterScreen(),
+                    ),
+                  ),
+          child: Text(
+            TranslationService.t('login.register_here'),
+            style: const TextStyle(
+              color: AppColors.primaryBlue,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
-    );
-  }
-
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -635,7 +786,20 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         const SizedBox(height: 20),
-                        _buildDividerAndRegister(),
+
+_buildDivider(),
+
+const SizedBox(height: 20),
+
+_buildGoogleButton(),
+
+const SizedBox(height: 12),
+
+_buildGuestButton(),
+
+const SizedBox(height: 20),
+
+_buildRegister(),
                       ],
                     ),
                   ),
