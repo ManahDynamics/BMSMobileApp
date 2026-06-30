@@ -1,0 +1,79 @@
+name: Release Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    # Prevents the auto-commit below from re-triggering this workflow
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Read base version from pubspec.yaml
+        id: base_version
+        run: |
+          BASE_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version:[[:space:]]*//' | cut -d'+' -f1)
+          MAJOR=$(echo "$BASE_VERSION" | cut -d'.' -f1)
+          MINOR=$(echo "$BASE_VERSION" | cut -d'.' -f2)
+          echo "major=$MAJOR" >> "$GITHUB_OUTPUT"
+          echo "minor=$MINOR" >> "$GITHUB_OUTPUT"
+
+      - name: Compute build name and number
+        id: version
+        run: |
+          BUILD_NUMBER=${{ github.run_number }}
+          BUILD_NAME="${{ steps.base_version.outputs.major }}.${{ steps.base_version.outputs.minor }}.${BUILD_NUMBER}"
+          echo "build_name=$BUILD_NAME" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Building version $BUILD_NAME+$BUILD_NUMBER"
+
+      - name: Update pubspec.yaml with new version
+        run: |
+          sed -i "s/^version:.*/version: ${{ steps.version.outputs.build_name }}+${{ steps.version.outputs.build_number }}/" pubspec.yaml
+          cat pubspec.yaml | grep '^version:'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Release APK
+        run: |
+          flutter build apk --release \
+            --build-name=${{ steps.version.outputs.build_name }} \
+            --build-number=${{ steps.version.outputs.build_number }}
+
+      - name: Commit updated pubspec.yaml back to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pubspec.yaml
+          git commit -m "chore: bump version to ${{ steps.version.outputs.build_name }}+${{ steps.version.outputs.build_number }} [skip ci]"
+          git push
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk-${{ steps.version.outputs.build_name }}+${{ steps.version.outputs.build_number }}
+          path: build/app/outputs/flutter-apk/app-release.apk

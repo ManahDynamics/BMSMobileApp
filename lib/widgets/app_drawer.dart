@@ -1,5 +1,6 @@
 // ignore_for_file: deprecated_member_use
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import '../../../modules/dashboard/screens/dashboard_screen.dart';
 import '../../../modules/cells/screens/cell_screen.dart';
@@ -27,11 +28,23 @@ class _AppDrawerState extends State<AppDrawer> {
     return TranslationService.t(key);
   }
 
+  String _versionLabel = '';
+
   // ── Listen to TranslationService changes ─────────────────────────────────
   @override
   void initState() {
     super.initState();
     TranslationService.instance.addListener(_onTranslationsChanged);
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final info = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _versionLabel = 'v${info.version} (${info.buildNumber})';
+      });
+    }
   }
 
   void _onTranslationsChanged() {
@@ -151,6 +164,22 @@ class _AppDrawerState extends State<AppDrawer> {
                   label: tr('drawer.settings'),
                   route: '/settings',
                   page: SettingsScreen(service: widget.service),
+                ),
+                const Spacer(),
+                // ── Version number footer ───────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: 16,
+                    bottom: 18,
+                    top: 8,
+                  ),
+                  child: Text(
+                    _versionLabel,
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
+                  ),
                 ),
               ],
             ),
