@@ -158,7 +158,7 @@ class BMSParsedPacket {
           : '– Ah';
 
   String get powerDisplay =>
-      totalPower != null ? '${(totalPower! / 1000).toStringAsFixed(0)} Kw' : '– Kw';
+      totalPower != null ? '${(totalPower!).toStringAsFixed(0)} Kw' : '– Kw';
 
   String get temperatureDisplay =>
       temperature != null ? '${temperature!.toStringAsFixed(0)} °C' : '– °C';

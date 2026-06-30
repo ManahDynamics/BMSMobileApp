@@ -259,7 +259,7 @@ class BMSPacketParser {
     final int rawCurrent           = _littleEndian16(bytes, BMSProtocol.dashCurrentHigh);
     final double totalCurrent      = _decodeSigned16(rawCurrent) / 10.0;
     final int rawTemp              = _littleEndian16(bytes, BMSProtocol.dashTempHigh);
-    final double temperature       = _decodeSigned16(rawTemp).toDouble();
+    final double temperature       = _decodeSigned16(rawTemp) / 10.0;
     final int rawPower             = _littleEndian16(bytes, BMSProtocol.dashPowerHigh);
     final double totalPower        = _decodeSigned16(rawPower) / 1000.0;
     final int totalCells           = bytes[BMSProtocol.dashTotalCellsByte] & 0xFF;
