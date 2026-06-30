@@ -6,6 +6,7 @@ import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
+import 'package:bmsmobileapp/widgets/screen_pulse_overlay.dart';
 import 'package:provider/provider.dart';
 
 enum SortType { cellNo, voltage }
@@ -56,9 +57,9 @@ class _CellsScreenState extends State<CellsScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(() {
-  context.read<BMSBluetoothService>().startCellVoltagePolling();
-});
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.service.startCellVoltagePolling();
+    });
     TranslationService.instance.addListener(_onChanged);
     widget.service.addListener(_onChanged);
     _sortCells();
@@ -347,7 +348,10 @@ class _CellsScreenState extends State<CellsScreen> {
           ),
         ],
       ),
-      body: widget.service.isCellVoltageLoading
+      body: ScreenPulseOverlay(
+  pulseValue: widget.service.cellVoltagePulse,
+  color: primaryGreen,
+  child: widget.service.isCellVoltageLoading
           ? const Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -660,6 +664,7 @@ class _CellsScreenState extends State<CellsScreen> {
           ],
         ),
       ),
+    )
     );
   }
 

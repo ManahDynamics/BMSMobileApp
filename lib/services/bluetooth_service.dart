@@ -59,6 +59,9 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   BMSParsedPacket? latestDashboard;
   BMSParsedPacket? latestCellVoltage;
 
+   int dashboardPulse = 0;
+  int cellVoltagePulse = 0;
+
   // ── Device info ───────────────────────────────────────────────────────────
   String? bleName;
   String? batterySerial;
@@ -223,8 +226,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     _notifySub = _notifyChar!.onValueReceived.listen((raw) {
       if (raw.isEmpty) return;
 
-      debugPrint('📥 RX [${raw.length} bytes] : ${_toHex(raw)}');
-      addDebugLog('📥 RX [${raw.length}B]: ${_toHex(raw)}');
+      // debugPrint('📥 RX [${raw.length} bytes] : ${_toHex(raw)}');
+      // addDebugLog('📥 RX [${raw.length}B]: ${_toHex(raw)}');
 
       final result = BMSPacketParser.parse(
         Uint8List.fromList(raw),
@@ -233,8 +236,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
       if (result.isSuccess && result.packet != null) {
         final packet = result.packet!.copyWith(direction: PacketDirection.receive);
         _addToLog(packet);
-        debugPrint('✅ RX Parsed: ${packet.typeName}');
-        addDebugLog('✅ Parsed: ${packet.typeName}');
+        // debugPrint('✅ RX Parsed: ${packet.typeName}');
+        // addDebugLog('✅ Parsed: ${packet.typeName}');
         addDebugLog(
           '✅ Response received: 0x${result.packet!.dataId.toRadixString(16).toUpperCase()}',
         );
@@ -242,6 +245,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
         if (packet.isCellVoltageResponse) {
           addDebugLog('🔋 Cell Voltage Response received');
           latestCellVoltage = packet;
+          cellVoltagePulse++;
           notifyListeners();
           if (_cellVoltageCompleter != null && !_cellVoltageCompleter!.isCompleted) {
             _cellVoltageCompleter!.complete(true);
@@ -259,6 +263,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
           // and still use the dedicated cell-voltage request/response.
           latestDashboard   = packet;
           latestCellVoltage = packet;
+           dashboardPulse++;
+          cellVoltagePulse++;
 
           if (_cellVoltageCompleter != null && !_cellVoltageCompleter!.isCompleted) {
             _cellVoltageCompleter!.complete(true);
@@ -311,8 +317,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
       } else {
         final reason = result.error?.name ?? 'unknown';
         final detail = result.errorDetail ?? '';
-        debugPrint('❌ RX Parse Failed [$reason] $detail — last valid data retained');
-        addDebugLog('❌ Parse FAILED [$reason] $detail');
+        // debugPrint('❌ RX Parse Failed [$reason] $detail — last valid data retained');
+        // addDebugLog('❌ Parse FAILED [$reason] $detail');
       }
     });
   }

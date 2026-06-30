@@ -9,6 +9,7 @@ import '../../../modules/cells/screens/cell_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
+import 'package:bmsmobileapp/widgets/screen_pulse_overlay.dart';
 import 'package:provider/provider.dart';
 
 const _green  = Color(0xFF1B6B3A);
@@ -245,10 +246,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void initState() {
-    super.initState();
-    Future.microtask(() {
-  context.read<BMSBluetoothService>().startDashboardPolling();
-});
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    widget.service.startDashboardPolling();
+  });
+
     // Try to load cached data initially
     WidgetsBinding.instance.addPostFrameCallback((_) {
       // If BLE has data, use it, otherwise load from cache.
@@ -380,8 +382,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
        final int warningAlertsCount = dashMap?['warningAlerts'] as int? ?? 0;
         final int faultAlertsCount   = dashMap?['faultAlerts'] as int? ?? 0;
         final int clearedAlertsCount = dashMap?['clearedAlerts'] as int? ?? 0;
-        final int totalAlertsCount   = dashMap?['totalAlerts'] as int? ??
-            (warningAlertsCount + faultAlertsCount + clearedAlertsCount);
+        final int totalAlertsCount = dashMap?['totalAlerts'] as int? ?? 0;
 
         final bool hasData = dashMap != null || cellMap != null;
 
@@ -450,7 +451,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-          body: svc.isDashboardLoading
+          body: ScreenPulseOverlay(
+            pulseValue: svc.dashboardPulse,
+            color: _green,
+            child: svc.isDashboardLoading
               ? const Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -684,19 +688,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
+        )
         );
       },
     );
-  }
-
-  String _nowTime() {
-    final now    = DateTime.now();
-    final h      = now.hour > 12
-        ? now.hour - 12
-        : now.hour == 0 ? 12 : now.hour;
-    final m      = now.minute.toString().padLeft(2, '0');
-    final period = now.hour >= 12 ? 'PM' : 'AM';
-    return '${h.toString().padLeft(2, '0')}:$m $period';
   }
 }
 
