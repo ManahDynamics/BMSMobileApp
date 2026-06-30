@@ -60,6 +60,8 @@ class _AppDrawerState extends State<AppDrawer> {
 
   @override
   Widget build(BuildContext context) {
+    final currentYear = DateTime.now().year;
+
     return Drawer(
       backgroundColor: const Color(0xFF0B6645),
       width: MediaQuery.of(context).size.width * 0.78,
@@ -166,19 +168,32 @@ class _AppDrawerState extends State<AppDrawer> {
                   page: SettingsScreen(service: widget.service),
                 ),
                 const Spacer(),
-                // ── Version number footer ───────────────────────────────
+                // ── Version number + copyright footer ───────────────────
                 Padding(
                   padding: const EdgeInsets.only(
                     left: 16,
                     bottom: 18,
                     top: 8,
                   ),
-                  child: Text(
-                    _versionLabel,
-                    style: const TextStyle(
-                      color: Colors.white54,
-                      fontSize: 12,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _versionLabel,
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '\u00A9 manah.com $currentYear',
+                        style: const TextStyle(
+                          color: Colors.white54,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
