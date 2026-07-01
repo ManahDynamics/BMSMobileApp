@@ -1326,6 +1326,52 @@ class _AlertsSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool hasAnyAlerts =
+        warningCount > 0 || faultCount > 0 || clearedCount > 0;
+
+    // Build only the rows that have a non-zero count
+    final List<Widget> rows = [];
+
+    if (warningCount > 0) {
+      rows.add(_alertRow(
+        icon: Icons.warning_amber_rounded,
+        iconColor: Colors.grey.shade600,
+        label: 'Warning Alerts',
+        count: warningCount,
+      ));
+    }
+    if (faultCount > 0) {
+      rows.add(_alertRow(
+        icon: Icons.error_outline_rounded,
+        iconColor: Colors.grey.shade600,
+        label: 'Fault Alerts',
+        count: faultCount,
+      ));
+    }
+    if (clearedCount > 0) {
+      rows.add(_alertRow(
+        icon: Icons.check_circle_outline_rounded,
+        iconColor: Colors.grey.shade600,
+        label: 'Cleared Alerts',
+        count: clearedCount,
+      ));
+    }
+
+    // Interleave dividers between the visible rows only
+    final List<Widget> children = [];
+    for (int i = 0; i < rows.length; i++) {
+      children.add(rows[i]);
+      if (i != rows.length - 1) {
+        children.add(Divider(
+          height: 1,
+          thickness: 1,
+          color: Colors.grey.shade100,
+          indent: 14,
+          endIndent: 14,
+        ));
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1351,30 +1397,26 @@ class _AlertsSummaryCard extends StatelessWidget {
               ),
             ],
           ),
-          child: Column(
-            children: [
-              _alertRow(
-                icon: Icons.warning_amber_rounded,
-                iconColor: Colors.grey.shade600,
-                label: 'Warning Alerts',
-                count: warningCount,
-              ),
-              Divider(height: 1, thickness: 1, color: Colors.grey.shade100, indent: 14, endIndent: 14),
-              _alertRow(
-                icon: Icons.error_outline_rounded,
-                iconColor: Colors.grey.shade600,
-                label: 'Fault Alerts',
-                count: faultCount,
-              ),
-              Divider(height: 1, thickness: 1, color: Colors.grey.shade100, indent: 14, endIndent: 14),
-              _alertRow(
-                icon: Icons.check_circle_outline_rounded,
-                iconColor: Colors.grey.shade600,
-                label: 'Cleared Alerts',
-                count: clearedCount,
-              ),
-            ],
-          ),
+          child: hasAnyAlerts
+              ? Column(children: children)
+              : Padding(
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 20, horizontal: 14),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle_outline_rounded,
+                          color: Colors.green.shade600, size: 20),
+                      const SizedBox(width: 10),
+                      const Text(
+                        'No active alerts',
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.black87),
+                      ),
+                    ],
+                  ),
+                ),
         ),
       ],
     );

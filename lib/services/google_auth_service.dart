@@ -36,9 +36,12 @@ class GoogleAuthService {
     final userCredential =
         await _auth.signInWithCredential(credential);
 
-    final firebaseIdToken =
-        await userCredential.user!.getIdToken();
-        print('Firebase ID Token: $firebaseIdToken');
+    print("Firebase sign in completed");
+
+final firebaseIdToken = await userCredential.user!.getIdToken(true);
+
+print("Token fetched");
+print(firebaseIdToken);
 
     return GoogleSignInResult(
       credential: userCredential,

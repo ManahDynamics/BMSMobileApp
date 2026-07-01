@@ -42,7 +42,7 @@ class _AppDrawerState extends State<AppDrawer> {
     final info = await PackageInfo.fromPlatform();
     if (mounted) {
       setState(() {
-        _versionLabel = 'v${info.version} (${info.buildNumber})';
+        _versionLabel = 'v${info.version}';
       });
     }
   }
@@ -182,15 +182,15 @@ class _AppDrawerState extends State<AppDrawer> {
                         _versionLabel,
                         style: const TextStyle(
                           color: Colors.white54,
-                          fontSize: 12,
+                          fontSize: 15,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '\u00A9 manah.com $currentYear',
+                        '\u00A9All Rights Reserved @manah.com $currentYear',
                         style: const TextStyle(
                           color: Colors.white54,
-                          fontSize: 12,
+                          fontSize: 15,
                         ),
                       ),
                     ],
