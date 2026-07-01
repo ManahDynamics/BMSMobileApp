@@ -164,7 +164,7 @@ class _CellsScreenState extends State<CellsScreen> {
   // ── Accessors (live BLE first, cached fallback) ──────────────────────────
 
   String get _deviceName =>
-      widget.service.bleName ?? 'BMS Device';
+      widget.service.bleName ?? tr('cells.bms_device_fallback');
 
   int get _totalCells =>
       widget.service.latestCellVoltage?.cellTotalCells ??
@@ -196,8 +196,8 @@ class _CellsScreenState extends State<CellsScreen> {
 
   ({String text, Color color}) _cellStatus(double v) =>
       v < 3.2
-          ? (text: 'Poor', color: poorAmber)
-          : (text: 'Good', color: primaryGreen);
+          ? (text: tr('cells.status_poor'), color: poorAmber)
+          : (text: tr('cells.status_good'), color: primaryGreen);
 
   // ── Summary tile ─────────────────────────────────────────────────────────
 
@@ -242,7 +242,7 @@ class _CellsScreenState extends State<CellsScreen> {
                       color: Colors.white70, fontSize: 10)),
               const SizedBox(height: 3),
               if (isBalancing) ...[
-                Text('Active/',
+                Text('${tr('cells.active')}/',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: balancingActive
@@ -250,7 +250,7 @@ class _CellsScreenState extends State<CellsScreen> {
                             : Colors.white38,
                         fontSize  : 13,
                         fontWeight: FontWeight.bold)),
-                Text('Inactive',
+                Text(tr('cells.inactive'),
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: !balancingActive
@@ -298,8 +298,8 @@ class _CellsScreenState extends State<CellsScreen> {
         ),
         title: Column(
           children: [
-            const Text('Cell Details',
-                style: TextStyle(
+            Text(tr('cells.title'),
+                style: const TextStyle(
                     color     : Colors.white,
                     fontSize  : 16,
                     fontWeight: FontWeight.w600)),
@@ -338,12 +338,12 @@ class _CellsScreenState extends State<CellsScreen> {
             shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8)),
             onSelected: (_) {},
-            itemBuilder: (ctx) => const [
+            itemBuilder: (ctx) => [
               PopupMenuItem(
-                  value: 'edit_profile', child: Text('Edit Profile')),
+                  value: 'edit_profile', child: Text(tr('dashboard.edit_profile'))),
               PopupMenuItem(
-                  value: 'forget_password', child: Text('Forget Password')),
-              PopupMenuItem(value: 'logout', child: Text('Logout')),
+                  value: 'forget_password', child: Text(tr('dashboard.forget_password'))),
+              PopupMenuItem(value: 'logout', child: Text(tr('logout.title'))),
             ],
           ),
         ],
@@ -352,18 +352,18 @@ class _CellsScreenState extends State<CellsScreen> {
   pulseValue: widget.service.cellVoltagePulse,
   color: primaryGreen,
   child: widget.service.isCellVoltageLoading
-          ? const Center(
+          ? Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  CircularProgressIndicator(
+                  const CircularProgressIndicator(
                     strokeWidth: 2.5,
                     color: primaryGreen,
                   ),
-                  SizedBox(height: 16),
+                  const SizedBox(height: 16),
                   Text(
-                    'Loading cell details…',
-                    style: TextStyle(fontSize: 14, color: Colors.black54),
+                    tr('cells.loading'),
+                    style: const TextStyle(fontSize: 14, color: Colors.black54),
                   ),
                 ],
               ),
@@ -393,7 +393,7 @@ class _CellsScreenState extends State<CellsScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Offline — showing last cached cell data',
+                        tr('cells.offline_banner'),
                         style: TextStyle(
                             fontSize: 12, color: Colors.orange.shade900),
                       ),
@@ -403,7 +403,7 @@ class _CellsScreenState extends State<CellsScreen> {
               ),
 
             Text(
-              'Cell Details${_totalCells > 0 ? ' ($_totalCells Cells)' : ''}',
+              '${tr('cells.title')}${_totalCells > 0 ? ' ($_totalCells ${tr('dashboard.cells')})' : ''}',
               style: const TextStyle(
                   fontSize: 15, fontWeight: FontWeight.w600),
             ),
@@ -420,33 +420,33 @@ class _CellsScreenState extends State<CellsScreen> {
                   children: [
                     Container(width: 1, color: Colors.white24),
                     _summaryTile(
-                      label        : 'Total Cells',
+                      label        : tr('cells.total_cells'),
                       value        : '$_totalCells',
                       isTotalCells : true,
                     ),
                     Container(width: 1, color: Colors.white24),
                     _summaryTile(
-                      label: 'Max. Volt',
+                      label: tr('cells.max_volt'),
                       value: _maxVoltage != null
                           ? '${_maxVoltage!.toStringAsFixed(3)} V'
                           : '– V',
                       sub  : _maxVoltageNo != null
-                          ? 'Cell ${_maxVoltageNo.toString().padLeft(2, '0')}'
+                          ? '${tr('cells.cell_label')} ${_maxVoltageNo.toString().padLeft(2, '0')}'
                           : null,
                     ),
                     Container(width: 1, color: Colors.white24),
                     _summaryTile(
-                      label: 'Min. Volt',
+                      label: tr('cells.min_volt'),
                       value: _minVoltage != null
                           ? '${_minVoltage!.toStringAsFixed(3)} V'
                           : '– V',
                       sub  : _minVoltageNo != null
-                          ? 'Cell ${_minVoltageNo.toString().padLeft(2, '0')}'
+                          ? '${tr('cells.cell_label')} ${_minVoltageNo.toString().padLeft(2, '0')}'
                           : null,
                     ),
                     Container(width: 1, color: Colors.white24),
                     _summaryTile(
-                      label: 'Average\nVoltage',
+                      label: tr('cells.average_voltage'),
                       value: _avgVoltage != null
                           ? '${_avgVoltage!.toStringAsFixed(1)} V'
                           : '– V',
@@ -468,15 +468,15 @@ class _CellsScreenState extends State<CellsScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('Cell Voltages',
-                      style: TextStyle(
+                  Text(tr('cells.cell_voltages'),
+                      style: const TextStyle(
                           fontSize  : 14,
                           fontWeight: FontWeight.w600,
                           color     : Colors.black54)),
                   Row(
                     children: [
-                      const Text('Sort by: ',
-                          style: TextStyle(
+                      Text('${tr('cells.sort_by')}: ',
+                          style: const TextStyle(
                               fontSize: 12, color: Colors.black54)),
                       GestureDetector(
                         key    : _sortButtonKey,
@@ -494,8 +494,8 @@ class _CellsScreenState extends State<CellsScreen> {
                             children: [
                               Text(
                                 _sortBy == SortType.cellNo
-                                    ? 'Cell No.'
-                                    : 'Voltage',
+                                    ? tr('cells.sort_cell_no')
+                                    : tr('cells.sort_voltage'),
                                 style:
                                     const TextStyle(fontSize: 12),
                               ),
@@ -537,7 +537,7 @@ class _CellsScreenState extends State<CellsScreen> {
                                   SizedBox(
                                     width: 54,
                                     child: Text(
-                                      'Cell ${cell.no.toString().padLeft(2, '0')}',
+                                      '${tr('cells.cell_label')} ${cell.no.toString().padLeft(2, '0')}',
                                       style: const TextStyle(
                                           fontWeight: FontWeight.w500,
                                           fontSize  : 13,
@@ -633,13 +633,13 @@ class _CellsScreenState extends State<CellsScreen> {
                                 const SizedBox(height: 12),
                                 TextButton.icon(
                                   icon: const Icon(Icons.refresh),
-                                  label: const Text('Retry'),
+                                  label: Text(tr('cells.retry')),
                                   onPressed: () => widget.service
                                       .refreshCellVoltages(),
                                 ),
                                 TextButton.icon(
                                   icon: const Icon(Icons.history),
-                                  label: const Text('Load cached data'),
+                                  label: Text(tr('dashboard.load_cached_data')),
                                   onPressed: _loadFromCache,
                                 ),
                               ]
@@ -647,14 +647,14 @@ class _CellsScreenState extends State<CellsScreen> {
                                 const CircularProgressIndicator(
                                     color: primaryGreen),
                                 const SizedBox(height: 16),
-                                const Text('Waiting for cell data…',
-                                    style: TextStyle(
+                                Text(tr('cells.waiting_for_data'),
+                                    style: const TextStyle(
                                         color: Colors.black54)),
                                 const SizedBox(height: 12),
                                 // Offer to load from cache
                                 TextButton.icon(
                                   icon: const Icon(Icons.history),
-                                  label: const Text('Load cached data'),
+                                  label: Text(tr('dashboard.load_cached_data')),
                                   onPressed: _loadFromCache,
                                 ),
                               ],
@@ -689,9 +689,9 @@ class _CellsScreenState extends State<CellsScreen> {
     final result = await showMenu<SortType>(
       context : context,
       position: position,
-      items   : const [
-        PopupMenuItem(value: SortType.cellNo,  child: Text('Cell No.')),
-        PopupMenuItem(value: SortType.voltage, child: Text('Voltage')),
+      items   : [
+        PopupMenuItem(value: SortType.cellNo,  child: Text(tr('cells.sort_cell_no'))),
+        PopupMenuItem(value: SortType.voltage, child: Text(tr('cells.sort_voltage'))),
       ],
     );
 

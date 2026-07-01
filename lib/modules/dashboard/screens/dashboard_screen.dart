@@ -13,7 +13,7 @@ import 'package:bmsmobileapp/widgets/screen_pulse_overlay.dart';
 import 'package:provider/provider.dart';
 
 const _green  = Color(0xFF1B6B3A);
-const _blue   = Color(0xFF3A6EAC);
+// const _blue   = Color(0xFF3A6EAC);
 const _orange = Color(0xFFD4621A);
 const _gap12  = SizedBox(height: 12);
 const _gap16  = SizedBox(height: 16);
@@ -29,12 +29,9 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final LocalAuthDB _localAuthDB = LocalAuthDB();
 
-  // Tracks the last map we cached so we don't write on every rebuild
   Map<String, dynamic>? _lastCachedDash;
   Map<String, dynamic>? _lastCachedCell;
   String? _lastCachedDeviceName;
-  
-  // Cached data for offline display
   Map<String, dynamic>? _cachedDashboard;
   Map<String, dynamic>? _cachedCellVoltage;
   String? _cachedDeviceName;
@@ -69,10 +66,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: const Icon(Icons.bluetooth, size: 40, color: Color(0xFF00796B)),
             ),
             const SizedBox(height: 24),
-            const Text(
-              'Are you sure you want to disconnect the device?',
+            Text(
+              tr('dashboard.disconnect_confirm'),
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, height: 1.4, color: Colors.black87),
+              style: const TextStyle(fontSize: 16, height: 1.4, color: Colors.black87),
             ),
             const SizedBox(height: 32),
             Row(
@@ -88,8 +85,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
                     ),
-                    child: const Text('Yes',
-                        style: TextStyle(
+                    child: Text(tr('dashboard.yes'),
+                        style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
                 ),
@@ -104,8 +101,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(8)),
                     ),
-                    child: const Text('Cancel',
-                        style: TextStyle(
+                    child: Text(tr('dashboard.cancel'),
+                        style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w500)),
                   ),
                 ),
@@ -340,7 +337,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return ListenableBuilder(
       listenable: svc,
       builder: (context, _) {
-        // ── Cache in background whenever data arrives ──────────────────
         _cacheDeviceNameIfNew();
         _cacheDashboardIfNew();
         _cacheCellVoltageIfNew();
@@ -401,11 +397,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             title: Column(
               children: [
-                const Text('Dashboard',
-                    style: TextStyle(
-                        color     : Colors.white,
-                        fontSize  : 18,
-                        fontWeight: FontWeight.w500)),
+                Text(tr('dashboard.title'),
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
                 if (deviceName.isNotEmpty)
                   Text(deviceName,
                       style: const TextStyle(color: Colors.white60, fontSize: 11)),
@@ -443,10 +437,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onSelected: (value) {
                   if (value == 'logout') _showDisconnectDialog();
                 },
-                itemBuilder: (ctx) => const [
-                  PopupMenuItem(value: 'edit_profile',   child: Text('Edit Profile')),
-                  PopupMenuItem(value: 'forget_password', child: Text('Forget Password')),
-                  PopupMenuItem(value: 'logout',          child: Text('Logout')),
+                itemBuilder: (ctx) => [
+                  PopupMenuItem(value: 'edit_profile',    child: Text(tr('dashboard.edit_profile'))),
+                  PopupMenuItem(value: 'forget_password', child: Text(tr('dashboard.forget_password'))),
+                  PopupMenuItem(value: 'logout',          child: Text(tr('logout.title'))),
                 ],
               ),
             ],
@@ -455,19 +449,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
             pulseValue: svc.dashboardPulse,
             color: _green,
             child: svc.isDashboardLoading
-              ? const Center(
+              ? Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircularProgressIndicator(
+                        const CircularProgressIndicator(
                         strokeWidth: 2.5,
-                        color: _green,
+                        color: _green
                       ),
-                      SizedBox(height: 16),
-                      Text(
-                        'Loading dashboard details…',
-                        style: TextStyle(fontSize: 14, color: Colors.black54),
-                      ),
+                        const SizedBox(height: 16),
+                      Text(tr('dashboard.loading_details'),
+                        style: const TextStyle(fontSize: 14, color: Colors.black54)),
                     ],
                   ),
                 )
@@ -493,9 +485,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Offline — showing last cached data',
+                          tr('dashboard.offline_cached_banner'),
                           style: TextStyle(
-                              fontSize: 12, color: Colors.orange.shade900),
+                              fontSize: 12, color: Colors.orange.shade900)
                         ),
                       ),
                     ],
@@ -509,18 +501,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
 
               if (svc.isBleNameLoading && !_isFromCache)
-                const Padding(
-                  padding: EdgeInsets.only(top: 4),
-                  child: Text('Fetching device name…',
-                      style: TextStyle(fontSize: 12, color: Colors.black54)),
+                 Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(tr('dashboard.fetching_device_name'),
+                      style: const TextStyle(fontSize: 12, color: Colors.black54)),
                 )
               else if (svc.bleNameError != null && !_isFromCache)
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Row(
                     children: [
-                      Icon(Icons.error_outline,
-                          size: 14, color: Colors.red.shade700),
+                      Icon(Icons.error_outline, size: 14, color: Colors.red.shade700),
                       const SizedBox(width: 4),
                       Expanded(
                         child: Text(svc.bleNameError!,
@@ -565,8 +556,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text('Connected',
-                            style: TextStyle(
+                         Text(tr('dashboard.connected'),
+                            style: const TextStyle(
                                 color     : _green,
                                 fontWeight: FontWeight.w600,
                                 fontSize  : 13)),
@@ -590,8 +581,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           borderRadius: BorderRadius.circular(8)),
                       elevation: 0,
                     ),
-                    child: const Text('Disconnect',
-                        style: TextStyle(
+                    child: Text(tr('dashboard.disconnect'),
+                        style: const TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w600)),
                   ),
                 ],
@@ -603,12 +594,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               else if (!hasData && !_isFromCache)
                 Column(
                   children: [
-                    const _ErrorSection(
-                        message: 'No data available. Try loading from cache.'),
+                     _ErrorSection(
+                        message: tr('dashboard.no_data_available')),
                     const SizedBox(height: 12),
                     TextButton.icon(
                       icon: const Icon(Icons.history),
-                      label: const Text('Load cached data'),
+                      label: Text(tr('dashboard.load_cached_data')),
                       onPressed: _loadFromCache,
                     ),
                   ],
@@ -629,14 +620,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
               Row(
                 children: [
-                  Expanded(
-                    child: _MetricCard(
-                        label: 'Voltage', value: voltageDisplay, iconLabel: 'V')),
+                  Expanded(child: _MetricCard(
+                        label: tr('dashboard.voltage'), value: voltageDisplay, iconLabel: 'V')),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _MetricCard(
-                      label     : 'Current',
-                      value     : currentDisplay,
+                      label: tr('dashboard.current'),
+                      value: currentDisplay,
                       iconLabel : 'A',
                       isCharging: isCharging,
                     )),
@@ -649,13 +639,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Expanded(
                     child: _MetricCard(
-                        label: 'Temperature',
+                        label: tr('dashboard.temperature'),
                         value: tempDisplay,
                         icon : Icons.thermostat_rounded)),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _MetricCard(
-                        label: 'Power',
+                        label: tr('dashboard.power'),
                         value: powerDisplay,
                         icon : Icons.power_outlined)),
                 ],
@@ -711,6 +701,7 @@ class _DeviceHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tr = TranslationService.t;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -718,13 +709,13 @@ class _DeviceHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Battery Type: $batteryType',
+              Text('${tr('dashboard.battery_type')}: $batteryType',
                   style: const TextStyle(
                       fontSize  : 17,
                       fontWeight: FontWeight.w600,
                       color     : Color(0xFF424242))),
               const SizedBox(height: 4),
-              Text('Battery Serial No: $serialNo',
+              Text('${tr('dashboard.battery_serial_no')}: $serialNo',
                   style: TextStyle(
                       fontSize  : 13,
                       fontWeight: FontWeight.w400,
@@ -801,6 +792,7 @@ class _BatteryCardState extends State<_BatteryCard>
 
   @override
   Widget build(BuildContext context) {
+    final tr = TranslationService.t;
     return Container(
       padding    : const EdgeInsets.all(16),
       decoration : BoxDecoration(
@@ -828,8 +820,8 @@ class _BatteryCardState extends State<_BatteryCard>
                               fontSize  : 28,
                               fontWeight: FontWeight.bold,
                               color     : Colors.white)),
-                      const Text('SOC',
-                          style: TextStyle(
+                      Text(tr('dashboard.soc'),
+                          style: const TextStyle(
                               fontSize: 12, color: Colors.white70)),
                     ],
                   ),
@@ -844,8 +836,8 @@ class _BatteryCardState extends State<_BatteryCard>
               children: [
                 Row(
                   children: [
-                    const Text('Battery Status',
-                        style: TextStyle(color: Colors.white70, fontSize: 12)),
+                    Text(tr('dashboard.battery_status'),
+                        style: const TextStyle(color: Colors.white70, fontSize: 12)),
                     const Spacer(),
                    SizedBox(
   width: 28,
@@ -880,8 +872,8 @@ class _BatteryCardState extends State<_BatteryCard>
                         fontSize  : 15,
                         fontWeight: FontWeight.w600)),
                 const Divider(color: Colors.white24, height: 14),
-                const Text('Remaining Capacity',
-                    style: TextStyle(color: Colors.white70, fontSize: 12)),
+                Text(tr('dashboard.remaining_capacity'),
+                    style: const TextStyle(color: Colors.white70, fontSize: 12)),
                 Text(widget.capacity,
                     style: const TextStyle(
                         color: Colors.white, fontSize: 14)),
@@ -893,8 +885,8 @@ class _BatteryCardState extends State<_BatteryCard>
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Cycles',
-                            style: TextStyle(
+                          Text(tr('dashboard.cycles'),
+                            style: const TextStyle(
                                 color: Colors.white70, fontSize: 12)),
                         Text(widget.cycles,
                             style: const TextStyle(
@@ -912,8 +904,8 @@ class _BatteryCardState extends State<_BatteryCard>
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        const Text('Health',
-                            style: TextStyle(
+                          Text(tr('dashboard.health'),
+                            style: const TextStyle(
                                 color: Colors.white70, fontSize: 12)),
                         Row(
                           children: [
@@ -1054,9 +1046,8 @@ class _MetricCard extends StatelessWidget {
                 color: Colors.grey.shade400,
               ),
             ),
-            child: const Text(
-              "Charging",
-              style: TextStyle(
+            child: Text(TranslationService.t('dashboard.charging'),
+                            style: const TextStyle(
                 fontSize: 9,
                 color: Colors.black54,
                 fontWeight: FontWeight.w500,
@@ -1103,25 +1094,24 @@ class _CellSummary extends StatelessWidget {
     this.onViewMore,
   });
 
-  @override
+ @override
   Widget build(BuildContext context) {
+    final tr = TranslationService.t;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Cell Summary ($cellCount Cells)',
-                style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w600)),
+            Text('${tr('dashboard.cell_summary')} ($cellCount ${tr('dashboard.cells')})',
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
             GestureDetector(
               onTap: onViewMore,
-              child: const Row(
+              child: Row(
                 children: [
-                  Text('View More',
-                      style: TextStyle(color: Color(0xFF3A6EAC), fontSize: 13)),
-                  Icon(Icons.chevron_right,
-                      color: Color(0xFF3A6EAC), size: 18),
+                  Text(tr('dashboard.view_more'),
+                      style: const TextStyle(color: Color(0xFF3A6EAC), fontSize: 13)),
+                  const Icon(Icons.chevron_right, color: Color(0xFF3A6EAC), size: 18),
                 ],
               ),
             ),
@@ -1130,23 +1120,17 @@ class _CellSummary extends StatelessWidget {
         const SizedBox(height: 10),
         Row(
           children: [
-            const Text('Average Voltage',
-                style: TextStyle(fontSize: 13, color: Colors.black87)),
+            Text(tr('dashboard.average_voltage'),
+                style: const TextStyle(fontSize: 13, color: Colors.black87)),
             const SizedBox(width: 4),
             Text(avgVoltage,
-                style: const TextStyle(
-                    fontSize  : 13,
-                    fontWeight: FontWeight.w700,
-                    color     : Colors.black87)),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black87)),
             const Spacer(),
-            const Text('Volt Difference',
-                style: TextStyle(fontSize: 13, color: Colors.black87)),
+            Text(tr('dashboard.volt_difference'),
+                style: const TextStyle(fontSize: 13, color: Colors.black87)),
             const SizedBox(width: 4),
             Text(voltDiff,
-                style: const TextStyle(
-                    fontSize  : 13,
-                    fontWeight: FontWeight.w700,
-                    color     : Colors.black87)),
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black87)),
           ],
         ),
         const SizedBox(height: 4),
@@ -1155,14 +1139,11 @@ class _CellSummary extends StatelessWidget {
           child: Column(
             children: [
               SizedBox(
-                height: 130,
-                width : double.infinity,
-                child : Row(
+                height: 130, width: double.infinity,
+                child: Row(
                   children: [
-                    const SizedBox(
-                        width: 18,
-                        child: Icon(Icons.chevron_left,
-                            size: 18, color: Colors.grey)),
+                    const SizedBox(width: 18,
+                        child: Icon(Icons.chevron_left, size: 18, color: Colors.grey)),
                     Expanded(
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
@@ -1170,19 +1151,14 @@ class _CellSummary extends StatelessWidget {
                           height: 150,
                           child : Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: List.generate(
-                              cellVoltages.length,
-                              (i) => _buildBar(i, cellVoltages,
-                                  maxVoltageNo, minVoltageNo),
-                            ),
+                            children: List.generate(cellVoltages.length,
+                                (i) => _buildBar(i, cellVoltages, maxVoltageNo, minVoltageNo)),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(
-                        width: 18,
-                        child: Icon(Icons.chevron_right,
-                            size: 18, color: Colors.grey)),
+                    const SizedBox(width: 18,
+                        child: Icon(Icons.chevron_right, size: 18, color: Colors.grey)),
                   ],
                 ),
               ),
@@ -1190,16 +1166,10 @@ class _CellSummary extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Min. Volt $minVoltage',
-                      style: const TextStyle(
-                          fontSize  : 11,
-                          color     : Colors.black54,
-                          fontWeight: FontWeight.w500)),
-                  Text('Max. Volt $maxVoltage',
-                      style: const TextStyle(
-                          fontSize  : 11,
-                          color     : Colors.black54,
-                          fontWeight: FontWeight.w500)),
+                  Text('${tr('dashboard.min_volt')} $minVoltage',
+                      style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500)),
+                  Text('${tr('dashboard.max_volt')} $maxVoltage',
+                      style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500)),
                 ],
               ),
             ],
@@ -1213,43 +1183,23 @@ class _CellSummary extends StatelessWidget {
     final double v      = voltages[index];
     final bool   isMax  = (index + 1) == maxNo;
     final bool   isMin  = (index + 1) == minNo;
-    final double height =
-        45 + ((v - 3.0) * 60).clamp(0.0, 40.0);
-    final Color color   = isMax
-        ? const Color(0xFF0B6645)
-        : isMin
-            ? Colors.orange
-            : const Color(0xFF0B6645);
-
+    final double height = 45 + ((v - 3.0) * 60).clamp(0.0, 40.0);
+    final Color  color  = isMax ? const Color(0xFF0B6645) : isMin ? Colors.orange : const Color(0xFF0B6645);
     return SizedBox(
-      width : 28,
-      child : Column(
+      width: 28,
+      child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Text(v.toStringAsFixed(2),
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize  : 8,
-                  color     : Colors.black54,
-                  fontWeight: FontWeight.w500)),
+          Text(v.toStringAsFixed(2), textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 8, color: Colors.black54, fontWeight: FontWeight.w500)),
           const SizedBox(height: 2),
-          Container(
-            width : 20, height: height,
-            decoration: BoxDecoration(
-                color       : color,
-                borderRadius: BorderRadius.circular(2)),
-          ),
+          Container(width: 20, height: height,
+              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
           const SizedBox(height: 2),
-          SizedBox(
-            width: 20,
-            child: Text(
-              'C${(index + 1).toString().padLeft(2, '0')}',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize  : 8,
-                  fontWeight: FontWeight.w600,
-                  color     : Colors.black54),
-            ),
+          SizedBox(width: 20,
+            child: Text('C${(index + 1).toString().padLeft(2, '0')}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w600, color: Colors.black54)),
           ),
         ],
       ),
@@ -1260,22 +1210,17 @@ class _CellSummary extends StatelessWidget {
 class _LoadingSection extends StatelessWidget {
   final String text;
   const _LoadingSection({required this.text});
-
   @override
   Widget build(BuildContext context) {
     return Container(
       padding   : const EdgeInsets.symmetric(vertical: 32),
-      decoration: BoxDecoration(
-          color       : const Color(0xFFF5F5F5),
-          borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(color: const Color(0xFFF5F5F5), borderRadius: BorderRadius.circular(12)),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(
-              strokeWidth: 2.5, color: Color(0xFF1B6B3A)),
+          const CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF1B6B3A)),
           const SizedBox(height: 12),
-          Text(text,
-              style: const TextStyle(fontSize: 13, color: Colors.black54)),
+          Text(text, style: const TextStyle(fontSize: 13, color: Colors.black54)),
         ],
       ),
     );
@@ -1285,25 +1230,20 @@ class _LoadingSection extends StatelessWidget {
 class _ErrorSection extends StatelessWidget {
   final String message;
   const _ErrorSection({required this.message});
-
   @override
   Widget build(BuildContext context) {
     return Container(
       padding   : const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       decoration: BoxDecoration(
-        color       : Colors.red.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border      : Border.all(color: Colors.red.shade200),
+        color: Colors.red.shade50, borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade200),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.error_outline, color: Colors.red.shade700),
           const SizedBox(width: 10),
-          Expanded(
-            child: Text(message,
-                style: TextStyle(fontSize: 13, color: Colors.red.shade700)),
-          ),
+          Expanded(child: Text(message, style: TextStyle(fontSize: 13, color: Colors.red.shade700))),
         ],
       ),
     );
@@ -1317,58 +1257,30 @@ class _AlertItem {
 
 class _AlertsSummaryCard extends StatelessWidget {
   final int warningCount, faultCount, clearedCount;
-
-  const _AlertsSummaryCard({
-    required this.warningCount,
-    required this.faultCount,
-    required this.clearedCount,
-  });
+  const _AlertsSummaryCard({required this.warningCount, required this.faultCount, required this.clearedCount});
 
   @override
   Widget build(BuildContext context) {
-    final bool hasAnyAlerts =
-        warningCount > 0 || faultCount > 0 || clearedCount > 0;
-
-    // Build only the rows that have a non-zero count
+    final tr            = TranslationService.t;
+    final bool hasAny   = warningCount > 0 || faultCount > 0 || clearedCount > 0;
     final List<Widget> rows = [];
-
     if (warningCount > 0) {
-      rows.add(_alertRow(
-        icon: Icons.warning_amber_rounded,
-        iconColor: Colors.grey.shade600,
-        label: 'Warning Alerts',
-        count: warningCount,
-      ));
-    }
-    if (faultCount > 0) {
-      rows.add(_alertRow(
-        icon: Icons.error_outline_rounded,
-        iconColor: Colors.grey.shade600,
-        label: 'Fault Alerts',
-        count: faultCount,
-      ));
+    rows.add(_alertRow(icon: Icons.warning_amber_rounded,
+        iconColor: Colors.grey.shade600, label: tr('dashboard.warning_alerts'), count: warningCount));
+  }
+    if (faultCount > 0)  { rows.add(_alertRow(icon: Icons.error_outline_rounded,
+        iconColor: Colors.grey.shade600, label: tr('dashboard.fault_alerts'),   count: faultCount));
     }
     if (clearedCount > 0) {
-      rows.add(_alertRow(
-        icon: Icons.check_circle_outline_rounded,
-        iconColor: Colors.grey.shade600,
-        label: 'Cleared Alerts',
-        count: clearedCount,
-      ));
+      rows.add(_alertRow(icon: Icons.check_circle_outline_rounded,
+        iconColor: Colors.grey.shade600, label: tr('dashboard.cleared_alerts'), count: clearedCount));
     }
 
-    // Interleave dividers between the visible rows only
     final List<Widget> children = [];
     for (int i = 0; i < rows.length; i++) {
       children.add(rows[i]);
       if (i != rows.length - 1) {
-        children.add(Divider(
-          height: 1,
-          thickness: 1,
-          color: Colors.grey.shade100,
-          indent: 14,
-          endIndent: 14,
-        ));
+        children.add(Divider(height: 1, thickness: 1, color: Colors.grey.shade100, indent: 14, endIndent: 14));
       }
     }
 
@@ -1376,44 +1288,31 @@ class _AlertsSummaryCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          children: const [
-            Icon(Icons.notifications_none_rounded, size: 20),
-            SizedBox(width: 8),
-            Text('Active Alerts',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+          children: [
+            const Icon(Icons.notifications_none_rounded, size: 20),
+            const SizedBox(width: 8),
+            Text(tr('dashboard.active_alerts'),
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
           ],
         ),
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
+            color: Colors.white, borderRadius: BorderRadius.circular(10),
             border: Border.all(color: Colors.grey.shade200),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 6,
-                offset: const Offset(0, 2),
-              ),
-            ],
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
           ),
-          child: hasAnyAlerts
+          child: hasAny
               ? Column(children: children)
               : Padding(
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 20, horizontal: 14),
+                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
                   child: Row(
                     children: [
-                      Icon(Icons.check_circle_outline_rounded,
-                          color: Colors.green.shade600, size: 20),
+                      Icon(Icons.check_circle_outline_rounded, color: Colors.green.shade600, size: 20),
                       const SizedBox(width: 10),
-                      const Text(
-                        'No active alerts',
-                        style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.black87),
-                      ),
+                      Text(tr('dashboard.no_active_alerts'),
+                          style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87)),
                     ],
                   ),
                 ),
@@ -1422,26 +1321,17 @@ class _AlertsSummaryCard extends StatelessWidget {
     );
   }
 
-  Widget _alertRow({
-    required IconData icon,
-    required Color iconColor,
-    required String label,
-    required int count,
-  }) {
+  Widget _alertRow({required IconData icon, required Color iconColor, required String label, required int count}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
           Icon(icon, color: iconColor, size: 20),
           const SizedBox(width: 10),
-          Expanded(
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87)),
-          ),
+          Expanded(child: Text(label,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87))),
           Text(count.toString().padLeft(2, '0'),
-              style: const TextStyle(
-                  fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
           const SizedBox(width: 4),
           Icon(Icons.chevron_right, color: Colors.grey[400], size: 18),
         ],
