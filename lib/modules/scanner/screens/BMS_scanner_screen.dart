@@ -1064,7 +1064,8 @@ class DebugLogOverlay extends StatelessWidget {
                   children: [
                     const Icon(Icons.article, size: 18, color: Colors.black54),
                     const SizedBox(width: 8),
-                    Text('Packets', style: const TextStyle(color: Colors.black87)),
+                    Text(TranslationService.t('scan.packets'),
+                        style: const TextStyle(color: Colors.black87)),
                     const SizedBox(width: 8),
                     if (count > 0)
                       Container(
