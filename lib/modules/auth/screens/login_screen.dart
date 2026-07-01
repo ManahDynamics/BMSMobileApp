@@ -8,6 +8,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:bmsmobileapp/core/theme/app_colors.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
@@ -36,6 +37,13 @@ class _LoginScreenState extends State<LoginScreen> {
   bool    _isLoading       = false;
   String? _errorMessage;
 
+  // ── Remember Me state ─────────────────────────────────────────────────────
+  bool _rememberMe = true;
+
+  static const _kRememberMeKey = 'remember_me';
+  static const _kRememberedEmailKey = 'remembered_email';
+  static const _kRememberedPasswordKey = 'remembered_password';
+
   String _selectedLanguage = 'English';
 
   final _langCodeMap = {
@@ -56,6 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
     _updateLanguageDisplay();
     TranslationService.instance.addListener(_onTranslationsChanged);
     _checkAlreadyLoggedIn();
+    _loadRememberedCredentials();
   }
 
   void _updateLanguageDisplay() {
@@ -79,6 +88,46 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     }
   }
+
+  // ── Remember Me helpers ───────────────────────────────────────────────────
+
+  /// Loads previously remembered credentials (if any) and pre-fills the form.
+  Future<void> _loadRememberedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    final remembered = prefs.getBool(_kRememberMeKey) ?? true;
+    final savedEmail    = prefs.getString(_kRememberedEmailKey) ?? '';
+    final savedPassword = prefs.getString(_kRememberedPasswordKey) ?? '';
+
+    if (!mounted) return;
+
+    setState(() {
+      _rememberMe = remembered;
+      if (remembered) {
+        _emailController.text    = savedEmail;
+        _passwordController.text = savedPassword;
+      }
+    });
+  }
+
+  /// Persists or clears the remembered credentials based on [_rememberMe].
+  Future<void> _persistRememberedCredentials({
+    required String email,
+    required String password,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setBool(_kRememberMeKey, _rememberMe);
+
+    if (_rememberMe) {
+      await prefs.setString(_kRememberedEmailKey, email);
+      await prefs.setString(_kRememberedPasswordKey, password);
+    } else {
+      await prefs.remove(_kRememberedEmailKey);
+      await prefs.remove(_kRememberedPasswordKey);
+    }
+  }
+
 Future<void> _handleGoogleLogin() async {
   setState(() {
     _isLoading = true;
@@ -406,6 +455,9 @@ void _continueAsGuest() {
         userId   : userId,
       );
 
+      // ── Remember Me: persist or clear locally stored credentials ─────
+      await _persistRememberedCredentials(email: userEmail, password: password);
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -436,6 +488,9 @@ void _continueAsGuest() {
       if (user['user_id'] != null) {
         await _tokenService.saveUserId(user['user_id']);
       }
+
+      // ── Remember Me: persist or clear locally stored credentials ─────
+      await _persistRememberedCredentials(email: email, password: password);
 
       // Check whether we have BMS data cached
       final hasBMSData = await _localAuthDB.hasBMSCache();
@@ -537,6 +592,62 @@ void _continueAsGuest() {
     );
   }
 
+  // ── Remember Me + Forgot Password row ─────────────────────────────────────
+
+  Widget _buildRememberMeRow() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        InkWell(
+          onTap: _isLoading
+              ? null
+              : () => setState(() => _rememberMe = !_rememberMe),
+          borderRadius: BorderRadius.circular(6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width : 20,
+                height: 20,
+                child : Checkbox(
+                  value           : _rememberMe,
+                  onChanged       : _isLoading
+                      ? null
+                      : (value) =>
+                          setState(() => _rememberMe = value ?? true),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity   : VisualDensity.compact,
+                  activeColor     : AppColors.primaryBlue,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                TranslationService.t('login.remember_me'),
+                style: TextStyle(
+                    color   : Colors.grey[700],
+                    fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+        GestureDetector(
+          onTap: _isLoading
+              ? null
+              : () => Navigator.push(
+                  context,
+                  SlideRoute(page: const ForgotPasswordScreen())),
+          child: Text(
+            TranslationService.t('login.forgot_password'),
+            style: TextStyle(
+                color      : AppColors.primaryBlue,
+                fontSize   : 13,
+                fontWeight : FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+  }
+
  Widget _buildDivider() {
   return Row(
     children: [
@@ -545,11 +656,11 @@ void _continueAsGuest() {
           color: Colors.grey.shade300,
         ),
       ),
-      const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 12),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Text(
-          'OR',
-          style: TextStyle(
+          TranslationService.t('login.or'),
+          style: const TextStyle(
             color: Colors.grey,
             fontWeight: FontWeight.w600,
           ),
@@ -573,9 +684,9 @@ Widget _buildGoogleButton() {
         'assets/images/google_logo.png',
         width: 22,
       ),
-      label: const Text(
-        'Continue with Google',
-        style: TextStyle(
+      label: Text(
+        TranslationService.t('login.continue_with_google'),
+        style: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
         ),
@@ -590,9 +701,9 @@ Widget _buildGuestButton() {
     child: OutlinedButton.icon(
       onPressed: _isLoading ? null : _continueAsGuest,
       icon: const Icon(Icons.person_outline),
-      label: const Text(
-        'Continue as Guest',
-        style: TextStyle(
+      label: Text(
+        TranslationService.t('login.continue_as_guest'),
+        style: const TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
         ),
@@ -746,24 +857,7 @@ Widget _buildRegister() {
                           isLastField: true,
                         ),
                         const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: GestureDetector(
-                            onTap: _isLoading
-                                ? null
-                                : () => Navigator.push(
-                                    context,
-                                    SlideRoute(
-                                        page: const ForgotPasswordScreen())),
-                            child: Text(
-                              TranslationService.t('login.forgot_password'),
-                              style: TextStyle(
-                                  color      : AppColors.primaryBlue,
-                                  fontSize   : 13,
-                                  fontWeight : FontWeight.w600),
-                            ),
-                          ),
-                        ),
+                        _buildRememberMeRow(),
                         if (_errorMessage != null) ...[
                           const SizedBox(height: 12),
                           _buildErrorMessage(),
