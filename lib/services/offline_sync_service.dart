@@ -65,15 +65,10 @@ class OfflineSyncService {
 
       bool hasInternet = false;
 
-      if (connectivity is List<ConnectivityResult>) {
-        hasInternet = connectivity.any(
-          (e) => e != ConnectivityResult.none,
-        );
-      } else {
-        hasInternet =
-            connectivity != ConnectivityResult.none;
-      }
-
+      hasInternet = connectivity.any(
+        (e) => e != ConnectivityResult.none,
+      );
+    
       print(
           "Internet available: $hasInternet");
 

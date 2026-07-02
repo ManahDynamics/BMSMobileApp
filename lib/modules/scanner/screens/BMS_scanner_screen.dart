@@ -1034,7 +1034,7 @@ class _StatusChip extends StatelessWidget {
 // Simple in-file replacement for missing DebugLogOverlay widget
 class DebugLogOverlay extends StatelessWidget {
   final BMSBluetoothService service;
-  const DebugLogOverlay({required this.service});
+  const DebugLogOverlay({super.key, required this.service});
 
   @override
   Widget build(BuildContext context) {
@@ -1053,7 +1053,7 @@ class DebugLogOverlay extends StatelessWidget {
               onTap: () {
                 // Switch to packet log tab
                 try {
-                  DefaultTabController.of(context)?.animateTo(1);
+                  DefaultTabController.of(context).animateTo(1);
                 } catch (_) {}
               },
               borderRadius: BorderRadius.circular(8),

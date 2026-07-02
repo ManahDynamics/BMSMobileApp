@@ -52,7 +52,7 @@ class _ScreenPulseOverlayState extends State<ScreenPulseOverlay>
         IgnorePointer(
           child: AnimatedBuilder(
             animation: _opacity,
-            builder: (_, __) => Container(
+            builder: (_, _) => Container(
               color: widget.color.withOpacity(_opacity.value),
             ),
           ),

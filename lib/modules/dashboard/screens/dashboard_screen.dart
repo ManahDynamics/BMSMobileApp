@@ -209,8 +209,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// plain map and caches it.
   Future<void> _cacheCellVoltageIfNew() async {
     final dash = widget.service.latestDashboard;
-    if (dash == null || dash.cellVoltages == null || dash.cellVoltages!.isEmpty)
+    if (dash == null || dash.cellVoltages == null || dash.cellVoltages!.isEmpty) {
       return;
+    }
 
     final voltages = dash.cellVoltages!;
     int? maxNo, minNo;
@@ -1160,8 +1161,7 @@ class _MetricCard extends StatelessWidget {
     required this.value,
     this.iconLabel,
     this.icon,
-    this.badge,
-    this.isCharging = false,
+    this.isCharging = false, this.badge,
   });
 
   @override

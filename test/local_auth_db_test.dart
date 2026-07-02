@@ -19,7 +19,7 @@ void main() {
     await db.enqueueForSync('tests', {'status': 'queued'});
 
     final synced = await db.syncPendingEntries(
-      syncFn: (_, __, ___) async {
+      syncFn: (_, _, _) async {
         throw Exception('offline');
       },
     );
@@ -35,7 +35,7 @@ void main() {
     await db.enqueueForSync('tests', {'status': 'ok'});
 
     final synced = await db.syncPendingEntries(
-      syncFn: (_, __, ___) async {},
+      syncFn: (_, _, _) async {},
     );
 
     expect(synced, 1);
