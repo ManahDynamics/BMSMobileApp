@@ -1412,14 +1412,15 @@ class _CellSummary extends StatelessWidget {
 
   Widget _buildBar(int index, List<double> voltages, int? maxNo, int? minNo) {
     final double v = voltages[index];
-    final bool isMax = (index + 1) == maxNo;
-    final bool isMin = (index + 1) == minNo;
+    final Color color = v < 4.0 ? Colors.orange : const Color(0xFF0B6645);
+    // final bool isMax = (index + 1) == maxNo;
+    // final bool isMin = (index + 1) == minNo;
     final double height = 45 + ((v - 3.0) * 60).clamp(0.0, 40.0);
-    final Color color = isMax
-        ? const Color(0xFF0B6645)
-        : isMin
-        ? Colors.orange
-        : const Color(0xFF0B6645);
+    // final Color color = isMax
+    //     ? const Color(0xFF0B6645)
+    //     : isMin
+    //     ?Color(0xFF0B6645)
+    //     : const Color(0xFF0B6645);
     return SizedBox(
       width: 28,
       child: Column(

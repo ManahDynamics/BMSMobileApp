@@ -246,6 +246,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
           addDebugLog('🔋 Cell Voltage Response received');
           latestCellVoltage = packet;
           cellVoltagePulse++;
+          cellVoltageError = null;     
+          isCellVoltageLoading = false;
           notifyListeners();
           if (_cellVoltageCompleter != null && !_cellVoltageCompleter!.isCompleted) {
             _cellVoltageCompleter!.complete(true);
@@ -265,6 +267,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
           latestCellVoltage = packet;
            dashboardPulse++;
           cellVoltagePulse++;
+           dashboardError = null;       
+          isDashboardLoading = false;
 
           if (_cellVoltageCompleter != null && !_cellVoltageCompleter!.isCompleted) {
             _cellVoltageCompleter!.complete(true);

@@ -165,12 +165,12 @@ class BMSParsedPacket {
 
   String get avgCellVoltageDisplay =>
       avgCellVoltage != null
-          ? '${avgCellVoltage!.toStringAsFixed(2)} v'
+          ? '${avgCellVoltage!.toStringAsFixed(3)} v'
           : '– v';
 
   String get voltageDiffDisplay =>
       voltageDiff != null
-          ? '${voltageDiff!.toStringAsFixed(2)} v'
+          ? '${voltageDiff!.toStringAsFixed(3)} v'
           : '– v';
 
   String get maxCellVoltageDisplay =>
