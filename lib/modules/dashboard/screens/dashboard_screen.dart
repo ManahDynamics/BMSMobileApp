@@ -1,6 +1,8 @@
 // lib/screens/dashboard_screen.dart
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
+import 'package:bmsmobileapp/battery_indicator.dart'
+    show BatteryIndicator, BatteryMode;
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
@@ -10,13 +12,14 @@ import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/widgets/screen_pulse_overlay.dart';
+
 import 'package:provider/provider.dart';
 
-const _green  = Color(0xFF1B6B3A);
-// const _blue   = Color(0xFF3A6EAC);
+const _green = Color(0xFF1B6B3A);
+const _blue = Color(0xFF3A6EAC);
 const _orange = Color(0xFFD4621A);
-const _gap12  = SizedBox(height: 12);
-const _gap16  = SizedBox(height: 16);
+const _gap12 = SizedBox(height: 12);
+const _gap16 = SizedBox(height: 16);
 
 class DashboardScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -60,34 +63,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width : 72, height: 72,
+              width: 72,
+              height: 72,
               decoration: const BoxDecoration(
-                  color: Color(0xFFE0F2F1), shape: BoxShape.circle),
-              child: const Icon(Icons.bluetooth, size: 40, color: Color(0xFF00796B)),
+                color: Color(0xFFE0F2F1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.bluetooth,
+                size: 40,
+                color: Color(0xFF00796B),
+              ),
             ),
             const SizedBox(height: 24),
             Text(
               tr('dashboard.disconnect_confirm'),
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, height: 1.4, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 16,
+                height: 1.4,
+                color: Colors.black87,
+              ),
             ),
             const SizedBox(height: 32),
             Row(
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () { Navigator.pop(ctx); _disconnect(); },
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _disconnect();
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFFAC5624),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       elevation: 0,
                     ),
-                    child: Text(tr('dashboard.yes'),
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600)),
+                    child: Text(
+                      tr('dashboard.yes'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -99,11 +121,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       foregroundColor: Colors.black87,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    child: Text(tr('dashboard.cancel'),
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w500)),
+                    child: Text(
+                      tr('dashboard.cancel'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -124,7 +151,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (name != _lastCachedDeviceName) {
       _lastCachedDeviceName = name;
       await _localAuthDB.saveDeviceName(name);
-      
+
       setState(() {
         _cachedDeviceName = name;
         _isFromCache = false;
@@ -139,37 +166,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     // Build a comparable snapshot map from the dashboard model fields
     final map = <String, dynamic>{
-      'soc'               : dash.soc,
-      'batteryStatusCode' : dash.batteryStatusCode,
+      'soc': dash.soc,
+      'batteryStatusCode': dash.batteryStatusCode,
       'batteryStatusLabel': dash.batteryStatusLabel,
-      'batteryType'       : dash.batteryType,
-      'batterySerial'     : dash.batterySerial,
-      'capacityDisplay'   : dash.capacityDisplay,
-      'healthLabel'       : dash.healthLabel,
-      'healthCode'        : dash.healthCode,
-      'voltageDisplay'    : dash.voltageDisplay,
-      'currentDisplay'    : dash.currentDisplay,
+      'batteryType': dash.batteryType,
+      'batterySerial': dash.batterySerial,
+      'capacityDisplay': dash.capacityDisplay,
+      'healthLabel': dash.healthLabel,
+      'healthCode': dash.healthCode,
+      'voltageDisplay': dash.voltageDisplay,
+      'currentDisplay': dash.currentDisplay,
       'temperatureDisplay': dash.temperatureDisplay,
-      'powerDisplay'      : dash.powerDisplay,
+      'powerDisplay': dash.powerDisplay,
       'chargeCyclesDisplay': dash.chargeCyclesDisplay,
-      'totalCells'        : dash.totalCells,
-      'avgCellVoltageDisplay' : dash.avgCellVoltageDisplay,
-      'voltageDiffDisplay'    : dash.voltageDiffDisplay,
-      'minCellVoltageDisplay' : dash.minCellVoltageDisplay,
-      'maxCellVoltageDisplay' : dash.maxCellVoltageDisplay,
-      'temperature'       : dash.temperature,
-      'voltageDiff'       : dash.voltageDiff,
-      'warningAlerts'     : dash.warningAlerts,
-      'faultAlerts'       : dash.faultAlerts,
-      'clearedAlerts'     : dash.clearedAlerts,
-      'totalAlerts'       : dash.totalAlerts,
+      'totalCells': dash.totalCells,
+      'avgCellVoltageDisplay': dash.avgCellVoltageDisplay,
+      'voltageDiffDisplay': dash.voltageDiffDisplay,
+      'minCellVoltageDisplay': dash.minCellVoltageDisplay,
+      'maxCellVoltageDisplay': dash.maxCellVoltageDisplay,
+      'temperature': dash.temperature,
+      'voltageDiff': dash.voltageDiff,
+      'warningAlerts': dash.warningAlerts,
+      'faultAlerts': dash.faultAlerts,
+      'clearedAlerts': dash.clearedAlerts,
+      'totalAlerts': dash.totalAlerts,
     };
 
     // Only write if something changed
     if (map.toString() != _lastCachedDash.toString()) {
       _lastCachedDash = map;
       await _localAuthDB.saveDashboard(map);
-      
+
       // Also update cached dashboard for display
       setState(() {
         _cachedDashboard = map;
@@ -182,7 +209,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// plain map and caches it.
   Future<void> _cacheCellVoltageIfNew() async {
     final dash = widget.service.latestDashboard;
-    if (dash == null || dash.cellVoltages == null || dash.cellVoltages!.isEmpty) return;
+    if (dash == null || dash.cellVoltages == null || dash.cellVoltages!.isEmpty)
+      return;
 
     final voltages = dash.cellVoltages!;
     int? maxNo, minNo;
@@ -196,13 +224,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     final map = <String, dynamic>{
-      'cellVoltages'    : voltages,
-      'cellTotalCells'  : dash.totalCells,
-      'cellMaxVoltage'  : dash.maxCellVoltage,
+      'cellVoltages': voltages,
+      'cellTotalCells': dash.totalCells,
+      'cellMaxVoltage': dash.maxCellVoltage,
       'cellMaxVoltageNo': maxNo,
-      'cellMinVoltage'  : dash.minCellVoltage,
+      'cellMinVoltage': dash.minCellVoltage,
       'cellMinVoltageNo': minNo,
-      'cellAvgVoltage'  : dash.avgCellVoltage,
+      'cellAvgVoltage': dash.avgCellVoltage,
     };
 
     if (map.toString() != _lastCachedCell.toString()) {
@@ -222,9 +250,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final cachedDash = await _localAuthDB.getCachedDashboard();
     final cachedCell = await _localAuthDB.getCachedCellVoltage();
     final cachedName = await _localAuthDB.getCachedDeviceName();
-    
+
     if (!mounted) return;
-    
+
     setState(() {
       if (cachedDash != null) {
         _cachedDashboard = cachedDash;
@@ -243,10 +271,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void initState() {
-  super.initState();
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    widget.service.startDashboardPolling();
-  });
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      widget.service.startDashboardPolling();
+    });
 
     // Try to load cached data initially
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -275,30 +303,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (live != null) {
       // Convert live model to map for consistent access
       return {
-        'soc'               : live.soc,
-        'batteryStatusCode' : live.batteryStatusCode,
+        'soc': live.soc,
+        'batteryStatusCode': live.batteryStatusCode,
         'batteryStatusLabel': live.batteryStatusLabel,
-        'batteryType'       : live.batteryType,
-        'batterySerial'     : live.batterySerial,
-        'capacityDisplay'   : live.capacityDisplay,
-        'healthLabel'       : live.healthLabel,
-        'healthCode'        : live.healthCode,
-        'voltageDisplay'    : live.voltageDisplay,
-        'currentDisplay'    : live.currentDisplay,
+        'batteryType': live.batteryType,
+        'batterySerial': live.batterySerial,
+        'capacityDisplay': live.capacityDisplay,
+        'healthLabel': live.healthLabel,
+        'healthCode': live.healthCode,
+        'voltageDisplay': live.voltageDisplay,
+        'currentDisplay': live.currentDisplay,
         'temperatureDisplay': live.temperatureDisplay,
-        'powerDisplay'      : live.powerDisplay,
+        'powerDisplay': live.powerDisplay,
         'chargeCyclesDisplay': live.chargeCyclesDisplay,
-        'totalCells'        : live.totalCells,
-        'avgCellVoltageDisplay' : live.avgCellVoltageDisplay,
-        'voltageDiffDisplay'    : live.voltageDiffDisplay,
-        'minCellVoltageDisplay' : live.minCellVoltageDisplay,
-        'maxCellVoltageDisplay' : live.maxCellVoltageDisplay,
-        'temperature'       : live.temperature,
-        'voltageDiff'       : live.voltageDiff,
-        'warningAlerts'     : live.warningAlerts,
-        'faultAlerts'       : live.faultAlerts,
-        'clearedAlerts'     : live.clearedAlerts,
-        'totalAlerts'       : live.totalAlerts,
+        'totalCells': live.totalCells,
+        'avgCellVoltageDisplay': live.avgCellVoltageDisplay,
+        'voltageDiffDisplay': live.voltageDiffDisplay,
+        'minCellVoltageDisplay': live.minCellVoltageDisplay,
+        'maxCellVoltageDisplay': live.maxCellVoltageDisplay,
+        'temperature': live.temperature,
+        'voltageDiff': live.voltageDiff,
+        'warningAlerts': live.warningAlerts,
+        'faultAlerts': live.faultAlerts,
+        'clearedAlerts': live.clearedAlerts,
+        'totalAlerts': live.totalAlerts,
       };
     }
     return _cachedDashboard;
@@ -306,7 +334,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Map<String, dynamic>? get _effectiveCellVoltage {
     final live = widget.service.latestDashboard;
-    if (live != null && live.cellVoltages != null && live.cellVoltages!.isNotEmpty) {
+    if (live != null &&
+        live.cellVoltages != null &&
+        live.cellVoltages!.isNotEmpty) {
       final voltages = live.cellVoltages!;
       int? maxNo, minNo;
       if (live.maxCellVoltage != null) {
@@ -318,13 +348,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (i >= 0) minNo = i + 1;
       }
       return {
-        'cellVoltages'    : voltages,
-        'cellTotalCells'  : live.totalCells,
-        'cellMaxVoltage'  : live.maxCellVoltage,
+        'cellVoltages': voltages,
+        'cellTotalCells': live.totalCells,
+        'cellMaxVoltage': live.maxCellVoltage,
         'cellMaxVoltageNo': maxNo,
-        'cellMinVoltage'  : live.minCellVoltage,
+        'cellMinVoltage': live.minCellVoltage,
         'cellMinVoltageNo': minNo,
-        'cellAvgVoltage'  : live.avgCellVoltage,
+        'cellAvgVoltage': live.avgCellVoltage,
       };
     }
     return _cachedCellVoltage;
@@ -347,36 +377,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final cellMap = _effectiveCellVoltage;
 
         // ── Device Info ────────────────────────────────────────────────
-        final String batteryType = svc.batteryType ?? dashMap?['batteryType'] ?? '-';
-        final String serialNo    = svc.batterySerial ?? dashMap?['batterySerial'] ?? '-';
+        final String batteryType =
+            svc.batteryType ?? dashMap?['batteryType'] ?? '-';
+        final String serialNo =
+            svc.batterySerial ?? dashMap?['batterySerial'] ?? '-';
 
         // ── Dashboard Data ─────────────────────────────────────────────
-        final int    soc              = dashMap?['soc'] ?? 0;
-        final String batteryStatus    = dashMap?['batteryStatusLabel'] ?? 'N/A';
-        final bool   isCharging       = dashMap?['batteryStatusCode'] == 0x01;
-        final String capacityDisplay  = dashMap?['capacityDisplay'] ?? '0.0 Ah';
-        final String health           = dashMap?['healthLabel'] ?? 'N/A';
-        final bool   healthGood       = dashMap?['healthCode'] == 0x01;
+        final int soc = dashMap?['soc'] ?? 0;
+        final String batteryStatus = dashMap?['batteryStatusLabel'] ?? 'N/A';
+        final bool isCharging = dashMap?['batteryStatusCode'] == 0x01;
+        final String capacityDisplay = dashMap?['capacityDisplay'] ?? '0.0 Ah';
+        final String health = dashMap?['healthLabel'] ?? 'N/A';
+        final bool healthGood = dashMap?['healthCode'] == 0x01;
 
-        final String voltageDisplay = dashMap?['voltageDisplay']    ?? '0.0 V';
-        final String currentDisplay = dashMap?['currentDisplay']    ?? '0.0 A';
-        final String tempDisplay    = dashMap?['temperatureDisplay'] ?? '0 °C';
-        final String powerDisplay   = dashMap?['powerDisplay']      ?? '0 Kw';
-        final String cyclesDisplay  = dashMap?['chargeCyclesDisplay'] ?? '0';
+        final String voltageDisplay = dashMap?['voltageDisplay'] ?? '0.0 V';
+        final String currentDisplay = dashMap?['currentDisplay'] ?? '0.0 A';
+        final String tempDisplay = dashMap?['temperatureDisplay'] ?? '0 °C';
+        final String powerDisplay = dashMap?['powerDisplay'] ?? '0 Kw';
+        final String cyclesDisplay = dashMap?['chargeCyclesDisplay'] ?? '0';
 
-        final int    cellCount   = dashMap?['totalCells'] ?? cellMap?['cellTotalCells'] ?? 0;
-        final String avgVoltage  = dashMap?['avgCellVoltageDisplay']   ?? '0.00 v';
-        final String voltDiff    = dashMap?['voltageDiffDisplay']      ?? '0.00 v';
-        final String minVoltage  = dashMap?['minCellVoltageDisplay']   ?? '0.000 V';
-        final String maxVoltage  = dashMap?['maxCellVoltageDisplay']   ?? '0.000 V';
+        final int cellCount =
+            dashMap?['totalCells'] ?? cellMap?['cellTotalCells'] ?? 0;
+        final String avgVoltage = dashMap?['avgCellVoltageDisplay'] ?? '0.00 v';
+        final String voltDiff = dashMap?['voltageDiffDisplay'] ?? '0.00 v';
+        final String minVoltage =
+            dashMap?['minCellVoltageDisplay'] ?? '0.000 V';
+        final String maxVoltage =
+            dashMap?['maxCellVoltageDisplay'] ?? '0.000 V';
 
-        final List<double> cellVoltages = (cellMap?['cellVoltages'] as List?)?.cast<double>() ?? [];
-        final int? maxVoltageNo         = cellMap?['cellMaxVoltageNo'] as int?;
-        final int? minVoltageNo         = cellMap?['cellMinVoltageNo'] as int?;
+        final List<double> cellVoltages =
+            (cellMap?['cellVoltages'] as List?)?.cast<double>() ?? [];
+        final int? maxVoltageNo = cellMap?['cellMaxVoltageNo'] as int?;
+        final int? minVoltageNo = cellMap?['cellMinVoltageNo'] as int?;
 
         // ── Build alerts from live BMS data ────────────────────────────
-       final int warningAlertsCount = dashMap?['warningAlerts'] as int? ?? 0;
-        final int faultAlertsCount   = dashMap?['faultAlerts'] as int? ?? 0;
+        final int warningAlertsCount = dashMap?['warningAlerts'] as int? ?? 0;
+        final int faultAlertsCount = dashMap?['faultAlerts'] as int? ?? 0;
         final int clearedAlertsCount = dashMap?['clearedAlerts'] as int? ?? 0;
         final int totalAlertsCount = dashMap?['totalAlerts'] as int? ?? 0;
 
@@ -387,60 +423,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
           drawer: AppDrawer(activeRoute: '/dashboard', service: widget.service),
           appBar: AppBar(
             backgroundColor: _green,
-            elevation      : 0,
-            centerTitle    : true,
+            elevation: 0,
+            centerTitle: true,
             leading: Builder(
               builder: (ctx) => IconButton(
-                icon    : const Icon(Icons.menu_rounded, color: Colors.white),
+                icon: const Icon(Icons.menu_rounded, color: Colors.white),
                 onPressed: () => Scaffold.of(ctx).openDrawer(),
               ),
             ),
             title: Column(
               children: [
-                Text(tr('dashboard.title'),
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500)),
+                Text(
+                  tr('dashboard.title'),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
                 if (deviceName.isNotEmpty)
-                  Text(deviceName,
-                      style: const TextStyle(color: Colors.white60, fontSize: 11)),
+                  Text(
+                    deviceName,
+                    style: const TextStyle(color: Colors.white60, fontSize: 11),
+                  ),
               ],
             ),
             actions: [
               Stack(
                 children: [
                   IconButton(
-                    icon     : const Icon(Icons.notifications_none_rounded,
-                        color: Colors.white),
+                    icon: const Icon(
+                      Icons.notifications_none_rounded,
+                      color: Colors.white,
+                    ),
                     onPressed: () {},
                   ),
-                 if (totalAlertsCount > 0)
+                  if (totalAlertsCount > 0)
                     Positioned(
-                      right: 8, top: 8,
+                      right: 8,
+                      top: 8,
                       child: Container(
-                        padding   : const EdgeInsets.all(3),
+                        padding: const EdgeInsets.all(3),
                         decoration: const BoxDecoration(
-                            color: Colors.red, shape: BoxShape.circle),
-                        child: Text('$totalAlertsCount',
-                            style: const TextStyle(
-                                color     : Colors.white,
-                                fontSize  : 9,
-                                fontWeight: FontWeight.bold)),
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          '$totalAlertsCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
                     ),
                 ],
               ),
               PopupMenuButton<String>(
-                icon : const Icon(Icons.more_vert, color: Colors.white),
+                icon: const Icon(Icons.more_vert, color: Colors.white),
                 color: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 onSelected: (value) {
                   if (value == 'logout') _showDisconnectDialog();
                 },
                 itemBuilder: (ctx) => [
-                  PopupMenuItem(value: 'edit_profile',    child: Text(tr('dashboard.edit_profile'))),
-                  PopupMenuItem(value: 'forget_password', child: Text(tr('dashboard.forget_password'))),
-                  PopupMenuItem(value: 'logout',          child: Text(tr('logout.title'))),
+                  PopupMenuItem(
+                    value: 'edit_profile',
+                    child: Text(tr('dashboard.edit_profile')),
+                  ),
+                  PopupMenuItem(
+                    value: 'forget_password',
+                    child: Text(tr('dashboard.forget_password')),
+                  ),
+                  PopupMenuItem(
+                    value: 'logout',
+                    child: Text(tr('logout.title')),
+                  ),
                 ],
               ),
             ],
@@ -449,236 +510,293 @@ class _DashboardScreenState extends State<DashboardScreen> {
             pulseValue: svc.dashboardPulse,
             color: _green,
             child: svc.isDashboardLoading
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                        const CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: _green
-                      ),
-                        const SizedBox(height: 16),
-                      Text(tr('dashboard.loading_details'),
-                        style: const TextStyle(fontSize: 14, color: Colors.black54)),
-                    ],
-                  ),
-                )
-              : ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            children: [
-              // ── Offline cache banner ───────────────────────────────────
-              if (_isFromCache && !hasData)
-                Container(
-                  width  : double.infinity,
-                  margin : const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color       : Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border      : Border.all(color: Colors.orange.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.wifi_off,
-                          size: 14, color: Colors.orange.shade800),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          tr('dashboard.offline_cached_banner'),
-                          style: TextStyle(
-                              fontSize: 12, color: Colors.orange.shade900)
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-              _DeviceHeader(
-                batteryType : batteryType,
-                serialNo    : serialNo,
-                onDisconnect: _showDisconnectDialog,
-              ),
-
-              if (svc.isBleNameLoading && !_isFromCache)
-                 Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(tr('dashboard.fetching_device_name'),
-                      style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                )
-              else if (svc.bleNameError != null && !_isFromCache)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Row(
-                    children: [
-                      Icon(Icons.error_outline, size: 14, color: Colors.red.shade700),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(svc.bleNameError!,
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.red.shade700)),
-                      ),
-                    ],
-                  ),
-                )
-              else if (_isFromCache && _cachedDeviceName != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Row(
-                    children: [
-                      Icon(Icons.history,
-                          size: 14, color: Colors.orange.shade700),
-                      const SizedBox(width: 4),
-                      // Expanded(
-                      //   child: Text('Device name from cache: $_cachedDeviceName',
-                      //       style: TextStyle(
-                      //           fontSize: 12, color: Colors.orange.shade700)),
-                      // ),
-                    ],
-                  ),
-                ),
-
-              const SizedBox(height: 8),
-              const SizedBox(height: 8),
-
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 14, vertical: 5),
-                    decoration: BoxDecoration(
-                      color : const Color.fromARGB(255, 239, 242, 240),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: _green, width: 2.5),
-                    ),
-                    child: Row(
+                ? Center(
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                         Text(tr('dashboard.connected'),
-                            style: const TextStyle(
-                                color     : _green,
-                                fontWeight: FontWeight.w600,
-                                fontSize  : 13)),
-                        const SizedBox(width: 6),
-                        Container(
-                          width : 8, height: 8,
-                          decoration: const BoxDecoration(
-                              color: _green, shape: BoxShape.circle),
+                        const CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          color: _green,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          tr('dashboard.loading_details'),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: Colors.black54,
+                          ),
                         ),
                       ],
                     ),
+                  )
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                    children: [
+                      // ── Offline cache banner ───────────────────────────────────
+                      if (_isFromCache && !hasData)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.orange.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.wifi_off,
+                                size: 14,
+                                color: Colors.orange.shade800,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  tr('dashboard.offline_cached_banner'),
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.orange.shade900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+
+                      _DeviceHeader(
+                        batteryType: batteryType,
+                        serialNo: serialNo,
+                        onDisconnect: _showDisconnectDialog,
+                      ),
+
+                      if (svc.isBleNameLoading && !_isFromCache)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            tr('dashboard.fetching_device_name'),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        )
+                      else if (svc.bleNameError != null && !_isFromCache)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                size: 14,
+                                color: Colors.red.shade700,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  svc.bleNameError!,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.red.shade700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (_isFromCache && _cachedDeviceName != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.history,
+                                size: 14,
+                                color: Colors.orange.shade700,
+                              ),
+                              const SizedBox(width: 4),
+                              // Expanded(
+                              //   child: Text('Device name from cache: $_cachedDeviceName',
+                              //       style: TextStyle(
+                              //           fontSize: 12, color: Colors.orange.shade700)),
+                              // ),
+                            ],
+                          ),
+                        ),
+
+                      const SizedBox(height: 8),
+                      const SizedBox(height: 8),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color.fromARGB(255, 239, 242, 240),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: _green, width: 2.5),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  tr('dashboard.connected'),
+                                  style: const TextStyle(
+                                    color: _green,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: const BoxDecoration(
+                                    color: _green,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          ElevatedButton(
+                            onPressed: _showDisconnectDialog,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _orange,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 10,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: Text(
+                              tr('dashboard.disconnect'),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      _gap16,
+
+                      if (svc.dashboardError != null && !_isFromCache)
+                        _ErrorSection(message: svc.dashboardError!)
+                      else if (!hasData && !_isFromCache)
+                        Column(
+                          children: [
+                            _ErrorSection(
+                              message: tr('dashboard.no_data_available'),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton.icon(
+                              icon: const Icon(Icons.history),
+                              label: Text(tr('dashboard.load_cached_data')),
+                              onPressed: _loadFromCache,
+                            ),
+                          ],
+                        )
+                      else if (hasData)
+                        _BatteryCard(
+                          soc: soc,
+                          statusCode: dashMap?['batteryStatusCode'] ?? 0x02,
+                          capacity: capacityDisplay,
+                          status: batteryStatus,
+                          isCharging: isCharging,
+                          health: health,
+                          healthGood: healthGood,
+                          cycles: cyclesDisplay,
+                        ),
+
+                      _gap16,
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _MetricCard(
+                              label: tr('dashboard.voltage'),
+                              value: voltageDisplay,
+                              iconLabel: 'V',
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _MetricCard(
+                              label: tr('dashboard.current'),
+                              value: currentDisplay,
+                              iconLabel: 'A',
+                              isCharging: isCharging,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      _gap12,
+
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _MetricCard(
+                              label: tr('dashboard.temperature'),
+                              value: tempDisplay,
+                              icon: Icons.thermostat_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _MetricCard(
+                              label: tr('dashboard.power'),
+                              value: powerDisplay,
+                              icon: Icons.power_outlined,
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 20),
+
+                      if (!hasData && !_isFromCache)
+                        const SizedBox.shrink()
+                      else if (hasData)
+                        _CellSummary(
+                          cellCount: cellCount,
+                          avgVoltage: avgVoltage,
+                          voltDiff: voltDiff,
+                          minVoltage: minVoltage,
+                          maxVoltage: maxVoltage,
+                          cellVoltages: cellVoltages,
+                          maxVoltageNo: maxVoltageNo,
+                          minVoltageNo: minVoltageNo,
+                          onViewMore: () => Navigator.push(
+                            context,
+                            SlideRoute(
+                              page: CellsScreen(service: widget.service),
+                            ),
+                          ),
+                        ),
+
+                      _gap16,
+                      _AlertsSummaryCard(
+                        warningCount: warningAlertsCount,
+                        faultCount: faultAlertsCount,
+                        clearedCount: clearedAlertsCount,
+                      ),
+                    ],
                   ),
-                  ElevatedButton(
-                    onPressed: _showDisconnectDialog,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _orange,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 20, vertical: 10),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8)),
-                      elevation: 0,
-                    ),
-                    child: Text(tr('dashboard.disconnect'),
-                        style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600)),
-                  ),
-                ],
-              ),
-              _gap16,
-
-              if (svc.dashboardError != null && !_isFromCache)
-                _ErrorSection(message: svc.dashboardError!)
-              else if (!hasData && !_isFromCache)
-                Column(
-                  children: [
-                     _ErrorSection(
-                        message: tr('dashboard.no_data_available')),
-                    const SizedBox(height: 12),
-                    TextButton.icon(
-                      icon: const Icon(Icons.history),
-                      label: Text(tr('dashboard.load_cached_data')),
-                      onPressed: _loadFromCache,
-                    ),
-                  ],
-                )
-              else if (hasData)
-                _BatteryCard(
-                  soc        : soc,
-                  statusCode : dashMap?['batteryStatusCode'] ?? 0x02,
-                  capacity   : capacityDisplay,
-                  status     : batteryStatus,
-                  isCharging : isCharging,
-                  health     : health,
-                  healthGood : healthGood,
-                  cycles     : cyclesDisplay,
-                ),
-
-              _gap16,
-
-              Row(
-                children: [
-                  Expanded(child: _MetricCard(
-                        label: tr('dashboard.voltage'), value: voltageDisplay, iconLabel: 'V')),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _MetricCard(
-                      label: tr('dashboard.current'),
-                      value: currentDisplay,
-                      iconLabel : 'A',
-                      isCharging: isCharging,
-                    )),
-                ],
-              ),
-
-              _gap12,
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _MetricCard(
-                        label: tr('dashboard.temperature'),
-                        value: tempDisplay,
-                        icon : Icons.thermostat_rounded)),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: _MetricCard(
-                        label: tr('dashboard.power'),
-                        value: powerDisplay,
-                        icon : Icons.power_outlined)),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-
-              if (!hasData && !_isFromCache)
-                const SizedBox.shrink()
-              else if (hasData)
-                _CellSummary(
-                  cellCount   : cellCount,
-                  avgVoltage  : avgVoltage,
-                  voltDiff    : voltDiff,
-                  minVoltage  : minVoltage,
-                  maxVoltage  : maxVoltage,
-                  cellVoltages: cellVoltages,
-                  maxVoltageNo: maxVoltageNo,
-                  minVoltageNo: minVoltageNo,
-                  onViewMore  : () => Navigator.push(context,
-                      SlideRoute(
-                          page: CellsScreen(service: widget.service))),
-                ),
-
-             _gap16,
-              _AlertsSummaryCard(
-                warningCount: warningAlertsCount,
-                faultCount  : faultAlertsCount,
-                clearedCount: clearedAlertsCount,
-              ),
-            ],
           ),
-        )
         );
       },
     );
@@ -709,17 +827,23 @@ class _DeviceHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('${tr('dashboard.battery_type')}: $batteryType',
-                  style: const TextStyle(
-                      fontSize  : 17,
-                      fontWeight: FontWeight.w600,
-                      color     : Color(0xFF424242))),
+              Text(
+                '${tr('dashboard.battery_type')}: $batteryType',
+                style: const TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF424242),
+                ),
+              ),
               const SizedBox(height: 4),
-              Text('${tr('dashboard.battery_serial_no')}: $serialNo',
-                  style: TextStyle(
-                      fontSize  : 13,
-                      fontWeight: FontWeight.w400,
-                      color     : Colors.grey[600])),
+              Text(
+                '${tr('dashboard.battery_serial_no')}: $serialNo',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w400,
+                  color: Colors.grey[600],
+                ),
+              ),
             ],
           ),
         ),
@@ -729,9 +853,9 @@ class _DeviceHeader extends StatelessWidget {
 }
 
 class _BatteryCard extends StatefulWidget {
-  final int    soc, statusCode;
+  final int soc, statusCode;
   final String capacity, status, health, cycles;
-  final bool   isCharging, healthGood;
+  final bool isCharging, healthGood;
 
   const _BatteryCard({
     required this.soc,
@@ -751,17 +875,18 @@ class _BatteryCard extends StatefulWidget {
 class _BatteryCardState extends State<_BatteryCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _blinkController;
-  late Animation<double>   _blinkAnimation;
+  late Animation<double> _blinkAnimation;
 
   @override
   void initState() {
     super.initState();
     _blinkController = AnimationController(
-        vsync   : this,
-        duration: const Duration(milliseconds: 600));
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
     _blinkAnimation = Tween<double>(begin: 1.0, end: 0.2).animate(
-        CurvedAnimation(
-            parent: _blinkController, curve: Curves.easeInOut));
+      CurvedAnimation(parent: _blinkController, curve: Curves.easeInOut),
+    );
     _updateBlink();
   }
 
@@ -787,42 +912,49 @@ class _BatteryCardState extends State<_BatteryCard>
     super.dispose();
   }
 
-  Color get _socColor =>
-      widget.soc > 20 ? Colors.green : Colors.red;
+  Color get _socColor => widget.soc > 20 ? Colors.green : Colors.red;
 
   @override
   Widget build(BuildContext context) {
     final tr = TranslationService.t;
     return Container(
-      padding    : const EdgeInsets.all(16),
-      decoration : BoxDecoration(
-          color       : const Color(0xFF3A6EAC),
-          borderRadius: BorderRadius.circular(12)),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF3A6EAC),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Row(
         children: [
           SizedBox(
-            width : 110, height: 110,
-            child : AnimatedBuilder(
+            width: 110,
+            height: 110,
+            child: AnimatedBuilder(
               animation: _blinkAnimation,
-              builder  : (_, child) => Opacity(
+              builder: (_, child) => Opacity(
                 opacity: widget.soc <= 10 ? _blinkAnimation.value : 1.0,
-                child  : child,
+                child: child,
               ),
               child: CustomPaint(
-                painter: _SocRingPainter(
-                    soc: widget.soc, ringColor: _socColor),
+                painter: _SocRingPainter(soc: widget.soc, ringColor: _socColor),
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('${widget.soc}%',
-                          style: const TextStyle(
-                              fontSize  : 28,
-                              fontWeight: FontWeight.bold,
-                              color     : Colors.white)),
-                      Text(tr('dashboard.soc'),
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.white70)),
+                      Text(
+                        '${widget.soc}%',
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        tr('dashboard.soc'),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.white70,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -836,101 +968,143 @@ class _BatteryCardState extends State<_BatteryCard>
               children: [
                 Row(
                   children: [
-                    Text(tr('dashboard.battery_status'),
-                        style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                    const Spacer(),
-                   SizedBox(
-  width: 28,
-  height: 28,
-  child: AnimatedSwitcher(
-    duration: const Duration(milliseconds: 250),
-    child: widget.statusCode == 0x01
-        ? Image.asset(
-            'assets/images/charging_icn_gif.gif',
-            key: const ValueKey('charging'),
-            gaplessPlayback: true,
-            fit: BoxFit.contain,
-          )
-        : widget.statusCode == 0x02
-            ? Image.asset(
-                'assets/images/idle-battery.png',
-                key: const ValueKey('idle'),
-                fit: BoxFit.contain,
-              )
-            : Image.asset(
-                'assets/images/load_connect.png',
-                key: const ValueKey('load'),
-                fit: BoxFit.contain,
-              ),
-  ),
-),
-                  ],
-                ),
-                Text(widget.status,
-                    style: const TextStyle(
-                        color     : Colors.white,
-                        fontSize  : 15,
-                        fontWeight: FontWeight.w600)),
-                const Divider(color: Colors.white24, height: 14),
-                Text(tr('dashboard.remaining_capacity'),
-                    style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                Text(widget.capacity,
-                    style: const TextStyle(
-                        color: Colors.white, fontSize: 14)),
-                const Divider(color: Colors.white24, height: 14),
-               IntrinsicHeight(
-  child: Row(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                          Text(tr('dashboard.cycles'),
-                            style: const TextStyle(
-                                color: Colors.white70, fontSize: 12)),
-                        Text(widget.cycles,
-                            style: const TextStyle(
-                                color     : Colors.white,
-                                fontSize  : 13,
-                                fontWeight: FontWeight.w600)),
-                      ],
+                    Text(
+                      tr('dashboard.battery_status'),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
                     ),
                     const Spacer(),
-                    Container(
+                    SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child: widget.statusCode == 0x01
+                            ? Column(
+                                key: const ValueKey('charging'),
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${widget.soc}%',
+                                    style: const TextStyle(
+                                      fontSize: 8,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                      height: 1.0,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 1),
+                                  BatteryIndicator(
+                                    soc: widget.soc.toDouble(),
+                                    mode: BatteryMode.charging,
+                                    width: 26,
+                                    height: 15,
+                                  ),
+                                ],
+                              )
+                            : widget.statusCode == 0x02
+                            ? Image.asset(
+                                'assets/images/idle-battery.png',
+                                key: const ValueKey('idle'),
+                                fit: BoxFit.contain,
+                              )
+                            : Image.asset(
+                                'assets/images/load_connect.png',
+                                key: const ValueKey('load'),
+                                fit: BoxFit.contain,
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  widget.status,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Divider(color: Colors.white24, height: 14),
+                Text(
+                  tr('dashboard.remaining_capacity'),
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+                Text(
+                  widget.capacity,
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
+                const Divider(color: Colors.white24, height: 14),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            tr('dashboard.cycles'),
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                          Text(
+                            widget.cycles,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      Container(
                         margin: const EdgeInsets.symmetric(horizontal: 14),
                         width: 1,
                         color: Colors.white30,
                       ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                          Text(tr('dashboard.health'),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            tr('dashboard.health'),
                             style: const TextStyle(
-                                color: Colors.white70, fontSize: 12)),
-                        Row(
-                          children: [
-                            Text(widget.health,
-                                style: const TextStyle(
-                                    color     : Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize  : 13)),
-                            const SizedBox(width: 4),
-                            Icon(
-                              widget.healthGood
-                                  ? Icons.verified_user_rounded
-                                  : Icons.warning_rounded,
-                              color: widget.healthGood
-                                  ? Colors.green
-                                  : Colors.orange,
-                              size: 16,
+                              color: Colors.white70,
+                              fontSize: 12,
                             ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
+                          ),
+                          Row(
+                            children: [
+                              Text(
+                                widget.health,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                widget.healthGood
+                                    ? Icons.verified_user_rounded
+                                    : Icons.warning_rounded,
+                                color: widget.healthGood
+                                    ? Colors.green
+                                    : Colors.orange,
+                                size: 16,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-               ),
               ],
             ),
           ),
@@ -941,7 +1115,7 @@ class _BatteryCardState extends State<_BatteryCard>
 }
 
 class _SocRingPainter extends CustomPainter {
-  final int   soc;
+  final int soc;
   final Color ringColor;
   _SocRingPainter({required this.soc, required this.ringColor});
 
@@ -950,19 +1124,23 @@ class _SocRingPainter extends CustomPainter {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = (size.shortestSide - 14) / 2;
     canvas.drawCircle(
-        center, radius,
-        Paint()
-          ..color      = Colors.white24
-          ..style      = PaintingStyle.stroke
-          ..strokeWidth= 10);
+      center,
+      radius,
+      Paint()
+        ..color = Colors.white24
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 10,
+    );
     canvas.drawArc(
       Rect.fromCircle(center: center, radius: radius),
-      -1.57, 6.28 * (soc / 100), false,
+      -1.57,
+      6.28 * (soc / 100),
+      false,
       Paint()
-        ..color      = ringColor
-        ..style      = PaintingStyle.stroke
-        ..strokeWidth= 10
-        ..strokeCap  = StrokeCap.round,
+        ..color = ringColor
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 10
+        ..strokeCap = StrokeCap.round,
     );
   }
 
@@ -971,11 +1149,11 @@ class _SocRingPainter extends CustomPainter {
 }
 
 class _MetricCard extends StatelessWidget {
-  final String  label, value;
+  final String label, value;
   final String? iconLabel;
   final IconData? icon;
-  final String?   badge;
-  final bool      isCharging;
+  final String? badge;
+  final bool isCharging;
 
   const _MetricCard({
     required this.label,
@@ -989,85 +1167,79 @@ class _MetricCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding   : const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-          color       : const Color(0xFFF0F0F0),
-          borderRadius: BorderRadius.circular(10)),
+        color: const Color(0xFFF0F0F0),
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Row(
         children: [
           CircleAvatar(
-            radius         : 18,
+            radius: 18,
             backgroundColor: Colors.transparent,
-           child: iconLabel != null
-    ? Text(
-        iconLabel!,
-        style: const TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: Colors.grey,
-        ),
-      )
-    : Icon(
-        icon,
-        color: Colors.grey,
-        size: 22,
-      ),
+            child: iconLabel != null
+                ? Text(
+                    iconLabel!,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                    ),
+                  )
+                : Icon(icon, color: Colors.grey, size: 22),
           ),
           const SizedBox(width: 10),
           Expanded(
-            child:Column(
-  crossAxisAlignment: CrossAxisAlignment.start,
-  children: [
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black54,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
 
-    Row(
-      children: [
+                    if (isCharging)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade400),
+                        ),
+                        child: Text(
+                          TranslationService.t('dashboard.charging'),
+                          style: const TextStyle(
+                            fontSize: 9,
+                            color: Colors.black54,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
 
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Colors.black54,
+                const SizedBox(height: 4),
+
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-
-        if (isCharging)
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 6,
-              vertical: 2,
-            ),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: Colors.grey.shade400,
-              ),
-            ),
-            child: Text(TranslationService.t('dashboard.charging'),
-                            style: const TextStyle(
-                fontSize: 9,
-                color: Colors.black54,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-      ],
-    ),
-
-    const SizedBox(height: 4),
-
-    Text(
-      value,
-      style: const TextStyle(
-        fontSize: 17,
-        fontWeight: FontWeight.w600,
-      ),
-    ),
-  ],
-)
           ),
         ],
       ),
@@ -1076,10 +1248,10 @@ class _MetricCard extends StatelessWidget {
 }
 
 class _CellSummary extends StatelessWidget {
-  final int          cellCount;
-  final String       avgVoltage, voltDiff, minVoltage, maxVoltage;
+  final int cellCount;
+  final String avgVoltage, voltDiff, minVoltage, maxVoltage;
   final List<double> cellVoltages;
-  final int?         maxVoltageNo, minVoltageNo;
+  final int? maxVoltageNo, minVoltageNo;
   final VoidCallback? onViewMore;
 
   const _CellSummary({
@@ -1094,7 +1266,7 @@ class _CellSummary extends StatelessWidget {
     this.onViewMore,
   });
 
- @override
+  @override
   Widget build(BuildContext context) {
     final tr = TranslationService.t;
     return Column(
@@ -1103,15 +1275,26 @@ class _CellSummary extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('${tr('dashboard.cell_summary')} ($cellCount ${tr('dashboard.cells')})',
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            Text(
+              '${tr('dashboard.cell_summary')} ($cellCount ${tr('dashboard.cells')})',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+            ),
             GestureDetector(
               onTap: onViewMore,
               child: Row(
                 children: [
-                  Text(tr('dashboard.view_more'),
-                      style: const TextStyle(color: Color(0xFF3A6EAC), fontSize: 13)),
-                  const Icon(Icons.chevron_right, color: Color(0xFF3A6EAC), size: 18),
+                  Text(
+                    tr('dashboard.view_more'),
+                    style: const TextStyle(
+                      color: Color(0xFF3A6EAC),
+                      fontSize: 13,
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right,
+                    color: Color(0xFF3A6EAC),
+                    size: 18,
+                  ),
                 ],
               ),
             ),
@@ -1120,17 +1303,33 @@ class _CellSummary extends StatelessWidget {
         const SizedBox(height: 10),
         Row(
           children: [
-            Text(tr('dashboard.average_voltage'),
-                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+            Text(
+              tr('dashboard.average_voltage'),
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
+            ),
             const SizedBox(width: 4),
-            Text(avgVoltage,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black87)),
+            Text(
+              avgVoltage,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
             const Spacer(),
-            Text(tr('dashboard.volt_difference'),
-                style: const TextStyle(fontSize: 13, color: Colors.black87)),
+            Text(
+              tr('dashboard.volt_difference'),
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
+            ),
             const SizedBox(width: 4),
-            Text(voltDiff,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.black87)),
+            Text(
+              voltDiff,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Colors.black87,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 4),
@@ -1139,26 +1338,46 @@ class _CellSummary extends StatelessWidget {
           child: Column(
             children: [
               SizedBox(
-                height: 130, width: double.infinity,
+                height: 130,
+                width: double.infinity,
                 child: Row(
                   children: [
-                    const SizedBox(width: 18,
-                        child: Icon(Icons.chevron_left, size: 18, color: Colors.grey)),
+                    const SizedBox(
+                      width: 18,
+                      child: Icon(
+                        Icons.chevron_left,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
+                    ),
                     Expanded(
                       child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: SizedBox(
                           height: 150,
-                          child : Row(
+                          child: Row(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: List.generate(cellVoltages.length,
-                                (i) => _buildBar(i, cellVoltages, maxVoltageNo, minVoltageNo)),
+                            children: List.generate(
+                              cellVoltages.length,
+                              (i) => _buildBar(
+                                i,
+                                cellVoltages,
+                                maxVoltageNo,
+                                minVoltageNo,
+                              ),
+                            ),
                           ),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 18,
-                        child: Icon(Icons.chevron_right, size: 18, color: Colors.grey)),
+                    const SizedBox(
+                      width: 18,
+                      child: Icon(
+                        Icons.chevron_right,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1166,10 +1385,22 @@ class _CellSummary extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('${tr('dashboard.min_volt')} $minVoltage',
-                      style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500)),
-                  Text('${tr('dashboard.max_volt')} $maxVoltage',
-                      style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500)),
+                  Text(
+                    '${tr('dashboard.min_volt')} $minVoltage',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.black54,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  Text(
+                    '${tr('dashboard.max_volt')} $maxVoltage',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.black54,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -1180,26 +1411,50 @@ class _CellSummary extends StatelessWidget {
   }
 
   Widget _buildBar(int index, List<double> voltages, int? maxNo, int? minNo) {
-    final double v      = voltages[index];
-    final bool   isMax  = (index + 1) == maxNo;
-    final bool   isMin  = (index + 1) == minNo;
+    final double v = voltages[index];
+    final bool isMax = (index + 1) == maxNo;
+    final bool isMin = (index + 1) == minNo;
     final double height = 45 + ((v - 3.0) * 60).clamp(0.0, 40.0);
-    final Color  color  = isMax ? const Color(0xFF0B6645) : isMin ? Colors.orange : const Color(0xFF0B6645);
+    final Color color = isMax
+        ? const Color(0xFF0B6645)
+        : isMin
+        ? Colors.orange
+        : const Color(0xFF0B6645);
     return SizedBox(
       width: 28,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          Text(v.toStringAsFixed(2), textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 8, color: Colors.black54, fontWeight: FontWeight.w500)),
+          Text(
+            v.toStringAsFixed(2),
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 8,
+              color: Colors.black54,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
           const SizedBox(height: 2),
-          Container(width: 20, height: height,
-              decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
+          Container(
+            width: 20,
+            height: height,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           const SizedBox(height: 2),
-          SizedBox(width: 20,
-            child: Text('C${(index + 1).toString().padLeft(2, '0')}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w600, color: Colors.black54)),
+          SizedBox(
+            width: 20,
+            child: Text(
+              'C${(index + 1).toString().padLeft(2, '0')}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 8,
+                fontWeight: FontWeight.w600,
+                color: Colors.black54,
+              ),
+            ),
           ),
         ],
       ),
@@ -1213,14 +1468,23 @@ class _LoadingSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding   : const EdgeInsets.symmetric(vertical: 32),
-      decoration: BoxDecoration(color: const Color(0xFFF5F5F5), borderRadius: BorderRadius.circular(12)),
+      padding: const EdgeInsets.symmetric(vertical: 32),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF5F5F5),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const CircularProgressIndicator(strokeWidth: 2.5, color: Color(0xFF1B6B3A)),
+          const CircularProgressIndicator(
+            strokeWidth: 2.5,
+            color: Color(0xFF1B6B3A),
+          ),
           const SizedBox(height: 12),
-          Text(text, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+          Text(
+            text,
+            style: const TextStyle(fontSize: 13, color: Colors.black54),
+          ),
         ],
       ),
     );
@@ -1233,9 +1497,10 @@ class _ErrorSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding   : const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.red.shade50, borderRadius: BorderRadius.circular(12),
+        color: Colors.red.shade50,
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.red.shade200),
       ),
       child: Row(
@@ -1243,7 +1508,12 @@ class _ErrorSection extends StatelessWidget {
         children: [
           Icon(Icons.error_outline, color: Colors.red.shade700),
           const SizedBox(width: 10),
-          Expanded(child: Text(message, style: TextStyle(fontSize: 13, color: Colors.red.shade700))),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(fontSize: 13, color: Colors.red.shade700),
+            ),
+          ),
         ],
       ),
     );
@@ -1257,30 +1527,61 @@ class _AlertItem {
 
 class _AlertsSummaryCard extends StatelessWidget {
   final int warningCount, faultCount, clearedCount;
-  const _AlertsSummaryCard({required this.warningCount, required this.faultCount, required this.clearedCount});
+  const _AlertsSummaryCard({
+    required this.warningCount,
+    required this.faultCount,
+    required this.clearedCount,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final tr            = TranslationService.t;
-    final bool hasAny   = warningCount > 0 || faultCount > 0 || clearedCount > 0;
+    final tr = TranslationService.t;
+    final bool hasAny = warningCount > 0 || faultCount > 0 || clearedCount > 0;
     final List<Widget> rows = [];
     if (warningCount > 0) {
-    rows.add(_alertRow(icon: Icons.warning_amber_rounded,
-        iconColor: Colors.grey.shade600, label: tr('dashboard.warning_alerts'), count: warningCount));
-  }
-    if (faultCount > 0)  { rows.add(_alertRow(icon: Icons.error_outline_rounded,
-        iconColor: Colors.grey.shade600, label: tr('dashboard.fault_alerts'),   count: faultCount));
+      rows.add(
+        _alertRow(
+          icon: Icons.warning_amber_rounded,
+          iconColor: Colors.grey.shade600,
+          label: tr('dashboard.warning_alerts'),
+          count: warningCount,
+        ),
+      );
+    }
+    if (faultCount > 0) {
+      rows.add(
+        _alertRow(
+          icon: Icons.error_outline_rounded,
+          iconColor: Colors.grey.shade600,
+          label: tr('dashboard.fault_alerts'),
+          count: faultCount,
+        ),
+      );
     }
     if (clearedCount > 0) {
-      rows.add(_alertRow(icon: Icons.check_circle_outline_rounded,
-        iconColor: Colors.grey.shade600, label: tr('dashboard.cleared_alerts'), count: clearedCount));
+      rows.add(
+        _alertRow(
+          icon: Icons.check_circle_outline_rounded,
+          iconColor: Colors.grey.shade600,
+          label: tr('dashboard.cleared_alerts'),
+          count: clearedCount,
+        ),
+      );
     }
 
     final List<Widget> children = [];
     for (int i = 0; i < rows.length; i++) {
       children.add(rows[i]);
       if (i != rows.length - 1) {
-        children.add(Divider(height: 1, thickness: 1, color: Colors.grey.shade100, indent: 14, endIndent: 14));
+        children.add(
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: Colors.grey.shade100,
+            indent: 14,
+            endIndent: 14,
+          ),
+        );
       }
     }
 
@@ -1291,28 +1592,49 @@ class _AlertsSummaryCard extends StatelessWidget {
           children: [
             const Icon(Icons.notifications_none_rounded, size: 20),
             const SizedBox(width: 8),
-            Text(tr('dashboard.active_alerts'),
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+            Text(
+              tr('dashboard.active_alerts'),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+            ),
           ],
         ),
         const SizedBox(height: 10),
         Container(
           decoration: BoxDecoration(
-            color: Colors.white, borderRadius: BorderRadius.circular(10),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(color: Colors.grey.shade200),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6, offset: const Offset(0, 2))],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: hasAny
               ? Column(children: children)
               : Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 20,
+                    horizontal: 14,
+                  ),
                   child: Row(
                     children: [
-                      Icon(Icons.check_circle_outline_rounded, color: Colors.green.shade600, size: 20),
+                      Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: Colors.green.shade600,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
-                      Text(tr('dashboard.no_active_alerts'),
-                          style: const TextStyle(
-                              fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87)),
+                      Text(
+                        tr('dashboard.no_active_alerts'),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.black87,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1321,17 +1643,36 @@ class _AlertsSummaryCard extends StatelessWidget {
     );
   }
 
-  Widget _alertRow({required IconData icon, required Color iconColor, required String label, required int count}) {
+  Widget _alertRow({
+    required IconData icon,
+    required Color iconColor,
+    required String label,
+    required int count,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       child: Row(
         children: [
           Icon(icon, color: iconColor, size: 20),
           const SizedBox(width: 10),
-          Expanded(child: Text(label,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.black87))),
-          Text(count.toString().padLeft(2, '0'),
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black87)),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.black87,
+              ),
+            ),
+          ),
+          Text(
+            count.toString().padLeft(2, '0'),
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
           const SizedBox(width: 4),
           Icon(Icons.chevron_right, color: Colors.grey[400], size: 18),
         ],
