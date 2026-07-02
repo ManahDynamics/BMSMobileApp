@@ -17,36 +17,68 @@ class GoogleAuthService {
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  Future<GoogleSignInResult?> signIn() async {
+  bool _initialized = false;
+
+  Future<void> _ensureInitialized() async {
+    if (_initialized) return;
     await _googleSignIn.initialize(
       serverClientId:
           '947445061824-q2f09l531q695tlusjbqhubvpres9um2.apps.googleusercontent.com',
     );
+    _initialized = true;
+  }
 
-    final GoogleSignInAccount googleUser =
-        await _googleSignIn.authenticate();
+  /// Returns null if the user cancels the sign-in flow.
+  /// Throws [GoogleSignInException] or other exceptions on real failures —
+  /// callers should catch and surface a message.
+  Future<GoogleSignInResult?> signIn() async {
+    try {
+      await _ensureInitialized();
 
-    final GoogleSignInAuthentication googleAuth =
-        googleUser.authentication;
+      final GoogleSignInAccount googleUser =
+          await _googleSignIn.authenticate();
 
-    final credential = GoogleAuthProvider.credential(
-      idToken: googleAuth.idToken,
-    );
+      final GoogleSignInAuthentication googleAuth =
+          googleUser.authentication;
 
-    final userCredential =
-        await _auth.signInWithCredential(credential);
+      if (googleAuth.idToken == null) {
+        throw Exception('No idToken returned from Google Sign-In');
+      }
 
-    print("Firebase sign in completed");
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
 
-final firebaseIdToken = await userCredential.user!.getIdToken(true);
+      final userCredential = await _auth.signInWithCredential(credential);
 
-print("Token fetched");
-print(firebaseIdToken);
+      final firebaseIdToken = await userCredential.user!.getIdToken(true);
 
-    return GoogleSignInResult(
-      credential: userCredential,
-      firebaseIdToken: firebaseIdToken,
-    );
+      return GoogleSignInResult(
+        credential: userCredential,
+        firebaseIdToken: firebaseIdToken,
+      );
+    } on GoogleSignInException catch (e) {
+      // ---- Debug: remove/replace with real logging once diagnosed ----
+      // ignore: avoid_print
+      print('[GoogleAuthService] GoogleSignInException '
+          'code=${e.code} description=${e.description}');
+
+      if (e.code == GoogleSignInExceptionCode.canceled) {
+        // User backed out of the picker — not an error.
+        return null;
+      }
+      // Real failure (config, network, provider issue, etc).
+      rethrow;
+    } on FirebaseAuthException catch (e) {
+      // ignore: avoid_print
+      print('[GoogleAuthService] FirebaseAuthException '
+          'code=${e.code} message=${e.message}');
+      rethrow;
+    } catch (e) {
+      // ignore: avoid_print
+      print('[GoogleAuthService] Unexpected error: $e');
+      rethrow;
+    }
   }
 
   Future<void> signOut() async {

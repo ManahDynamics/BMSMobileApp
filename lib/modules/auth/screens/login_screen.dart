@@ -9,6 +9,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import 'package:bmsmobileapp/core/theme/app_colors.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
@@ -57,7 +58,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   final TokenService  _tokenService  = TokenService();
   final LocalAuthDB   _localAuthDB   = LocalAuthDB();
- final GoogleAuthService _googleAuthService = GoogleAuthService();
+  final GoogleAuthService _googleAuthService = GoogleAuthService();
+
   @override
   void initState() {
     super.initState();
@@ -91,7 +93,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // ── Remember Me helpers ───────────────────────────────────────────────────
 
-  /// Loads previously remembered credentials (if any) and pre-fills the form.
   Future<void> _loadRememberedCredentials() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -110,7 +111,6 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  /// Persists or clears the remembered credentials based on [_rememberMe].
   Future<void> _persistRememberedCredentials({
     required String email,
     required String password,
@@ -128,98 +128,116 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-Future<void> _handleGoogleLogin() async {
-  setState(() {
-    _isLoading = true;
-    _errorMessage = null;
-  });
+  // ── Google login handler ────────────────────────────────────────────────
 
-  try {
-    final googleResult = await _googleAuthService.signIn();
+  Future<void> _handleGoogleLogin() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
 
-    if (googleResult == null) {
-      return;
-    }
+    try {
+      final googleResult = await _googleAuthService.signIn();
 
-    final deviceInfo = await _getDeviceInfo();
-
-    final response = await http.post(
-      Uri.parse('http://15.207.26.224:3030/api/auth/login'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: jsonEncode({
-        "loginType": "google",
-        "googleIdToken": googleResult.firebaseIdToken,
-        "deviceId": deviceInfo["deviceId"],
-        "devicePlatform": deviceInfo["devicePlatform"],
-        "deviceToken": deviceInfo["deviceToken"],
-      }),
-    );
-
-    final Map<String, dynamic> rawJson = jsonDecode(response.body);
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final loginResponse = LoginResponse.fromJson(rawJson);
-
-      final name = loginResponse.name ?? "User";
-      final email = loginResponse.email ?? "";
-      final userId = loginResponse.userId ?? "";
-
-      if (loginResponse.accessToken != null &&
-          loginResponse.accessToken!.isNotEmpty) {
-        await _tokenService.saveToken(loginResponse.accessToken!);
-
-        await _tokenService.saveUserEmail(email);
-
-        await _tokenService.saveUserName(name);
-
-        if (userId.isNotEmpty) {
-          await _tokenService.saveUserId(userId);
-        }
-
-        if (loginResponse.refreshToken != null &&
-            loginResponse.refreshToken!.isNotEmpty) {
-          await _tokenService.saveRefreshToken(
-            loginResponse.refreshToken!,
-          );
-        }
+      // User cancelled the picker — just stop, no error shown.
+      if (googleResult == null) {
+        return;
       }
 
-      if (!mounted) return;
+      final deviceInfo = await _getDeviceInfo();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Welcome back, $name!"),
-          backgroundColor: const Color(0xFF5E93D4),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      final response = await http
+          .post(
+            Uri.parse('http://15.207.26.224:3030/api/auth/login'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({
+              "loginType": "google",
+              "googleIdToken": googleResult.firebaseIdToken,
+              "deviceId": deviceInfo["deviceId"],
+              "devicePlatform": deviceInfo["devicePlatform"],
+              "deviceToken": deviceInfo["deviceToken"],
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
 
-      Navigator.pushReplacementNamed(context, '/connect');
-    } else {
+      // ignore: avoid_print
+      print('[GoogleLogin] status=${response.statusCode} body=${response.body}');
+
+      final Map<String, dynamic> rawJson = jsonDecode(response.body);
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final loginResponse = LoginResponse.fromJson(rawJson);
+
+        final name   = loginResponse.name   ?? "User";
+        final email  = loginResponse.email  ?? "";
+        final userId = loginResponse.userId ?? "";
+
+        if (loginResponse.accessToken != null &&
+            loginResponse.accessToken!.isNotEmpty) {
+          await _tokenService.saveToken(loginResponse.accessToken!);
+          await _tokenService.saveUserEmail(email);
+          await _tokenService.saveUserName(name);
+
+          if (userId.isNotEmpty) {
+            await _tokenService.saveUserId(userId);
+          }
+
+          if (loginResponse.refreshToken != null &&
+              loginResponse.refreshToken!.isNotEmpty) {
+            await _tokenService.saveRefreshToken(
+              loginResponse.refreshToken!,
+            );
+          }
+        }
+
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Welcome back, $name!"),
+            backgroundColor: const Color(0xFF5E93D4),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+
+        Navigator.pushReplacementNamed(context, '/connect');
+      } else {
+        setState(() {
+          _errorMessage =
+              rawJson["message"] ?? rawJson["error"] ?? "Google login failed";
+        });
+      }
+    } on GoogleSignInException catch (e) {
+      // Real Google Sign-In failure (config/cert/provider issue etc).
+      // ignore: avoid_print
+      print('[GoogleLogin] GoogleSignInException code=${e.code} '
+          'description=${e.description}');
       setState(() {
-        _errorMessage =
-            rawJson["message"] ?? rawJson["error"] ?? "Google login failed";
+        _errorMessage = 'Google sign-in failed (${e.code}). '
+            'Please try again.';
       });
-    }
-  } catch (e) {
-    setState(() {
-      _errorMessage = e.toString();
-    });
-  } finally {
-    if (mounted) {
+    } catch (e) {
+      // ignore: avoid_print
+      print('[GoogleLogin] Unexpected error: $e');
       setState(() {
-        _isLoading = false;
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
-}
 
-void _continueAsGuest() {
-  Navigator.pushReplacementNamed(context, '/connect');
-}
+  void _continueAsGuest() {
+    Navigator.pushReplacementNamed(context, '/connect');
+  }
+
   Future<bool> _isOnline() async {
     final result = await Connectivity().checkConnectivity();
     return result.contains(ConnectivityResult.mobile) ||
@@ -390,7 +408,6 @@ void _continueAsGuest() {
         await _loginOffline(email, password);
       }
     } on SocketException {
-      // Network available but unreachable server — fall back to offline
       setState(() =>
           _errorMessage = 'Server unreachable. Trying offline login…');
       await _loginOffline(email, password);
@@ -447,7 +464,6 @@ void _continueAsGuest() {
         }
       }
 
-      // ── Save credentials for future offline logins ──────────────────
       await _localAuthDB.saveUser(
         email    : userEmail,
         password : password,
@@ -455,7 +471,6 @@ void _continueAsGuest() {
         userId   : userId,
       );
 
-      // ── Remember Me: persist or clear locally stored credentials ─────
       await _persistRememberedCredentials(email: userEmail, password: password);
 
       if (!mounted) return;
@@ -468,7 +483,6 @@ void _continueAsGuest() {
         ),
       );
 
-      // Navigate — no offline banner needed
       Navigator.pushReplacementNamed(context, '/connect');
     } else {
       final msg = rawJson['message'] ?? rawJson['error'] ?? 'Login failed';
@@ -482,23 +496,19 @@ void _continueAsGuest() {
     final user = await _localAuthDB.loginOffline(email, password);
 
     if (user != null) {
-      // Restore user identity tokens so the rest of the app works
       await _tokenService.saveUserEmail(email);
       await _tokenService.saveUserName(user['name'] ?? 'User');
       if (user['user_id'] != null) {
         await _tokenService.saveUserId(user['user_id']);
       }
 
-      // ── Remember Me: persist or clear locally stored credentials ─────
       await _persistRememberedCredentials(email: email, password: password);
 
-      // Check whether we have BMS data cached
       final hasBMSData = await _localAuthDB.hasBMSCache();
       final syncTime   = await _localAuthDB.getLastSyncTime();
 
       if (!mounted) return;
 
-      // Show offline snackbar with last-sync info
       final syncLabel = _formatSyncTime(syncTime);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -648,103 +658,107 @@ void _continueAsGuest() {
     );
   }
 
- Widget _buildDivider() {
-  return Row(
-    children: [
-      Expanded(
-        child: Divider(
-          color: Colors.grey.shade300,
-        ),
-      ),
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        child: Text(
-          TranslationService.t('login.or'),
-          style: const TextStyle(
-            color: Colors.grey,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-      Expanded(
-        child: Divider(
-          color: Colors.grey.shade300,
-        ),
-      ),
-    ],
-  );
-}
-Widget _buildGoogleButton() {
-  return SizedBox(
-    width: double.infinity,
-    height: 52,
-    child: OutlinedButton.icon(
-      onPressed: _isLoading ? null : _handleGoogleLogin,
-      icon: Image.asset(
-        'assets/images/google_logo.png',
-        width: 22,
-      ),
-      label: Text(
-        TranslationService.t('login.continue_with_google'),
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ),
-  );
-}
-Widget _buildGuestButton() {
-  return SizedBox(
-    width: double.infinity,
-    height: 52,
-    child: OutlinedButton.icon(
-      onPressed: _isLoading ? null : _continueAsGuest,
-      icon: const Icon(Icons.person_outline),
-      label: Text(
-        TranslationService.t('login.continue_as_guest'),
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ),
-  );
-}
-Widget _buildRegister() {
-  return Center(
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
+  Widget _buildDivider() {
+    return Row(
       children: [
-        Text(
-          TranslationService.t('login.no_account_prefix'),
-          style: TextStyle(
-            color: Colors.grey[600],
-            fontSize: 12,
+        Expanded(
+          child: Divider(
+            color: Colors.grey.shade300,
           ),
         ),
-        const SizedBox(width: 4),
-        GestureDetector(
-          onTap: _isLoading
-              ? null
-              : () => Navigator.push(
-                    context,
-                    SlideRoute(
-                      page: const RegisterScreen(),
-                    ),
-                  ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Text(
-            TranslationService.t('login.register_here'),
+            TranslationService.t('login.or'),
             style: const TextStyle(
-              color: AppColors.primaryBlue,
+              color: Colors.grey,
               fontWeight: FontWeight.w600,
             ),
           ),
         ),
+        Expanded(
+          child: Divider(
+            color: Colors.grey.shade300,
+          ),
+        ),
       ],
-    ),
-  );
-}
+    );
+  }
+
+  Widget _buildGoogleButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: OutlinedButton.icon(
+        onPressed: _isLoading ? null : _handleGoogleLogin,
+        icon: Image.asset(
+          'assets/images/google_logo.png',
+          width: 22,
+        ),
+        label: Text(
+          TranslationService.t('login.continue_with_google'),
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGuestButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: OutlinedButton.icon(
+        onPressed: _isLoading ? null : _continueAsGuest,
+        icon: const Icon(Icons.person_outline),
+        label: Text(
+          TranslationService.t('login.continue_as_guest'),
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRegister() {
+    return Center(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            TranslationService.t('login.no_account_prefix'),
+            style: TextStyle(
+              color: Colors.grey[600],
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: _isLoading
+                ? null
+                : () => Navigator.push(
+                      context,
+                      SlideRoute(
+                        page: const RegisterScreen(),
+                      ),
+                    ),
+            child: Text(
+              TranslationService.t('login.register_here'),
+              style: const TextStyle(
+                color: AppColors.primaryBlue,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -881,19 +895,19 @@ Widget _buildRegister() {
                         ),
                         const SizedBox(height: 20),
 
-_buildDivider(),
+                        _buildDivider(),
 
-const SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-_buildGoogleButton(),
+                        _buildGoogleButton(),
 
-const SizedBox(height: 12),
+                        const SizedBox(height: 12),
 
-_buildGuestButton(),
+                        _buildGuestButton(),
 
-const SizedBox(height: 20),
+                        const SizedBox(height: 20),
 
-_buildRegister(),
+                        _buildRegister(),
                       ],
                     ),
                   ),
