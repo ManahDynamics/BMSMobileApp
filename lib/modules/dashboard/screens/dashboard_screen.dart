@@ -916,11 +916,11 @@ class _BatteryCardState extends State<_BatteryCard>
   Color get _socColor => widget.soc > 20 ? Colors.green : Colors.red;
 
   @override
-  Widget build(BuildContext context) {
-    final tr = TranslationService.t;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+    Widget build(BuildContext context) {
+     final tr = TranslationService.t;  
+      return Container(
+       padding: const EdgeInsets.all(16),
+       decoration: BoxDecoration(
         color: const Color(0xFF3A6EAC),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -1265,7 +1265,14 @@ class _CellSummary extends StatelessWidget {
     this.minVoltageNo,
     this.onViewMore,
   });
-
+Color _voltageColor(double v) {
+  if (v >= 4.5) return const Color(0xFF1B6B3A); // darkest green — 4.5–5.0V
+  if (v >= 4.0) return const Color(0xFF2E8B4E); // green — 4.0–4.5V
+  if (v >= 3.5) return const Color(0xFF4CAF6D); // medium green — 3.5–4.0V
+  if (v >= 3.0) return const Color(0xFF7FC98C); // lightest green — 3.0–3.5V
+  if (v >= 2.5) return const Color(0xFFE8A33D); // orange — 2.5–3.0V
+  return const Color(0xFFD9483A);               // red — 2.0–2.5V
+}
   @override
   Widget build(BuildContext context) {
     final tr = TranslationService.t;
@@ -1334,132 +1341,123 @@ class _CellSummary extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Container(
-          padding: const EdgeInsets.fromLTRB(0, 8, 0, 10),
-          child: Column(
-            children: [
-              SizedBox(
-                height: 130,
-                width: double.infinity,
-                child: Row(
-                  children: [
-                    const SizedBox(
-                      width: 18,
-                      child: Icon(
-                        Icons.chevron_left,
-                        size: 18,
-                        color: Colors.grey,
-                      ),
-                    ),
-                    Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: SizedBox(
-                          height: 150,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: List.generate(
-                              cellVoltages.length,
-                              (i) => _buildBar(
-                                i,
-                                cellVoltages,
-                                maxVoltageNo,
-                                minVoltageNo,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(
-                      width: 18,
-                      child: Icon(
-                        Icons.chevron_right,
-                        size: 18,
-                        color: Colors.grey,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${tr('dashboard.min_volt')} $minVoltage',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.black54,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  Text(
-                    '${tr('dashboard.max_volt')} $maxVoltage',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: Colors.black54,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildBar(int index, List<double> voltages, int? maxNo, int? minNo) {
-    final double v = voltages[index];
-    final Color color = v < 4.0 ? Colors.orange : const Color(0xFF0B6645);
-    // final bool isMax = (index + 1) == maxNo;
-    // final bool isMin = (index + 1) == minNo;
-    final double height = 45 + ((v - 3.0) * 60).clamp(0.0, 40.0);
-    // final Color color = isMax
-    //     ? const Color(0xFF0B6645)
-    //     : isMin
-    //     ?Color(0xFF0B6645)
-    //     : const Color(0xFF0B6645);
-    return SizedBox(
-      width: 28,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
+  padding: const EdgeInsets.fromLTRB(0, 8, 0, 10),
+  child: Column(
+    children: [
+      _buildCellChart(),   // ← the new width-aware method
+      const SizedBox(height: 10),
+      Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            v.toStringAsFixed(2),
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 8,
-              color: Colors.black54,
-              fontWeight: FontWeight.w500,
-            ),
+            '${tr('dashboard.min_volt')} $minVoltage',
+            style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500),
           ),
-          const SizedBox(height: 2),
-          Container(
-            width: 20,
-            height: height,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(height: 2),
-          SizedBox(
-            width: 20,
-            child: Text(
-              'C${(index + 1).toString().padLeft(2, '0')}',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 8,
-                fontWeight: FontWeight.w600,
-                color: Colors.black54,
-              ),
-            ),
+          Text(
+            '${tr('dashboard.max_volt')} $maxVoltage',
+            style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500),
           ),
         ],
       ),
-    );
+    ],
+  ),
+),
+      ],
+    );    
+  }
+  Widget _buildCellChart() {
+  const double barWidth = 28;
+
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final double availableWidth = constraints.maxWidth;
+      final double neededWidth = cellVoltages.length * barWidth;
+      final bool needsScroll = neededWidth > availableWidth;
+
+      if (!needsScroll) {
+        // Fits comfortably — spread bars evenly, no scroll arrows.
+        return SizedBox(
+          height: 150,
+          width: double.infinity,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: List.generate(
+              cellVoltages.length,
+              (i) => _buildBar(i, cellVoltages, maxVoltageNo, minVoltageNo),
+            ),
+          ),
+        );
+      }
+
+      // Too many cells to fit — keep the scrollable version with arrows.
+      return SizedBox(
+        height: 130,
+        width: double.infinity,
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 18,
+              child: Icon(Icons.chevron_left, size: 18, color: Colors.grey),
+            ),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  height: 150,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: List.generate(
+                      cellVoltages.length,
+                      (i) => _buildBar(i, cellVoltages, maxVoltageNo, minVoltageNo),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(
+              width: 18,
+              child: Icon(Icons.chevron_right, size: 18, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+  Widget _buildBar(int index, List<double> voltages, int? maxNo, int? minNo) {
+  final double v = voltages[index];
+  final Color color = _voltageColor(v);
+  final double height = 45 + ((v - 3.0) * 60).clamp(0.0, 40.0);
+  return SizedBox(
+    width: 28,
+    child: Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Text(
+          v.toStringAsFixed(2),
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 8, color: Colors.black54, fontWeight: FontWeight.w500),
+        ),
+        const SizedBox(height: 2),
+        Container(
+          width: 20,
+          height: height,
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+        ),
+        const SizedBox(height: 2),
+        SizedBox(
+          width: 20,
+          child: Text(
+            'C${(index + 1).toString().padLeft(2, '0')}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 8, fontWeight: FontWeight.w600, color: Colors.black54),
+          ),
+        ),
+      ],
+    ),
+  );
   }
 }
 
