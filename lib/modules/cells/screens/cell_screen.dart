@@ -32,10 +32,9 @@ class CellsScreen extends StatefulWidget {
 }
 
 class _CellsScreenState extends State<CellsScreen> {
-  static const primaryGreen = Color(0xFF1B6B3A);
+  static const primaryGreen = Color(0xFF0B6645);
   static const cardBlue     = Color(0xFF3A6EAC);
   static const titleGreyBg  = Color(0xFFEEEEEE);
-  static const poorAmber    = Color(0xFFB8860B);
 
   final LocalAuthDB _localAuthDB = LocalAuthDB();
 
@@ -88,10 +87,11 @@ class _CellsScreenState extends State<CellsScreen> {
   }
 
   @override
+
   void dispose() {
     widget.service.removeListener(_onChanged);
     TranslationService.instance.removeListener(_onChanged);
-     context.read<BMSBluetoothService>().stopAllPolling();
+     widget.service.startDashboardPolling();
     super.dispose();
   }
 
@@ -195,9 +195,18 @@ class _CellsScreenState extends State<CellsScreen> {
   }
 
   ({String text, Color color}) _cellStatus(double v) =>
-      v < 3.2
-          ? (text: tr('cells.status_poor'), color: poorAmber)
-          : (text: tr('cells.status_good'), color: primaryGreen);
+      v < 3.0
+          ? (text: tr('cells.status_poor'), color: _voltageTierColor(v))
+          : (text: tr('cells.status_good'), color: _voltageTierColor(v));
+
+          Color _voltageTierColor(double v) {
+    if (v >= 4.5) return const Color(0xFF0B6645); // darkest green — 4.5–5.0V
+    if (v >= 4.0) return const Color(0xFF0B6645); // green — 4.0–4.5V
+    if (v >= 3.5) return const Color(0xFF0B6645); // medium green — 3.5–4.0V
+    if (v >= 3.0) return const Color(0xFF0B6645); // lightest green — 3.0–3.5V
+    if (v >= 2.5) return const Color(0xFFE8A33D); // orange — 2.5–3.0V
+    return const Color(0xFFD9483A);               // red — 2.0–2.5V
+  }
 
   // ── Summary tile ─────────────────────────────────────────────────────────
 
@@ -523,7 +532,7 @@ class _CellsScreenState extends State<CellsScreen> {
                         final status     = _cellStatus(cell.voltage);
                         final bool isPoor = cell.voltage < 3.2;
                         final int filledBars =
-                            ((cell.voltage - 3.0) / (4.2 - 3.0) * 8)
+                            ((cell.voltage - 2.0) / (5.0 - 2.0) * 8)
                                 .clamp(0, 8)
                                 .toInt();
 
@@ -563,9 +572,7 @@ class _CellsScreenState extends State<CellsScreen> {
                                           margin: const EdgeInsets.only(right: 3),
                                           decoration: BoxDecoration(
                                             color: filled
-                                                ? (isPoor
-                                                    ? poorAmber
-                                                    : primaryGreen)
+                                                ? _voltageTierColor(cell.voltage)
                                                 : Colors.grey.shade300,
                                             borderRadius:
                                                 BorderRadius.circular(2),

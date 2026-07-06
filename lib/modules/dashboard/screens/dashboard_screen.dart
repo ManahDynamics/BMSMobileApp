@@ -641,9 +641,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               vertical: 5,
                             ),
                             decoration: BoxDecoration(
-                              color: const Color.fromARGB(255, 239, 242, 240),
+                              color: Colors.white,
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: _green, width: 2.5),
+                              border: Border.all(color: _green, width: 1),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -909,7 +909,6 @@ class _BatteryCardState extends State<_BatteryCard>
   @override
   void dispose() {
     _blinkController.dispose();
-    context.read<BMSBluetoothService>().stopAllPolling();
     super.dispose();
   }
 
@@ -1039,69 +1038,72 @@ class _BatteryCardState extends State<_BatteryCard>
                   style: const TextStyle(color: Colors.white, fontSize: 14),
                 ),
                 const Divider(color: Colors.white24, height: 14),
-                IntrinsicHeight(
+              IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            tr('dashboard.cycles'),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              tr('dashboard.cycles'),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                              ),
                             ),
-                          ),
-                          Text(
-                            widget.cycles,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
+                            Text(
+                              widget.cycles,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                      const Spacer(),
                       Container(
                         margin: const EdgeInsets.symmetric(horizontal: 14),
                         width: 1,
                         color: Colors.white30,
                       ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            tr('dashboard.health'),
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                          Row(
-                            children: [
-                              Text(
-                                widget.health,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              tr('dashboard.health'),
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
                               ),
-                              const SizedBox(width: 4),
-                              Icon(
+                            ),
+                            Row(
+                              children: [
+                                Text(
+                                  widget.health,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                               Icon(
                                 widget.healthGood
-                                    ? Icons.verified_user_rounded
-                                    : Icons.warning_rounded,
+                                    ? Icons.gpp_good_rounded
+                                    : Icons.gpp_bad_rounded,
                                 color: widget.healthGood
                                     ? Colors.green
-                                    : Colors.orange,
-                                size: 16,
+                                    : Colors.red,
+                                size: 18,
                               ),
-                            ],
-                          ),
-                        ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -1164,7 +1166,7 @@ class _MetricCard extends StatelessWidget {
     this.isCharging = false, this.badge,
   });
 
-  @override
+ @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -1195,42 +1197,47 @@ class _MetricCard extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        label,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.black54,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.black54,
                       ),
+                      maxLines: 1,
+                      softWrap: false,
                     ),
-
-                    if (isCharging)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.grey.shade400),
-                        ),
-                        child: Text(
-                          TranslationService.t('dashboard.charging'),
-                          style: const TextStyle(
-                            fontSize: 9,
-                            color: Colors.black54,
-                            fontWeight: FontWeight.w500,
+                    if (isCharging) ...[
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerRight,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: Colors.grey.shade400, width: 1),
+                            ),
+                            child: Text(
+                              TranslationService.t('dashboard.charging'),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                            ),
                           ),
                         ),
                       ),
+                    ],
                   ],
                 ),
-
                 const SizedBox(height: 4),
-
                 Text(
                   value,
                   style: const TextStyle(
@@ -1244,9 +1251,7 @@ class _MetricCard extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
+  }}
 class _CellSummary extends StatelessWidget {
   final int cellCount;
   final String avgVoltage, voltDiff, minVoltage, maxVoltage;
@@ -1266,10 +1271,10 @@ class _CellSummary extends StatelessWidget {
     this.onViewMore,
   });
 Color _voltageColor(double v) {
-  if (v >= 4.5) return const Color(0xFF1B6B3A); // darkest green — 4.5–5.0V
-  if (v >= 4.0) return const Color(0xFF2E8B4E); // green — 4.0–4.5V
-  if (v >= 3.5) return const Color(0xFF4CAF6D); // medium green — 3.5–4.0V
-  if (v >= 3.0) return const Color(0xFF7FC98C); // lightest green — 3.0–3.5V
+  if (v >= 4.5) return const Color(0xFF0B6645); // darkest green — 4.5–5.0V
+  if (v >= 4.0) return const Color(0xFF0B6645); // green — 4.0–4.5V
+  if (v >= 3.5) return const Color(0xFF0B6645); // medium green — 3.5–4.0V
+  if (v >= 3.0) return const Color(0xFF0B6645); // lightest green — 3.0–3.5V
   if (v >= 2.5) return const Color(0xFFE8A33D); // orange — 2.5–3.0V
   return const Color(0xFFD9483A);               // red — 2.0–2.5V
 }
@@ -1429,7 +1434,7 @@ Color _voltageColor(double v) {
   Widget _buildBar(int index, List<double> voltages, int? maxNo, int? minNo) {
   final double v = voltages[index];
   final Color color = _voltageColor(v);
-  final double height = 45 + ((v - 3.0) * 60).clamp(0.0, 40.0);
+  final double height = 40 + ((v - 2.0) / (5.0 - 2.0) * 80).clamp(0.0, 80.0);
   return SizedBox(
     width: 28,
     child: Column(
