@@ -24,10 +24,25 @@ class ConnectScreen extends StatefulWidget {
 class _ConnectScreenState extends State<ConnectScreen> {
   String tr(String key) => TranslationService.t(key);
 
+  final TokenService _tokenService = TokenService();
+
+  bool _isGuest = false;
+  bool _guestCheckDone = false;
+
   @override
   void initState() {
     super.initState();
     TranslationService.instance.addListener(_onTranslationsChanged);
+    _checkGuestStatus();
+  }
+
+  Future<void> _checkGuestStatus() async {
+    final loggedIn = await _tokenService.isLoggedIn();
+    if (!mounted) return;
+    setState(() {
+      _isGuest = !loggedIn;
+      _guestCheckDone = true;
+    });
   }
 
   void _onTranslationsChanged() {
@@ -103,6 +118,13 @@ class _ConnectScreenState extends State<ConnectScreen> {
     );
   }
 
+  void _handleGuestBack() {
+    Navigator.of(context, rootNavigator: true).pushNamedAndRemoveUntil(
+      AppRoutes.login,
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -113,6 +135,13 @@ class _ConnectScreenState extends State<ConnectScreen> {
         backgroundColor: AppColors.primaryGreen,
         centerTitle: true,
         automaticallyImplyLeading: false,
+        leading: (_guestCheckDone && _isGuest)
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                tooltip: tr('connect.back'),
+                onPressed: _handleGuestBack,
+              )
+            : null,
         title: Text(
           tr('connect.title'),
           style: theme.textTheme.titleLarge?.copyWith(
@@ -120,7 +149,9 @@ class _ConnectScreenState extends State<ConnectScreen> {
             fontWeight: FontWeight.w500,
           ),
         ),
-        actions: [
+        actions: (_guestCheckDone && _isGuest)
+            ? const []
+            : [
           IconButton(
             icon: const Icon(Icons.power_settings_new, color: Colors.white),
             tooltip: tr('logout.title'),
