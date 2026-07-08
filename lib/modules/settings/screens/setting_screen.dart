@@ -24,40 +24,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool isConnected = true;
   bool isLocked = true;
 
-  double chargeCutoffVoltage = 3.65;
-  double dischargeCutoffVoltage = 2.80;
-  int tempMin = -10;
-  int tempMax = 60;
-  int chargeCurrentLimit = 50;
-  int dischargeCurrentLimit = 100;
-  int shortCircuitDelay = 100;
-  double cellBalancingVoltage = 0.03;
+  // ── Tab state ──────────────────────────────────────────────────────────────
+  int _selectedTab = 0; // 0 Battery, 1 Protection, 2 Temp, 3 Factory
+  final List<String> _tabLabels = const [
+    'Battery Settings',
+    'Protection Settings',
+    'Temp Settings',
+    'Factory Settings',
+  ];
+
+  // ── Battery Settings ────────────────────────────────────────────────────────
+  int batteryStringCount = 14; // "S"
+  double ratedCapacity = 30.0; // AH
+  int socSet = 99; // %
+  int sleepWaitingTime = 3600; // ms
+  double balancedStartDifferenceVolt = 0.03; // V
+  double balancedStartVolt = 3.20; // V
+  double nominalCellVolt = 3.0; // V
+  String cellChemistry = 'Li-Ion';
+  final List<String> _chemistryOptions = const ['Li-Ion', 'LiFePO4', 'NiMH', 'Lead Acid'];
+
+  // ── Protection Settings ─────────────────────────────────────────────────────
+  double singleCellHighVoltProtection = 3.200;
+  double singleCellLowVoltProtection = 3.00;
+  double sumVoltHighProtection = 58.8;
+  double sumVoltLowProtection = 42.0;
+  double chargeOverCurrentProtection = 40.0;
+  double dischargeOverCurrentProtection = 60.0;
+
+  // ── Temp Settings ────────────────────────────────────────────────────────────
+  int noOfTempChannels = 4;
+  int chargeHighTempProtection = 60;
+  int chargeLowTempProtection = -10;
+  int dischargeHighTempProtection = 70;
+  int dischargeLowTempProtection = -10;
+  int diffTempProtection = 15;
+
+  // ── Factory Settings ─────────────────────────────────────────────────────────
+  String batterySerialNo = 'CHP8510262400001';
+  String bleDeviceName = 'MCH_BAT_1AF0001';
 
   // ── Offline-cache state ───────────────────────────────────────────────────
   bool _isOffline = false;
   bool _isLoadingCache = true;
   DateTime? _lastSync;
 
-  String _selectedLanguage = 'English';
-  final Map<String, String> _langCodeMap = {
-    'English': 'en',
-    'Telugu': 'te',
-    'Hindi': 'hi',
-  };
-  OverlayEntry? _overlayEntry;
-  final LayerLink _layerLink = LayerLink();
-
   String tr(String key) {
     return TranslationService.t(key);
   }
 
-  // ── Listen to TranslationService + BLE service changes ───────────────────
   @override
   void initState() {
     super.initState();
     TranslationService.instance.addListener(_onTranslationsChanged);
     widget.service.addListener(_onServiceChanged);
-    _selectedLanguage = _languageDisplayName(TranslationService.language);
     _loadCachedSettings();
   }
 
@@ -77,16 +97,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     TranslationService.instance.removeListener(_onTranslationsChanged);
     widget.service.removeListener(_onServiceChanged);
-    _removeOverlay();
     super.dispose();
   }
-  // ── END ───────────────────────────────────────────────────────────────────
 
   // ── Offline cache: load / persist ─────────────────────────────────────────
 
-  /// Loads previously cached protection-parameter settings from LocalAuthDB
-  /// (if any) so the screen still shows the user's last-known configuration
-  /// when the device is offline / not yet connected over BLE.
   Future<void> _loadCachedSettings() async {
     final cached = await _localAuthDB.getCachedSettings();
     final syncTime = await _localAuthDB.getLastSyncTime();
@@ -94,20 +109,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (cached != null) {
       setState(() {
-        chargeCutoffVoltage =
-            (cached['chargeCutoffVoltage'] as num?)?.toDouble() ?? chargeCutoffVoltage;
-        dischargeCutoffVoltage =
-            (cached['dischargeCutoffVoltage'] as num?)?.toDouble() ?? dischargeCutoffVoltage;
-        tempMin = (cached['tempMin'] as num?)?.toInt() ?? tempMin;
-        tempMax = (cached['tempMax'] as num?)?.toInt() ?? tempMax;
-        chargeCurrentLimit =
-            (cached['chargeCurrentLimit'] as num?)?.toInt() ?? chargeCurrentLimit;
-        dischargeCurrentLimit =
-            (cached['dischargeCurrentLimit'] as num?)?.toInt() ?? dischargeCurrentLimit;
-        shortCircuitDelay =
-            (cached['shortCircuitDelay'] as num?)?.toInt() ?? shortCircuitDelay;
-        cellBalancingVoltage =
-            (cached['cellBalancingVoltage'] as num?)?.toDouble() ?? cellBalancingVoltage;
+        batteryStringCount = (cached['batteryStringCount'] as num?)?.toInt() ?? batteryStringCount;
+        ratedCapacity = (cached['ratedCapacity'] as num?)?.toDouble() ?? ratedCapacity;
+        socSet = (cached['socSet'] as num?)?.toInt() ?? socSet;
+        sleepWaitingTime = (cached['sleepWaitingTime'] as num?)?.toInt() ?? sleepWaitingTime;
+        balancedStartDifferenceVolt =
+            (cached['balancedStartDifferenceVolt'] as num?)?.toDouble() ?? balancedStartDifferenceVolt;
+        balancedStartVolt = (cached['balancedStartVolt'] as num?)?.toDouble() ?? balancedStartVolt;
+        nominalCellVolt = (cached['nominalCellVolt'] as num?)?.toDouble() ?? nominalCellVolt;
+        cellChemistry = (cached['cellChemistry'] as String?) ?? cellChemistry;
+
+        singleCellHighVoltProtection =
+            (cached['singleCellHighVoltProtection'] as num?)?.toDouble() ?? singleCellHighVoltProtection;
+        singleCellLowVoltProtection =
+            (cached['singleCellLowVoltProtection'] as num?)?.toDouble() ?? singleCellLowVoltProtection;
+        sumVoltHighProtection = (cached['sumVoltHighProtection'] as num?)?.toDouble() ?? sumVoltHighProtection;
+        sumVoltLowProtection = (cached['sumVoltLowProtection'] as num?)?.toDouble() ?? sumVoltLowProtection;
+        chargeOverCurrentProtection =
+            (cached['chargeOverCurrentProtection'] as num?)?.toDouble() ?? chargeOverCurrentProtection;
+        dischargeOverCurrentProtection =
+            (cached['dischargeOverCurrentProtection'] as num?)?.toDouble() ?? dischargeOverCurrentProtection;
+
+        noOfTempChannels = (cached['noOfTempChannels'] as num?)?.toInt() ?? noOfTempChannels;
+        chargeHighTempProtection = (cached['chargeHighTempProtection'] as num?)?.toInt() ?? chargeHighTempProtection;
+        chargeLowTempProtection = (cached['chargeLowTempProtection'] as num?)?.toInt() ?? chargeLowTempProtection;
+        dischargeHighTempProtection =
+            (cached['dischargeHighTempProtection'] as num?)?.toInt() ?? dischargeHighTempProtection;
+        dischargeLowTempProtection =
+            (cached['dischargeLowTempProtection'] as num?)?.toInt() ?? dischargeLowTempProtection;
+        diffTempProtection = (cached['diffTempProtection'] as num?)?.toInt() ?? diffTempProtection;
+
+        batterySerialNo = (cached['batterySerialNo'] as String?) ?? batterySerialNo;
+        bleDeviceName = (cached['bleDeviceName'] as String?) ?? bleDeviceName;
       });
     }
 
@@ -119,18 +152,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  /// Persists the current protection-parameter settings to LocalAuthDB so
-  /// they survive app restarts and remain available offline.
   Future<void> _persistSettings() async {
     await _localAuthDB.saveSettings({
-      'chargeCutoffVoltage': chargeCutoffVoltage,
-      'dischargeCutoffVoltage': dischargeCutoffVoltage,
-      'tempMin': tempMin,
-      'tempMax': tempMax,
-      'chargeCurrentLimit': chargeCurrentLimit,
-      'dischargeCurrentLimit': dischargeCurrentLimit,
-      'shortCircuitDelay': shortCircuitDelay,
-      'cellBalancingVoltage': cellBalancingVoltage,
+      'batteryStringCount': batteryStringCount,
+      'ratedCapacity': ratedCapacity,
+      'socSet': socSet,
+      'sleepWaitingTime': sleepWaitingTime,
+      'balancedStartDifferenceVolt': balancedStartDifferenceVolt,
+      'balancedStartVolt': balancedStartVolt,
+      'nominalCellVolt': nominalCellVolt,
+      'cellChemistry': cellChemistry,
+      'singleCellHighVoltProtection': singleCellHighVoltProtection,
+      'singleCellLowVoltProtection': singleCellLowVoltProtection,
+      'sumVoltHighProtection': sumVoltHighProtection,
+      'sumVoltLowProtection': sumVoltLowProtection,
+      'chargeOverCurrentProtection': chargeOverCurrentProtection,
+      'dischargeOverCurrentProtection': dischargeOverCurrentProtection,
+      'noOfTempChannels': noOfTempChannels,
+      'chargeHighTempProtection': chargeHighTempProtection,
+      'chargeLowTempProtection': chargeLowTempProtection,
+      'dischargeHighTempProtection': dischargeHighTempProtection,
+      'dischargeLowTempProtection': dischargeLowTempProtection,
+      'diffTempProtection': diffTempProtection,
+      'batterySerialNo': batterySerialNo,
+      'bleDeviceName': bleDeviceName,
     });
   }
 
@@ -141,102 +186,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (diff.inHours < 1) return '${diff.inMinutes}m ago';
     if (diff.inDays < 1) return '${diff.inHours}h ago';
     return '${diff.inDays}d ago';
-  }
-
-  void _removeOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
-
-  void _showLanguageOverlay() {
-    _removeOverlay();
-
-    _overlayEntry = OverlayEntry(
-      builder: (context) => GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: _removeOverlay,
-        child: Stack(
-          children: [
-            CompositedTransformFollower(
-              link: _layerLink,
-              showWhenUnlinked: false,
-              offset: const Offset(0, 44),
-              child: Align(
-                alignment: Alignment.topLeft,
-                child: Material(
-                  elevation: 6,
-                  borderRadius: BorderRadius.circular(10),
-                  color: Colors.white,
-                  child: SizedBox(
-                    width: 150,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: _langCodeMap.keys.map((lang) {
-                        final isSelected = lang == _selectedLanguage;
-                        return InkWell(
-                          onTap: () async {
-                            setState(() => _selectedLanguage = lang);
-                            await _changeLanguage(_langCodeMap[lang]!);
-                            _removeOverlay();
-                          },
-                          borderRadius: BorderRadius.circular(10),
-                          child: Container(
-                            width: double.infinity,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? Colors.grey.shade200
-                                  : Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              lang,
-                              style: TextStyle(
-                                color: Colors.black87,
-                                fontSize: 14,
-                                fontWeight: isSelected
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ),
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    Overlay.of(context).insert(_overlayEntry!);
-  }
-
-  String _languageDisplayName(String code) {
-    return code == 'hi'
-        ? 'Hindi'
-        : code == 'te'
-            ? 'Telugu'
-            : 'English';
-  }
-
-  // ── Change Language ───────────────────────────────────────────────────────
-  Future<void> _changeLanguage(String languageCode) async {
-    await TranslationService.setLanguage(languageCode);
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(tr('language_changed')),
-        duration: const Duration(seconds: 2),
-      ),
-    );
   }
 
   // ── Disconnect ─────────────────────────────────────────────────────────────
@@ -318,11 +267,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showResetConfirmation(
-    String title,
-    String message,
-    VoidCallback onConfirm,
-  ) {
+  void _handleLockSettings() {
+    setState(() => isLocked = true);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Settings locked')),
+    );
+  }
+
+  void _showDeviceDetails() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Device Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            const SizedBox(height: 12),
+            _detailRow('Device Name', bleDeviceName),
+            _detailRow('Serial No', batterySerialNo),
+            _detailRow('Status', isConnected ? 'Connected' : 'Disconnected'),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.black54, fontSize: 13)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+
+  void _showResetConfirmation(String title, String message, VoidCallback onConfirm) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -349,12 +338,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _editDoubleParam(
-    String title,
-    double current,
-    String unit,
-    Function(double) onSave,
-  ) {
+  // ── Generic edit dialogs ────────────────────────────────────────────────────
+  void _editDoubleParam(String title, double current, String unit, Function(double) onSave) {
     final controller = TextEditingController(text: current.toStringAsFixed(2));
     showDialog(
       context: context,
@@ -363,21 +348,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: TextField(
           controller: controller,
           keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(
-            suffixText: unit,
-            border: const OutlineInputBorder(),
-          ),
+          decoration: InputDecoration(suffixText: unit, border: const OutlineInputBorder()),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(tr('cancel')),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1B6B3A),
-              foregroundColor: Colors.white,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B6B3A), foregroundColor: Colors.white),
             onPressed: () {
               final val = double.tryParse(controller.text);
               if (val != null) {
@@ -393,12 +369,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _editIntParam(
-    String title,
-    int current,
-    String unit,
-    Function(int) onSave,
-  ) {
+  void _editIntParam(String title, int current, String unit, Function(int) onSave) {
     final controller = TextEditingController(text: current.toString());
     showDialog(
       context: context,
@@ -407,21 +378,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: TextField(
           controller: controller,
           keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            suffixText: unit,
-            border: const OutlineInputBorder(),
-          ),
+          decoration: InputDecoration(suffixText: unit, border: const OutlineInputBorder()),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(tr('cancel')),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1B6B3A),
-              foregroundColor: Colors.white,
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B6B3A), foregroundColor: Colors.white),
             onPressed: () {
               final val = int.tryParse(controller.text);
               if (val != null) {
@@ -437,6 +399,63 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  void _editStringParam(String title, String current, Function(String) onSave) {
+    final controller = TextEditingController(text: current);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(border: OutlineInputBorder()),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B6B3A), foregroundColor: Colors.white),
+            onPressed: () {
+              if (controller.text.trim().isNotEmpty) {
+                onSave(controller.text.trim());
+                _persistSettings();
+                Navigator.pop(context);
+              }
+            },
+            child: Text(tr('save')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _pickCellChemistry() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: _chemistryOptions.map((option) {
+            return ListTile(
+              title: Text(option),
+              trailing: option == cellChemistry ? const Icon(Icons.check, color: Color(0xFF1B6B3A)) : null,
+              onTap: () {
+                setState(() => cellChemistry = option);
+                _persistSettings();
+                Navigator.pop(context);
+              },
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+
+  void _handleSetNow(String context_) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('$context_ settings sent to device')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -445,13 +464,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: const Color(0xFF1B6B3A),
         elevation: 0,
         centerTitle: true,
-        title: Text(
-          tr('settings'),
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w500,
-          ),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              tr('settings'),
+              style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              bleDeviceName,
+              style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w400),
+            ),
+          ],
         ),
         leading: Builder(
           builder: (ctx) => IconButton(
@@ -459,6 +483,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
+        actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
+                onPressed: () {},
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                  constraints: const BoxConstraints(minWidth: 15, minHeight: 15),
+                  child: const Text(
+                    '03',
+                    style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w700),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+            onSelected: (value) {
+              if (value == 'disconnect') _showDisconnectDialog();
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(value: 'disconnect', child: Text(tr('disconnect'))),
+            ],
+          ),
+        ],
       ),
       drawer: AppDrawer(activeRoute: '/settings', service: widget.service),
       body: _isLoadingCache
@@ -466,252 +524,84 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : RefreshIndicator(
               onRefresh: _loadCachedSettings,
               child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildDeviceCard(),
-                    const SizedBox(height: 12),
-                    _buildOfflineBanner(),
+                    if (_isOffline) _buildOfflineBanner(),
 
-                    // Language Selector
-                    Row(
-                      children: [
-                        Text(
-                          tr('change_language'),
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-                        ),
-                        const SizedBox(width: 12),
-                        CompositedTransformTarget(
-                          link: _layerLink,
-                          child: GestureDetector(
-                            onTap: _showLanguageOverlay,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade400),
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.language, size: 20, color: Colors.black87),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    _selectedLanguage,
-                                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-                                  ),
-                                  const Icon(Icons.arrow_drop_down_rounded, size: 24),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 20),
-                    if (isLocked) _buildLockBanner(),
-                    if (isLocked) const SizedBox(height: 16),
-
-                    Text(
-                      tr('protection_parameters'),
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    _buildParameterCard(
-                      icon: Icons.battery_charging_full_rounded,
-                      title: tr('charge_cutoff_voltage'),
-                      subtitle: tr('charge_cutoff_voltage_desc'),
-                      value: '${chargeCutoffVoltage.toStringAsFixed(2)} V',
-                      onTap: isLocked
-                          ? null
-                          : () => _editDoubleParam(
-                              tr('charge_cutoff_voltage'),
-                              chargeCutoffVoltage,
-                              'V',
-                              (v) => setState(() => chargeCutoffVoltage = v),
-                            ),
-                    ),
-                    _buildParameterCard(
-                      icon: Icons.battery_alert_rounded,
-                      title: tr('discharge_cutoff_voltage'),
-                      subtitle: tr('discharge_cutoff_voltage_desc'),
-                      value: '${dischargeCutoffVoltage.toStringAsFixed(2)} V',
-                      onTap: isLocked
-                          ? null
-                          : () => _editDoubleParam(
-                              tr('discharge_cutoff_voltage'),
-                              dischargeCutoffVoltage,
-                              'V',
-                              (v) => setState(() => dischargeCutoffVoltage = v),
-                            ),
-                    ),
-                    _buildParameterCard(
-                      icon: Icons.thermostat_rounded,
-                      title: tr('temperature_limit'),
-                      subtitle: tr('temperature_limit_desc'),
-                      value: '$tempMin   $tempMax °C',
-                      onTap: isLocked ? null : () {},
-                    ),
-                    _buildParameterCard(
-                      icon: Icons.electric_bolt_rounded,
-                      title: tr('charge_current_limit'),
-                      subtitle: tr('charge_current_limit_desc'),
-                      value: '$chargeCurrentLimit A',
-                      onTap: isLocked
-                          ? null
-                          : () => _editIntParam(
-                              tr('charge_current_limit'),
-                              chargeCurrentLimit,
-                              'A',
-                              (v) => setState(() => chargeCurrentLimit = v),
-                            ),
-                    ),
-                    _buildParameterCard(
-                      icon: Icons.electric_bolt_outlined,
-                      title: tr('discharge_current_limit'),
-                      subtitle: tr('discharge_current_limit_desc'),
-                      value: '$dischargeCurrentLimit A',
-                      onTap: isLocked
-                          ? null
-                          : () => _editIntParam(
-                              tr('discharge_current_limit'),
-                              dischargeCurrentLimit,
-                              'A',
-                              (v) => setState(() => dischargeCurrentLimit = v),
-                            ),
-                    ),
-                    _buildParameterCard(
-                      icon: Icons.timer_rounded,
-                      title: tr('short_circuit_delay'),
-                      subtitle: tr('short_circuit_delay_desc'),
-                      value: '$shortCircuitDelay ms',
-                      onTap: isLocked
-                          ? null
-                          : () => _editIntParam(
-                              tr('short_circuit_delay'),
-                              shortCircuitDelay,
-                              'ms',
-                              (v) => setState(() => shortCircuitDelay = v),
-                            ),
-                    ),
-                    _buildParameterCard(
-                      icon: Icons.balance_rounded,
-                      title: tr('cell_balancing_voltage'),
-                      subtitle: tr('cell_balancing_voltage_desc'),
-                      value: '${cellBalancingVoltage.toStringAsFixed(2)} V',
-                      onTap: isLocked
-                          ? null
-                          : () => _editDoubleParam(
-                              tr('cell_balancing_voltage'),
-                              cellBalancingVoltage,
-                              'V',
-                              (v) => setState(() => cellBalancingVoltage = v),
-                            ),
-                    ),
-
-                    const SizedBox(height: 20),
-                    Text(
-                      tr('reset_options'),
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-
+                    // ── Unlock Settings / Device Details row ─────────────
+                    // Equal-width tiles spanning the row, matching the screenshot.
                     Row(
                       children: [
                         Expanded(
-                          child: _buildResetButton(
-                            icon: Icons.refresh_rounded,
-                            label: tr('reset_warnings'),
-                            sublabel: tr('reset_warnings_desc'),
-                            onTap: () => _showResetConfirmation(
-                              tr('reset_warnings'),
-                              tr('reset_warnings_confirm'),
-                              () => ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(tr('warnings_cleared'))),
-                              ),
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF2B5FA5),
+                              disabledForegroundColor: const Color(0xFF2B5FA5),
+                              side: const BorderSide(color: Color(0xFF2B5FA5)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                              visualDensity: VisualDensity.compact,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: isLocked ? _showUnlockDialog : _handleLockSettings,
+                            icon: Icon(isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, size: 15),
+                            label: Text(
+                              isLocked ? tr('unlock_settings') : 'Lock Settings',
+                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
-                          child: _buildResetButton(
-                            icon: Icons.check_circle_outline_rounded,
-                            label: tr('reset_counters'),
-                            sublabel: tr('reset_counters_desc'),
-                            onTap: () => _showResetConfirmation(
-                              tr('reset_counters'),
-                              tr('reset_counters_confirm'),
-                              () => ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(tr('counters_reset'))),
-                              ),
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF2B5FA5),
+                              side: const BorderSide(color: Color(0xFF2B5FA5)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                              visualDensity: VisualDensity.compact,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: _showDeviceDetails,
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Icon(Icons.shield_outlined, size: 15),
+                                SizedBox(width: 6),
+                                Flexible(
+                                  child: Text(
+                                    'Device Details',
+                                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                Icon(Icons.keyboard_arrow_down_rounded, size: 18),
+                              ],
                             ),
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    SizedBox(
-                      width: 190,
-                      child: _buildResetButton(
-                        icon: Icons.settings_backup_restore_rounded,
-                        label: tr('factory_reset'),
-                        sublabel: tr('factory_reset_desc'),
-                        onTap: () => _showResetConfirmation(
-                          tr('factory_reset'),
-                          tr('factory_reset_confirm'),
-                          () {
-                            setState(() {
-                              chargeCutoffVoltage = 3.65;
-                              dischargeCutoffVoltage = 2.80;
-                              tempMin = -10;
-                              tempMax = 60;
-                              chargeCurrentLimit = 50;
-                              dischargeCurrentLimit = 100;
-                              shortCircuitDelay = 100;
-                              cellBalancingVoltage = 0.03;
-                            });
-                            _persistSettings();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(tr('factory_reset_complete'))),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-
                     const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(Icons.info_outline_rounded, color: Colors.grey.shade600, size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              tr('settings_warning'),
-                              style: const TextStyle(fontSize: 12, color: Colors.black54),
-                            ),
-                          ),
-                        ],
-                      ),
+
+                    // ── Tab bar ───────────────────────────────────────────
+                    _buildTabBar(),
+                    const SizedBox(height: 14),
+
+                    // ── Tab content ───────────────────────────────────────
+                    IndexedStack(
+                      index: _selectedTab,
+                      children: [
+                        _buildBatterySettingsTab(),
+                        _buildProtectionSettingsTab(),
+                        _buildTempSettingsTab(),
+                        _buildFactorySettingsTab(),
+                      ],
                     ),
-                    const SizedBox(height: 24),
                   ],
                 ),
               ),
@@ -719,15 +609,45 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ── Widget Builders ────────────────────────────────────────────────────────
+  // ── Tab bar (segmented-control style, matches design) ──────────────────────
+  Widget _buildTabBar() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: List.generate(_tabLabels.length, (i) {
+        final selected = _selectedTab == i;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () => setState(() => _selectedTab = i),
+            child: Container(
+              height: 48,
+              margin: const EdgeInsets.symmetric(horizontal: 2),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: selected ? const Color(0xFF16324F) : Colors.white,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: selected ? const Color(0xFF16324F) : Colors.grey.shade300),
+              ),
+              child: Text(
+                _tabLabels[i],
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.15,
+                  color: selected ? Colors.white : Colors.black87,
+                ),
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
 
-  /// Banner shown when settings are being displayed from local cache because
-  /// the BLE device isn't currently connected / providing live data.
   Widget _buildOfflineBanner() {
-    if (!_isOffline) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.orange.shade50,
@@ -749,251 +669,636 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildDeviceCard() {
+  // ── Row widget shared across Battery / Protection / Temp tabs ─────────────
+  Widget _buildSettingRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    VoidCallback? onEdit,
+    Widget? trailingOverride,
+    Color iconColor = Colors.black54,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 1, vertical: 1),
-      decoration: const BoxDecoration(color: Colors.white),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.shade300),
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(
-              Icons.battery_full_rounded,
-              size: 28,
-              color: Colors.black54,
+          SizedBox(
+            width: 26,
+            child: Icon(icon, size: 19, color: iconColor),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87),
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          if (trailingOverride != null)
+            trailingOverride
+          else ...[
+            Text(
+              value,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+            ),
+            SizedBox(
+              width: 32,
+              child: IconButton(
+                icon: Icon(Icons.edit_rounded, size: 15, color: onEdit != null ? Colors.black54 : Colors.grey.shade300),
+                onPressed: onEdit,
+                splashRadius: 16,
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSetNowFooter(String sectionName) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        children: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF6FA88A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            ),
+            onPressed: () => _handleSetNow(sectionName),
+            child: Text(tr('save').isNotEmpty ? 'Set Now' : 'Set Now'),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(
+            child: Text(
+              '( Set here after parameter changes )',
+              style: TextStyle(fontSize: 11, color: Colors.black45),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Battery Settings tab ─────────────────────────────────────────────────
+  Widget _buildBatterySettingsTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSettingRow(
+          icon: Icons.battery_std_rounded,
+          label: 'Battery String',
+          value: '$batteryStringCount S',
+          onEdit: isLocked
+              ? null
+              : () => _editIntParam('Battery String', batteryStringCount, 'S', (v) => setState(() => batteryStringCount = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.battery_charging_full_rounded,
+          label: 'Rated Capacity',
+          value: '${ratedCapacity.toStringAsFixed(1)} AH',
+          onEdit: isLocked
+              ? null
+              : () => _editDoubleParam('Rated Capacity', ratedCapacity, 'AH', (v) => setState(() => ratedCapacity = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.battery_5_bar_rounded,
+          label: 'SOC Set',
+          value: '$socSet %',
+          onEdit: isLocked ? null : () => _editIntParam('SOC Set', socSet, '%', (v) => setState(() => socSet = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.access_time_rounded,
+          label: 'Sleep Waiting Time',
+          value: '$sleepWaitingTime ms',
+          onEdit: isLocked
+              ? null
+              : () => _editIntParam('Sleep Waiting Time', sleepWaitingTime, 'ms', (v) => setState(() => sleepWaitingTime = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.balance_rounded,
+          label: 'Balanced Start Difference Volt',
+          value: '${balancedStartDifferenceVolt.toStringAsFixed(2)} V',
+          onEdit: isLocked
+              ? null
+              : () => _editDoubleParam('Balanced Start Difference Volt', balancedStartDifferenceVolt, 'V',
+                  (v) => setState(() => balancedStartDifferenceVolt = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.play_circle_outline_rounded,
+          label: 'Balanced Start Volt',
+          value: '${balancedStartVolt.toStringAsFixed(2)} V',
+          onEdit: isLocked
+              ? null
+              : () => _editDoubleParam('Balanced Start Volt', balancedStartVolt, 'V', (v) => setState(() => balancedStartVolt = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.bolt_rounded,
+          label: 'Nominal Cell Volt',
+          value: '${nominalCellVolt.toStringAsFixed(1)} V',
+          onEdit: isLocked
+              ? null
+              : () => _editDoubleParam('Nominal Cell Volt', nominalCellVolt, 'V', (v) => setState(() => nominalCellVolt = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.science_outlined,
+          label: 'Cell Chemistry',
+          value: cellChemistry,
+          trailingOverride: GestureDetector(
+            onTap: isLocked ? null : _pickCellChemistry,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(6)),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(cellChemistry, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  const Icon(Icons.arrow_drop_down_rounded, size: 18),
+                ],
+              ),
+            ),
+          ),
+        ),
+        _buildSettingRow(
+          icon: Icons.auto_graph_rounded,
+          label: 'Zero Drift Current Calibration',
+          value: '',
+          trailingOverride: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2B5FA5),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+            ),
+            onPressed: isLocked
+                ? null
+                : () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Zero drift current calibration started')),
+                    );
+                  },
+            child: const Text('Calibrate Now', style: TextStyle(fontSize: 12)),
+          ),
+        ),
+        _buildSetNowFooter('Battery'),
+      ],
+    );
+  }
+
+  // ── Protection Settings tab ──────────────────────────────────────────────
+  Widget _buildProtectionSettingsTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSettingRow(
+          icon: Icons.warning_amber_rounded,
+          iconColor: const Color(0xFFD4621A),
+          label: 'Single Cell High Volt Protection',
+          value: '${singleCellHighVoltProtection.toStringAsFixed(3)} V',
+          onEdit: isLocked
+              ? null
+              : () => _editDoubleParam('Single Cell High Volt Protection', singleCellHighVoltProtection, 'V',
+                  (v) => setState(() => singleCellHighVoltProtection = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.battery_alert_rounded,
+          iconColor: const Color(0xFF2B5FA5),
+          label: 'Single Cell Low Volt Protection',
+          value: '${singleCellLowVoltProtection.toStringAsFixed(2)} V',
+          onEdit: isLocked
+              ? null
+              : () => _editDoubleParam('Single Cell Low Volt Protection', singleCellLowVoltProtection, 'V',
+                  (v) => setState(() => singleCellLowVoltProtection = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.show_chart_rounded,
+          iconColor: const Color(0xFF2B5FA5),
+          label: 'Sum Volt High Protection',
+          value: '${sumVoltHighProtection.toStringAsFixed(1)} V',
+          onEdit: isLocked
+              ? null
+              : () => _editDoubleParam('Sum Volt High Protection', sumVoltHighProtection, 'V', (v) => setState(() => sumVoltHighProtection = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.stacked_line_chart_rounded,
+          iconColor: const Color(0xFF2B5FA5),
+          label: 'Sum Volt Low Protection',
+          value: '${sumVoltLowProtection.toStringAsFixed(1)} V',
+          onEdit: isLocked
+              ? null
+              : () => _editDoubleParam('Sum Volt Low Protection', sumVoltLowProtection, 'V', (v) => setState(() => sumVoltLowProtection = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.battery_charging_full_rounded,
+          iconColor: const Color(0xFFD4621A),
+          label: 'Charge Over Current Protection',
+          value: '${chargeOverCurrentProtection.toStringAsFixed(1)} A',
+          onEdit: isLocked
+              ? null
+              : () => _editDoubleParam('Charge Over Current Protection', chargeOverCurrentProtection, 'A',
+                  (v) => setState(() => chargeOverCurrentProtection = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.electric_bolt_outlined,
+          iconColor: Colors.redAccent.shade700,
+          label: 'Discharge Over Current Protection',
+          value: '${dischargeOverCurrentProtection.toStringAsFixed(1)} A',
+          onEdit: isLocked
+              ? null
+              : () => _editDoubleParam('Discharge Over Current Protection', dischargeOverCurrentProtection, 'A',
+                  (v) => setState(() => dischargeOverCurrentProtection = v)),
+        ),
+        _buildSetNowFooter('Protection'),
+      ],
+    );
+  }
+
+  // ── Temp Settings tab ─────────────────────────────────────────────────────
+  Widget _buildTempSettingsTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSettingRow(
+          icon: Icons.developer_board_rounded,
+          iconColor: Colors.black54,
+          label: 'No of Temp Channels',
+          value: '$noOfTempChannels',
+          onEdit: isLocked
+              ? null
+              : () => _editIntParam('No of Temp Channels', noOfTempChannels, '', (v) => setState(() => noOfTempChannels = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.thermostat_rounded,
+          iconColor: Colors.redAccent.shade700,
+          label: 'Charge High Temp Protection',
+          value: '$chargeHighTempProtection °C',
+          onEdit: isLocked
+              ? null
+              : () => _editIntParam('Charge High Temp Protection', chargeHighTempProtection, '°C',
+                  (v) => setState(() => chargeHighTempProtection = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.ac_unit_rounded,
+          iconColor: const Color(0xFF2B5FA5),
+          label: 'Charge Low Temp Protection',
+          value: '$chargeLowTempProtection °C',
+          onEdit: isLocked
+              ? null
+              : () => _editIntParam('Charge Low Temp Protection', chargeLowTempProtection, '°C',
+                  (v) => setState(() => chargeLowTempProtection = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.local_fire_department_rounded,
+          iconColor: Colors.redAccent.shade700,
+          label: 'Discharge High Temp Protection',
+          value: '$dischargeHighTempProtection °C',
+          onEdit: isLocked
+              ? null
+              : () => _editIntParam('Discharge High Temp Protection', dischargeHighTempProtection, '°C',
+                  (v) => setState(() => dischargeHighTempProtection = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.severe_cold_rounded,
+          iconColor: const Color(0xFF2B5FA5),
+          label: 'Discharge Low Temp Protection',
+          value: '$dischargeLowTempProtection °C',
+          onEdit: isLocked
+              ? null
+              : () => _editIntParam('Discharge Low Temp Protection', dischargeLowTempProtection, '°C',
+                  (v) => setState(() => dischargeLowTempProtection = v)),
+        ),
+        _buildSettingRow(
+          icon: Icons.compare_arrows_rounded,
+          iconColor: const Color(0xFFD4621A),
+          label: 'Diff Temp Protection',
+          value: '$diffTempProtection °C',
+          onEdit: isLocked
+              ? null
+              : () => _editIntParam('Diff Temp Protection', diffTempProtection, '°C', (v) => setState(() => diffTempProtection = v)),
+        ),
+        _buildSetNowFooter('Temp'),
+      ],
+    );
+  }
+
+  // ── Factory Settings tab ─────────────────────────────────────────────────
+  Widget _buildFactoryTextField({
+    required String label,
+    required String value,
+    required VoidCallback onEdit,
+    required VoidCallback onScan,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 12.5, color: Colors.black87, fontWeight: FontWeight.w500)),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+            child: Row(
               children: [
-                const Text(
-                  'BMS_001',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                Expanded(
+                  child: Text(value, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
                 ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        isConnected ? tr('connected') : tr('disconnected'),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: isConnected ? const Color(0xFF1B6B3A) : Colors.red,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Icon(
-                      Icons.circle,
-                      size: 8,
-                      color: isConnected ? const Color(0xFF1B6B3A) : Colors.red,
-                    ),
-                  ],
+                IconButton(
+                  icon: const Icon(Icons.edit_rounded, size: 16, color: Colors.black54),
+                  onPressed: isLocked ? null : onEdit,
+                  splashRadius: 16,
+                  tooltip: 'Edit',
+                ),
+                IconButton(
+                  icon: Icon(Icons.qr_code_scanner_rounded, size: 19, color: Colors.grey.shade600),
+                  onPressed: isLocked ? null : onScan,
+                  splashRadius: 16,
+                  tooltip: 'Scan',
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 8),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFD4621A),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              elevation: 0,
-            ),
-            onPressed: _showDisconnectDialog,
-            child: Text(
-              tr('disconnect'),
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildLockBanner() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF2B5FA5),
-        borderRadius: BorderRadius.circular(10),
+  /// Opens the barcode/QR scanner and feeds the scanned code into [onResult].
+  /// Wire this up to your actual scanner screen / package
+  /// (e.g. push BluetoothDeviceScanPage-style scanner, or a package such as
+  /// `mobile_scanner`) — this stub shows the flow and a manual fallback.
+  Future<void> _scanCode(String title, Function(String) onResult) async {
+    final scanned = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _BarcodeScanPlaceholder(title: title),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    );
+    if (scanned != null && scanned.trim().isNotEmpty) {
+      onResult(scanned.trim());
+      _persistSettings();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$title scanned: $scanned')),
+      );
+    }
+  }
+
+  Widget _buildFactorySettingsTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildFactoryTextField(
+          label: 'Battery Serial No',
+          value: batterySerialNo,
+          onEdit: () => _editStringParam('Battery Serial No', batterySerialNo, (v) => setState(() => batterySerialNo = v)),
+          onScan: () => _scanCode('Battery Serial No', (v) => setState(() => batterySerialNo = v)),
+        ),
+        _buildFactoryTextField(
+          label: 'BLE Device Name',
+          value: bleDeviceName,
+          onEdit: () => _editStringParam('BLE Device Name', bleDeviceName, (v) => setState(() => bleDeviceName = v)),
+          onScan: () => _scanCode('BLE Device Name', (v) => setState(() => bleDeviceName = v)),
+        ),
+        Row(
+          children: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6FA88A),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              ),
+              onPressed: () => _handleSetNow('Factory'),
+              child: const Text('Set Now'),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                '( Set here after parameter changes )',
+                style: TextStyle(fontSize: 11, color: Colors.black45),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+
+        // Firmware upgrade card
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Row(
             children: [
-              const Icon(Icons.verified_user_rounded, color: Colors.white, size: 22),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  tr('protection_locked'),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                  ),
+              Container(
+                width: 38,
+                height: 38,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+                child: const Icon(Icons.system_update_alt_rounded, size: 20, color: Colors.black54),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('BMS Firmware Upgrade', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+                    SizedBox(height: 2),
+                    Text('Update the BMS firmware to the latest version.',
+                        style: TextStyle(fontSize: 11.5, color: Colors.black54)),
+                  ],
                 ),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2B5FA5),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                ),
+                onPressed: isLocked
+                    ? null
+                    : () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Checking for firmware updates...')),
+                        );
+                      },
+                child: const Text('Upgrade', style: TextStyle(fontSize: 12)),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.only(left: 32),
-            child: Text(
-              tr('protection_locked_desc'),
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white,
-              side: const BorderSide(color: Colors.white, width: 1),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            ),
-            onPressed: _showUnlockDialog,
-            icon: const Icon(Icons.lock_open_rounded, size: 16),
-            label: Text(
-              tr('unlock_settings'),
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
 
-  Widget _buildParameterCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required String value,
-    VoidCallback? onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey.shade100),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
+        const SizedBox(height: 20),
+
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2B5FA5),
+                  side: const BorderSide(color: Color(0xFF2B5FA5)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                onPressed: isLocked
+                    ? null
+                    : () => _showResetConfirmation(
+                          'Restart',
+                          'Are you sure you want to restart the BMS device?',
+                          () => ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(content: Text('Device restarting...'))),
+                        ),
+                icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                label: const Text('Restart', style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
             ),
+            const SizedBox(width: 6),
+            Icon(Icons.info_outline_rounded, size: 18, color: Colors.grey.shade500),
           ],
         ),
-        child: Row(
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF2B5FA5),
+                  side: const BorderSide(color: Color(0xFF2B5FA5)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+                onPressed: isLocked
+                    ? null
+                    : () => _showResetConfirmation(
+                          'Factory Data Reset',
+                          'This will erase all settings and restore factory defaults. Continue?',
+                          () {
+                            setState(() {
+                              batteryStringCount = 14;
+                              ratedCapacity = 30.0;
+                              socSet = 99;
+                              sleepWaitingTime = 3600;
+                              balancedStartDifferenceVolt = 0.03;
+                              balancedStartVolt = 3.20;
+                              nominalCellVolt = 3.0;
+                              cellChemistry = 'Li-Ion';
+                              singleCellHighVoltProtection = 3.200;
+                              singleCellLowVoltProtection = 3.00;
+                              sumVoltHighProtection = 58.8;
+                              sumVoltLowProtection = 42.0;
+                              chargeOverCurrentProtection = 40.0;
+                              dischargeOverCurrentProtection = 60.0;
+                              noOfTempChannels = 4;
+                              chargeHighTempProtection = 60;
+                              chargeLowTempProtection = -10;
+                              dischargeHighTempProtection = 70;
+                              dischargeLowTempProtection = -10;
+                              diffTempProtection = 15;
+                            });
+                            _persistSettings();
+                            ScaffoldMessenger.of(context)
+                                .showSnackBar(const SnackBar(content: Text('Factory reset complete')));
+                          },
+                        ),
+                icon: const Icon(Icons.settings_backup_restore_rounded, size: 18),
+                label: const Text('Factory Data Reset', style: TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Icon(Icons.info_outline_rounded, size: 18, color: Colors.grey.shade500),
+          ],
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+}
+
+/// Minimal placeholder scan screen so the "scan" buttons on the Factory
+/// Settings tab are fully wired end-to-end. Swap the body of this widget
+/// for a real camera scanner (e.g. the `mobile_scanner` package, or your
+/// existing BMS scanner screen) when ready — it just needs to
+/// `Navigator.pop(context, scannedValue)` with the decoded string.
+class _BarcodeScanPlaceholder extends StatefulWidget {
+  final String title;
+  const _BarcodeScanPlaceholder({required this.title});
+
+  @override
+  State<_BarcodeScanPlaceholder> createState() => _BarcodeScanPlaceholderState();
+}
+
+class _BarcodeScanPlaceholderState extends State<_BarcodeScanPlaceholder> {
+  final TextEditingController _manualController = TextEditingController();
+
+  @override
+  void dispose() {
+    _manualController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1B6B3A),
+        title: Text('Scan ${widget.title}', style: const TextStyle(color: Colors.white, fontSize: 15)),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Container(
-              width: 38,
-              height: 38,
+              height: 220,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.grey.shade300, width: 1.5),
-              ),
-              child: Icon(icon, size: 20, color: Colors.black54),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(color: Colors.black45, fontSize: 11.5),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(6),
               ),
-              child: Text(
-                value,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-            ),
-            const SizedBox(width: 4),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: onTap != null ? Colors.black54 : Colors.grey.shade300,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildResetButton({
-    required IconData icon,
-    required String label,
-    required String sublabel,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF2B5FA5),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 22),
-            const SizedBox(width: 8),
-            Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
+                  Icon(Icons.qr_code_scanner_rounded, size: 56, color: Colors.grey.shade500),
+                  const SizedBox(height: 8),
                   Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                  Text(
-                    sublabel,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white70, fontSize: 11),
+                    'Camera scanner goes here\n(wire up mobile_scanner or your BMS scanner)',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                   ),
                 ],
               ),
+            ),
+            const SizedBox(height: 24),
+            Text('Or enter the code manually', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _manualController,
+              decoration: const InputDecoration(border: OutlineInputBorder()),
+              autofocus: true,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1B6B3A),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                if (_manualController.text.trim().isNotEmpty) {
+                  Navigator.pop(context, _manualController.text.trim());
+                }
+              },
+              child: const Text('Use this value'),
             ),
           ],
         ),
