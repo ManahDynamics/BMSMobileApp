@@ -11,10 +11,14 @@ import 'firebase_options.dart';
 
 import 'services/bluetooth_service.dart';
 import 'services/translation_service.dart';
-import 'services/device_token_service.dart'; // ← NEW
+import 'services/device_token_service.dart';
+import 'services/offline_sync_service.dart'; // ← NEW
 
 /// Global bluetooth service - single instance used across the entire app
 final BMSBluetoothService bmsService = BMSBluetoothService();
+
+/// Global offline sync service - single instance used across the entire app
+final OfflineSyncService offlineSyncService = OfflineSyncService(); // ← NEW
 
 /// Background FCM message handler (must be a top-level function)
 @pragma('vm:entry-point')
@@ -47,6 +51,14 @@ void main() async {
 
   /// Load default language from Firestore and subscribe to realtime updates.
   await TranslationService.loadTranslations('en');
+
+  /// Start listening for connectivity changes so any SQLite-queued data
+  /// (from LocalAuthDB.enqueueForSync / OfflineSyncService.saveAndQueue,
+  /// or automatically via saveDashboard/saveCellVoltage/saveAlerts/
+  /// saveSettings/saveDeviceName) gets flushed to Firestore automatically,
+  /// and also does one sync pass immediately on app start in case there's
+  /// a backlog from while the app was offline.
+  await offlineSyncService.startListening(); // ← NEW
 
   /// Status bar styling
   SystemChrome.setSystemUIOverlayStyle(
@@ -91,6 +103,7 @@ class _MyAppState extends State<MyApp> {
   @override
   void dispose() {
     TranslationService.instance.removeListener(_onTranslationChanged);
+    offlineSyncService.dispose(); // ← NEW
     super.dispose();
   }
 
