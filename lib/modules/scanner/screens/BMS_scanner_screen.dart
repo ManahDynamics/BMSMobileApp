@@ -60,21 +60,15 @@ class _SignalBars extends StatelessWidget {
     return 1;
   }
 
-  Color get _color {
-    if (rssi >= -60) return const Color(0xFF4CAF50); // green  – excellent
-    if (rssi >= -70) return const Color(0xFF8BC34A); // light green – good
-    if (rssi >= -80) return const Color(0xFFFFC107); // amber  – fair
-    return const Color(0xFFF44336);                  // red    – weak
-  }
-
   @override
   Widget build(BuildContext context) {
     final bars = _bars;
-    final color = _color;
+    const filledColor = Color(0xFF424242);
+    const unfilledColor = Color(0xFFD6D6D6);
     const totalBars = 4;
-    const barWidth = 5.0;
-    const barSpacing = 2.0;
-    const maxHeight = 16.0;
+    const barWidth = 3.5;
+    const barSpacing = 1.5;
+    const maxHeight = 11.0;
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -88,7 +82,7 @@ class _SignalBars extends StatelessWidget {
             width: barWidth,
             height: height,
             decoration: BoxDecoration(
-              color: filled ? color : color.withValues(alpha: 0.22),
+              color: filled ? filledColor : unfilledColor,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -513,39 +507,72 @@ class _ScanTab extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _ConnectionStateBanner(state: service.state),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Bluetooth Device Scan',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF212121),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                tr('Search and connect to your battery'),
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Color(0xFF757575),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // _ConnectionStateBanner(state: service.state),
         const SizedBox(height: AppSpacing.sm),
 
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: SizedBox(
             width: double.infinity,
-            height: 44,
-            child: ElevatedButton.icon(
+            height: 45,
+            child: OutlinedButton.icon(
               onPressed: isScanning ? null : onScan,
               icon: isScanning
                   ? const SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.radar),
-              label: Text(isScanning
-                  ? tr('scan.scanning')
-                  : tr('scan.scan_button')),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryGreen,
-                foregroundColor: Colors.white,
+                          strokeWidth: 2, color: Colors.black54))
+                  : const Icon(Icons.crop_free, size: 20, color: Colors.black87),
+              label: Text(
+                (isScanning
+                        ? tr('scan.scanning')
+                        : tr('scan.scan_button'))
+                    .toUpperCase(),
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                  letterSpacing: 0.4,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.white,
+                side: BorderSide(color: Colors.grey.shade400),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8)),
-                elevation: 0,
               ),
             ),
           ),
         ),
 
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
 
         Expanded(
           child: ListView(
@@ -556,18 +583,24 @@ class _ScanTab extends StatelessWidget {
                   isLoadingPairedDevices ||
                   pairedDevicesError != null) ...[
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
                     children: [
                       Text(tr('paired_devices'),
                           style: theme.textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700)),
+                              ?.copyWith(fontWeight: FontWeight.w600)),
                       const Spacer(),
                       IconButton(
                         onPressed: isLoadingPairedDevices
                             ? null
                             : onRefreshPairedDevices,
                         icon: const Icon(Icons.refresh, size: 20),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
+                        ),
+                        visualDensity: VisualDensity.compact,
                       ),
                     ],
                   ),
@@ -588,7 +621,7 @@ class _ScanTab extends StatelessWidget {
                 if (!isLoadingPairedDevices && pairedDevicesError == null)
                   ...pairedDevices.map(
                       (device) => _buildPairedDeviceTile(device, context)),
-                const SizedBox(height: 24),
+                const SizedBox(height: 20),
               ],
 
               // ── Available Devices section ───────────────────
@@ -596,7 +629,7 @@ class _ScanTab extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Text(tr('scan.available_devices'),
                     style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700)),
+                        ?.copyWith(fontWeight: FontWeight.w600)),
               ),
 
               if (devices.isEmpty)
@@ -642,10 +675,10 @@ class _ScanTab extends StatelessWidget {
           children: [
             // Bluetooth icon box
             Container(
-              width: 44,
-              height: 44,
+              width: 34,
+              height: 34,
               decoration: BoxDecoration(
-                color: Colors.grey.shade900,
+                color: Colors.grey.shade700,
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.bluetooth,
@@ -661,7 +694,7 @@ class _ScanTab extends StatelessWidget {
                   Text(
                     device.deviceName,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 14),
+                        fontWeight: FontWeight.w600, fontSize: 14),
                   ),
                   const SizedBox(height: 2),
                   if (rssi != null)
@@ -702,12 +735,16 @@ class _ScanTab extends StatelessWidget {
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryGreen,
+                          backgroundColor: Color(0xFF3A6EAC),
                           foregroundColor: Colors.white,
+                          elevation: 1,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                              borderRadius: BorderRadius.circular(6)),
                         ),
-                        child: Text(tr('scan.connect')),
+                        child: Text(tr('scan.connect'), style: const TextStyle(fontSize: 14)),
                       ),
           ],
         ),
@@ -725,7 +762,7 @@ class _ScanTab extends StatelessWidget {
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(8),
         side: BorderSide(color: Colors.grey.shade200),
       ),
       child: Padding(
@@ -734,11 +771,11 @@ class _ScanTab extends StatelessWidget {
           children: [
             // Bluetooth icon box
             Container(
-              width: 44,
-              height: 44,
+              width: 34,
+              height: 34,
               decoration: BoxDecoration(
-                color: Colors.grey.shade900,
-                borderRadius: BorderRadius.circular(10),
+                color: Colors.grey.shade700,
+                borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.bluetooth,
                   color: Colors.white, size: 22),
@@ -758,7 +795,6 @@ class _ScanTab extends StatelessWidget {
                         fontWeight: FontWeight.w700, fontSize: 14),
                   ),
                   const SizedBox(height: 1),
-                  const SizedBox(height: 4),
                   if (rssi != null) _SignalStrengthRow(rssi: rssi),
                 ],
               ),
@@ -777,12 +813,16 @@ class _ScanTab extends StatelessWidget {
                     : ElevatedButton(
                         onPressed: () => onConnect(d),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primaryGreen,
+                          backgroundColor: Color(0xFF3A6EAC),
                           foregroundColor: Colors.white,
+                          elevation: 1,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8)),
+                              borderRadius: BorderRadius.circular(6)),
                         ),
-                        child: Text(tr('scan.connect')),
+                        child: Text(tr('scan.connect'), style: const TextStyle(fontSize: 14)),
                       ),
           ],
         ),
