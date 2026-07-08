@@ -63,8 +63,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72,
-              height: 72,
+              width: 60,
+              height: 60,
               decoration: const BoxDecoration(
                 color: Color(0xFFE0F2F1),
                 shape: BoxShape.circle,
@@ -75,7 +75,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 color: Color(0xFF00796B),
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             Text(
               tr('dashboard.disconnect_confirm'),
               textAlign: TextAlign.center,
@@ -85,7 +85,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 color: Colors.black87,
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 20),
             Row(
               children: [
                 Expanded(
@@ -95,9 +95,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       _disconnect();
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFAC5624),
+                      backgroundColor: const Color(0xFFBD5D26),
                       foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -119,7 +119,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextButton.styleFrom(
                       backgroundColor: const Color(0xFFF5F5F5),
                       foregroundColor: Colors.black87,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -438,14 +438,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   tr('dashboard.title'),
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 19,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 if (deviceName.isNotEmpty)
                   Text(
                     deviceName,
-                    style: const TextStyle(color: Colors.white60, fontSize: 11),
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
                   ),
               ],
             ),
@@ -628,71 +628,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         ),
 
-                      const SizedBox(height: 8),
-                      const SizedBox(height: 8),
-
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 5,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: _green, width: 1),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  tr('dashboard.connected'),
-                                  style: const TextStyle(
-                                    color: _green,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: _green,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: _showDisconnectDialog,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _orange,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 20,
-                                vertical: 10,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: Text(
-                              tr('dashboard.disconnect'),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      _gap16,
+                      const SizedBox(height: 10),
 
                       if (svc.dashboardError != null && !_isFromCache)
                         _ErrorSection(message: svc.dashboardError!)
@@ -821,32 +757,91 @@ class _DeviceHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tr = TranslationService.t;
-    return Row(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${tr('dashboard.battery_type')}: $batteryType',
-                style: const TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF424242),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${tr('dashboard.battery_serial_no')}: $serialNo',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w400,
-                  color: Colors.grey[600],
-                ),
-              ),
-            ],
+        // Row 1 — title + subtext
+        Text(
+          '${tr('dashboard.battery_type')}: $batteryType',
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF5E5E5E),
           ),
+        ),
+        const SizedBox(height: 1),
+        Text(
+          '${tr('dashboard.battery_serial_no')}: $serialNo',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Colors.grey[600],
+          ),
+        ),
+
+        const SizedBox(height: 1),
+
+        // Row 2 — status pill + disconnect button
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 7,
+                vertical: 0,
+              ),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: const Color(0xFF3FC579), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    tr('dashboard.connected'),
+                    style: const TextStyle(
+                      color: Color(0xFF0C8F45),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(width: 5),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: const Color(0xFF0C8F45),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ElevatedButton(
+              onPressed: onDisconnect,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFBD5D26),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 15,
+                  vertical: 5,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                elevation: 2,
+              ),
+              child: Text(
+                tr('dashboard.disconnect'),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -913,16 +908,16 @@ class _BatteryCardState extends State<_BatteryCard>
   }
 
 Color get _socColor {
-  if (widget.soc <= 10) return const Color(0xFFE53935);  // red
-  if (widget.soc <= 30) return const Color(0xFFFFA726);  // orange
-  return const Color(0xFF4CAF50);                          // green
+  if (widget.soc <= 10) return const Color(0xFFE53935);  // red — critical
+  if (widget.soc <= 30) return const Color(0xFFFFA726);  // orange — low
+  return Colors.white;                                     // white — normal (matches Figma)
 }
 
   @override
     Widget build(BuildContext context) {
      final tr = TranslationService.t;  
       return Container(
-       padding: const EdgeInsets.all(16),
+       padding: const EdgeInsets.all(10),
        decoration: BoxDecoration(
         color: const Color(0xFF3A6EAC),
         borderRadius: BorderRadius.circular(12),
@@ -930,8 +925,8 @@ Color get _socColor {
       child: Row(
         children: [
           SizedBox(
-            width: 110,
-            height: 110,
+            width: 120,
+            height: 120,
             child: AnimatedBuilder(
               animation: _blinkAnimation,
               builder: (_, child) => Opacity(
@@ -947,7 +942,7 @@ Color get _socColor {
                       Text(
                         '${widget.soc}%',
                         style: const TextStyle(
-                          fontSize: 28,
+                          fontSize: 25,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                         ),
@@ -955,7 +950,7 @@ Color get _socColor {
                       Text(
                         tr('dashboard.soc'),
                         style: const TextStyle(
-                          fontSize: 12,
+                          fontSize: 13,
                           color: Colors.white70,
                         ),
                       ),
@@ -981,8 +976,8 @@ Color get _socColor {
                     ),
                     const Spacer(),
                     SizedBox(
-                      width: 28,
-                      height: 28,
+                      width: 50,
+                      height: 22,
                       child: AnimatedSwitcher(
   duration: const Duration(milliseconds: 250),
   child: widget.statusCode == 0x01
@@ -990,23 +985,23 @@ Color get _socColor {
           key: const ValueKey('charging'),
           soc: widget.soc.toDouble(),
           mode: BatteryMode.charging,
-          width: 26,
-          height: 15,
+          width: 38,
+          height: 22,
         )
       : widget.statusCode == 0x02
           ? BatteryIndicator(
               key: const ValueKey('idle'),
               soc: widget.soc.toDouble(),
               mode: BatteryMode.idle,
-              width: 26,
-              height: 15,
+              width: 38,
+              height: 22,
             )
           : BatteryIndicator(
               key: const ValueKey('load'),
               soc: widget.soc.toDouble(),
               mode: BatteryMode.loadConnected,
-              width: 26,
-              height: 15,
+              width: 38,
+              height: 22,
             ),
 ),
                     ),
@@ -1016,8 +1011,8 @@ Color get _socColor {
                   widget.status,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
                 const Divider(color: Colors.white24, height: 14),
@@ -1050,7 +1045,7 @@ Color get _socColor {
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
@@ -1078,7 +1073,7 @@ Color get _socColor {
                                   widget.health,
                                   style: const TextStyle(
                                     color: Colors.white,
-                                    fontWeight: FontWeight.w600,
+                                    fontWeight: FontWeight.w500,
                                     fontSize: 13,
                                   ),
                                 ),
@@ -1090,7 +1085,7 @@ Color get _socColor {
                                 color: widget.healthGood
                                     ? Colors.green
                                     : Colors.red,
-                                size: 18,
+                                size: 20,
                               ),
                               ],
                             ),
@@ -1117,7 +1112,7 @@ class _SocRingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = (size.shortestSide - 14) / 2;
+    final radius = (size.shortestSide - 16) / 2;
     canvas.drawCircle(
       center,
       radius,
@@ -1134,7 +1129,7 @@ class _SocRingPainter extends CustomPainter {
       Paint()
         ..color = ringColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 10
+        ..strokeWidth = 9
         ..strokeCap = StrokeCap.round,
     );
   }
@@ -1161,26 +1156,31 @@ class _MetricCard extends StatelessWidget {
  @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F0F0),
-        borderRadius: BorderRadius.circular(10),
+        color: const Color(0xFFE6E6E6),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
         children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.transparent,
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.grey.shade600, width: 1.5),
+            ),
             child: iconLabel != null
                 ? Text(
                     iconLabel!,
                     style: const TextStyle(
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.grey,
+                      color: Colors.black54,
                     ),
                   )
-                : Icon(icon, color: Colors.grey, size: 22),
+                : Icon(icon, color: Colors.black54, size: 20),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1233,7 +1233,7 @@ class _MetricCard extends StatelessWidget {
                 Text(
                   value,
                   style: const TextStyle(
-                    fontSize: 17,
+                    fontSize: 15,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -1291,7 +1291,8 @@ Color _voltageColor(double v) {
                     tr('dashboard.view_more'),
                     style: const TextStyle(
                       color: Color(0xFF3A6EAC),
-                      fontSize: 13,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                   const Icon(
@@ -1309,13 +1310,13 @@ Color _voltageColor(double v) {
           children: [
             Text(
               tr('dashboard.average_voltage'),
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF5E5E5E)),
             ),
             const SizedBox(width: 4),
             Text(
               avgVoltage,
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
                 color: Colors.black87,
               ),
@@ -1323,36 +1324,36 @@ Color _voltageColor(double v) {
             const Spacer(),
             Text(
               tr('dashboard.volt_difference'),
-              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF5E5E5E)),
             ),
             const SizedBox(width: 4),
             Text(
               voltDiff,
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: 12,
                 fontWeight: FontWeight.w700,
-                color: Colors.black87,
+                color: Color(0xFF5E5E5E),
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 0),
         Container(
-  padding: const EdgeInsets.fromLTRB(0, 8, 0, 10),
+  padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
   child: Column(
     children: [
       _buildCellChart(),   // ← the new width-aware method
-      const SizedBox(height: 10),
+      const SizedBox(height: 5),
       Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
             '${tr('dashboard.min_volt')} $minVoltage',
-            style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF5E5E5E), fontWeight: FontWeight.w500),
           ),
           Text(
             '${tr('dashboard.max_volt')} $maxVoltage',
-            style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500),
+            style: const TextStyle(fontSize: 11, color: Color(0xFF5E5E5E), fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -1363,7 +1364,7 @@ Color _voltageColor(double v) {
     );    
   }
   Widget _buildCellChart() {
-  const double barWidth = 28;
+  const double barWidth = 32;
 
   return LayoutBuilder(
     builder: (context, constraints) {
@@ -1374,7 +1375,7 @@ Color _voltageColor(double v) {
       if (!needsScroll) {
         // Fits comfortably — spread bars evenly, no scroll arrows.
         return SizedBox(
-          height: 150,
+          height: 85,
           width: double.infinity,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -1389,19 +1390,19 @@ Color _voltageColor(double v) {
 
       // Too many cells to fit — keep the scrollable version with arrows.
       return SizedBox(
-        height: 130,
+        height: 85,
         width: double.infinity,
         child: Row(
           children: [
             const SizedBox(
-              width: 18,
+              width: 10,
               child: Icon(Icons.chevron_left, size: 18, color: Colors.grey),
             ),
             Expanded(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: SizedBox(
-                  height: 150,
+                  height: 85,
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: List.generate(
@@ -1413,7 +1414,7 @@ Color _voltageColor(double v) {
               ),
             ),
             const SizedBox(
-              width: 18,
+              width: 12,
               child: Icon(Icons.chevron_right, size: 18, color: Colors.grey),
             ),
           ],
@@ -1426,26 +1427,28 @@ Color _voltageColor(double v) {
   Widget _buildBar(int index, List<double> voltages, int? maxNo, int? minNo) {
   final double v = voltages[index];
   final Color color = _voltageColor(v);
-  final double height = 40 + ((v - 2.0) / (5.0 - 2.0) * 80).clamp(0.0, 80.0);
+  // Chart box is 85px tall. Value label (~14) + gap(2) + bar + gap(2) + cell label (~14)
+  // must all fit inside that, so the bar itself is capped at ~53px max.
+  final double height = 15 + ((v - 2.0) / (5.0 - 2.0) * 38).clamp(0.0, 38.0);
   return SizedBox(
-    width: 28,
+    width: 32,
     child: Column(
       mainAxisAlignment: MainAxisAlignment.end,
       children: [
         Text(
           v.toStringAsFixed(2),
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 8, color: Colors.black54, fontWeight: FontWeight.w500),
+          style: const TextStyle(fontSize: 9, color: Colors.black54, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 2),
         Container(
-          width: 20,
+          width: 18,
           height: height,
-          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+          decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3)),
         ),
         const SizedBox(height: 2),
         SizedBox(
-          width: 20,
+          width: 30,
           child: Text(
             'C${(index + 1).toString().padLeft(2, '0')}',
             textAlign: TextAlign.center,
@@ -1594,12 +1597,12 @@ class _AlertsSummaryCard extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.grey.shade200),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade300, width: 1),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.04),
@@ -1646,7 +1649,7 @@ class _AlertsSummaryCard extends StatelessWidget {
     required int count,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
           Icon(icon, color: iconColor, size: 20),
