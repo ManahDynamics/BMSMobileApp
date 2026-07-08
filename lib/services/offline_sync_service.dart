@@ -1,5 +1,5 @@
 import 'dart:async';
-
+import 'package:flutter/foundation.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'local_auth_db.dart';
@@ -23,16 +23,16 @@ class OfflineSyncService {
     Map<String, dynamic> payload,
   ) async {
 
-    print("Saving to SQLite...");
-    print("Collection: $collection");
-    print("Payload: $payload");
+    debugPrint("Saving to SQLite...");
+    debugPrint("Collection: $collection");
+    debugPrint("Payload: $payload");
 
     await _localAuthDB.enqueueForSync(
       collection,
       payload,
     );
 
-    print("Saved locally");
+    debugPrint("Saved locally");
 
     await _trySyncPending();
   }
@@ -40,7 +40,7 @@ class OfflineSyncService {
   /// Start internet listener
   Future<void> startListening() async {
 
-    print("Starting sync listener");
+    debugPrint("Starting sync listener");
 
     await _trySyncPending();
 
@@ -48,7 +48,7 @@ class OfflineSyncService {
         _connectivity.onConnectivityChanged.listen(
       (_) async {
 
-        print("Connectivity changed");
+        debugPrint("Connectivity changed");
 
         await _trySyncPending();
       },
@@ -69,16 +69,16 @@ class OfflineSyncService {
         (e) => e != ConnectivityResult.none,
       );
     
-      print(
+      debugPrint(
           "Internet available: $hasInternet");
 
       if (!hasInternet) {
-        print(
+        debugPrint(
             "No internet. Data remains in SQLite");
         return;
       }
 
-      print(
+      debugPrint(
           "Internet available. Starting sync...");
 
       await _localAuthDB.syncPendingEntries(
@@ -87,13 +87,13 @@ class OfflineSyncService {
 
           try {
 
-            print(
+            debugPrint(
                 "========== SYNC START ==========");
-            print(
+            debugPrint(
                 "Collection: $collection");
-            print(
+            debugPrint(
                 "Document ID: $id");
-            print(
+            debugPrint(
                 "Payload: $payload");
 
             await _firestore
@@ -101,17 +101,17 @@ class OfflineSyncService {
                 .doc(id.toString())
                 .set(payload);
 
-            print(
+            debugPrint(
                 "Firebase upload successful");
 
-            print(
+            debugPrint(
                 "========== SYNC END ==========");
 
           } catch (e) {
 
-            print(
+            debugPrint(
                 "Firebase upload failed");
-            print(e);
+            debugPrint(e.toString());
 
             rethrow;
           }
@@ -120,8 +120,8 @@ class OfflineSyncService {
 
     } catch (e) {
 
-      print("Sync process error");
-      print(e);
+      debugPrint("Sync process error");
+      debugPrint(e.toString());
     }
   }
 

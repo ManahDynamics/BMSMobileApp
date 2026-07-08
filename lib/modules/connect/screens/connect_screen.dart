@@ -6,7 +6,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:bmsmobileapp/core/theme/app_colors.dart';
 // import 'package:bmsmobileapp/core/theme/app_spacing.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
-import 'package:bmsmobileapp/modules/scanner/screens/BMS_scanner_screen.dart';
+import 'package:bmsmobileapp/modules/scanner/screens/bms_scanner_screen.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/auth_service.dart';
 import 'package:bmsmobileapp/services/token_service.dart';

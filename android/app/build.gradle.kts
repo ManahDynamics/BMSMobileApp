@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.bmsmobileapp"
+    namespace = "com.manah.bms"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -23,10 +23,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.bmsmobileapp"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
+        applicationId = "com.manah.bms"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -35,9 +32,28 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // TODO: Configure release signing with your keystore
+            // Create a keystore file and update signingConfigs below
+            // signingConfig = signingConfigs.getByName("release")
+            
+            // Temporarily using debug signing for testing
+            // Replace with proper release signing before store submission
             signingConfig = signingConfigs.getByName("debug")
+            
+            // Code shrinking disabled temporarily due to R8 conflicts
+            // Re-enable after refining ProGuard rules
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+    }
+    
+    signingConfigs {
+        create("release") {
+            // TODO: Replace with your actual keystore details
+            // storeFile = file("path/to/your/keystore.jks")
+            // storePassword = "your_store_password"
+            // keyAlias = "your_key_alias"
+            // keyPassword = "your_key_password"
         }
     }
 }

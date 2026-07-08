@@ -143,7 +143,6 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
   StreamSubscription? _scanStateSub;
 
   String? _connectingDeviceId;
-  bool _isPairing = false;
   bool _dashboardOpened = false;
   // Previously used to store selected paired battery serial. Removed as unused.
 
@@ -305,38 +304,6 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage>
       AppRoutes.login,
       (route) => false,
     );
-  }
-
-  Future<void> _pairDevice(String batterySerial) async {
-    if (_isPairing || batterySerial.isEmpty) return;
-    setState(() => _isPairing = true);
-    _showSnackBar('Pairing device...');
-
-    try {
-      final headers = await _getAuthHeaders();
-      final response = await http
-          .post(
-            Uri.parse('http://15.207.26.224:3030/api/connect/paired-device'),
-            headers: headers,
-            body: jsonEncode({'batterySerialNo': batterySerial}),
-          )
-          .timeout(const Duration(seconds: 30));
-
-      final data = jsonDecode(response.body);
-
-      if (response.statusCode == 200 && data['success'] == true) {
-        _showSnackBar('Device paired successfully', isError: false);
-        if (mounted) _navigateToDashboard();
-      } else {
-        _showSnackBar(
-            data['message']?.toString() ?? 'Pairing failed',
-            isError: true);
-      }
-    } catch (e) {
-      _showSnackBar(e.toString(), isError: true);
-    } finally {
-      if (mounted) setState(() => _isPairing = false);
-    }
   }
 
   Future<void> _fetchPairedDevices({bool isRefresh = false}) async {

@@ -97,8 +97,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   // APP LIFECYCLE
   // ─────────────────────────────────────────────────────────────────────────
   @override
-  void didChangeAppLifecycleState(AppLifecycleState appState) {
-    switch (appState) {
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
       case AppLifecycleState.paused:
       case AppLifecycleState.inactive:
       case AppLifecycleState.detached:
@@ -319,10 +319,8 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
         }
 
       } else {
-        final reason = result.error?.name ?? 'unknown';
-        final detail = result.errorDetail ?? '';
-        // debugPrint('❌ RX Parse Failed [$reason] $detail — last valid data retained');
-        // addDebugLog('❌ Parse FAILED [$reason] $detail');
+        // debugPrint('❌ RX Parse Failed — last valid data retained');
+        // addDebugLog('❌ Parse FAILED');
       }
     });
   }

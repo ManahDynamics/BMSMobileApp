@@ -6,17 +6,14 @@ import 'package:bmsmobileapp/battery_indicator.dart'
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
-import '../../../modules/scanner/screens/BMS_scanner_screen.dart';
+import '../../../modules/scanner/screens/bms_scanner_screen.dart';
 import '../../../modules/cells/screens/cell_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/widgets/screen_pulse_overlay.dart';
 
-import 'package:provider/provider.dart';
-
 const _green = Color(0xFF1B6B3A);
-const _blue = Color(0xFF3A6EAC);
 const _orange = Color(0xFFD4621A);
 const _gap12 = SizedBox(height: 12);
 const _gap16 = SizedBox(height: 16);
@@ -1155,7 +1152,6 @@ class _MetricCard extends StatelessWidget {
   final String label, value;
   final String? iconLabel;
   final IconData? icon;
-  final String? badge;
   final bool isCharging;
 
   const _MetricCard({
@@ -1163,7 +1159,7 @@ class _MetricCard extends StatelessWidget {
     required this.value,
     this.iconLabel,
     this.icon,
-    this.isCharging = false, this.badge,
+    this.isCharging = false,
   });
 
  @override
@@ -1466,35 +1462,6 @@ Color _voltageColor(double v) {
   }
 }
 
-class _LoadingSection extends StatelessWidget {
-  final String text;
-  const _LoadingSection({required this.text});
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 32),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const CircularProgressIndicator(
-            strokeWidth: 2.5,
-            color: Color(0xFF1B6B3A),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            text,
-            style: const TextStyle(fontSize: 13, color: Colors.black54),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _ErrorSection extends StatelessWidget {
   final String message;
   const _ErrorSection({required this.message});
@@ -1522,11 +1489,6 @@ class _ErrorSection extends StatelessWidget {
       ),
     );
   }
-}
-
-class _AlertItem {
-  final String title, time;
-  const _AlertItem({required this.title, required this.time});
 }
 
 class _AlertsSummaryCard extends StatelessWidget {

@@ -12,9 +12,7 @@ typedef SyncEntryHandler = Future<void> Function(
 
 /// Handles offline user auth AND caches all BMS screen data locally.
 class LocalAuthDB {
-  LocalAuthDB({DatabaseFactory? databaseFactory}) : _databaseFactory = databaseFactory;
-
-  final DatabaseFactory? _databaseFactory;
+  LocalAuthDB({DatabaseFactory? databaseFactory});
   Database? _database;
 
   // ── Keys ────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 name: bmsmobileapp
-description: "A new Flutter project."
+description: "Smart BMS - Battery Management System for monitoring and managing battery health via Bluetooth connection."
 publish_to: 'none'
 
 version: 1.0.11+11

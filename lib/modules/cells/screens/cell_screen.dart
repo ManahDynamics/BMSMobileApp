@@ -7,7 +7,6 @@ import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/widgets/screen_pulse_overlay.dart';
-import 'package:provider/provider.dart';
 
 enum SortType { cellNo, voltage }
 
@@ -181,8 +180,6 @@ class _CellsScreenState extends State<CellsScreen> {
       widget.service.latestCellVoltage?.cellMinVoltageNo ?? _cachedMinVoltageNo;
   double? get _avgVoltage =>
       widget.service.latestCellVoltage?.cellAvgVoltage ?? _cachedAvgVoltage;
-  bool get _balancingActive =>
-      widget.service.latestCellVoltage?.cellBalancingActive ?? false;
 
   int get _alertCount {
     int count = 0;
@@ -530,7 +527,6 @@ class _CellsScreenState extends State<CellsScreen> {
                       itemBuilder: (context, index) {
                         final cell       = _sortedCells[index];
                         final status     = _cellStatus(cell.voltage);
-                        final bool isPoor = cell.voltage < 3.2;
                         final int filledBars =
                             ((cell.voltage - 2.0) / (5.0 - 2.0) * 8)
                                 .clamp(0, 8)

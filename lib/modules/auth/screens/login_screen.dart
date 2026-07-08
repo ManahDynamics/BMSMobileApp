@@ -325,7 +325,7 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.20),
+            color: Colors.white.withValues(alpha: 0.20),
             borderRadius: BorderRadius.circular(20),
           ),
           child: Row(
@@ -774,14 +774,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     width: 360, height: 360,
                     decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.07)))),
+                        color: Colors.white.withValues(alpha: 0.07)))),
             Positioned(
                 bottom: 80, left: -80,
                 child: Container(
                     width: 220, height: 220,
                     decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.06)))),
+                        color: Colors.white.withValues(alpha: 0.06)))),
 
             SingleChildScrollView(
               child: Column(
@@ -802,7 +802,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius : BorderRadius.circular(22),
                       boxShadow    : [
                         BoxShadow(
-                          color     : Colors.black.withOpacity(0.18),
+                          color     : Colors.black.withValues(alpha: 0.18),
                           blurRadius: 20,
                           offset    : const Offset(0, 6),
                         )
@@ -837,7 +837,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       borderRadius : BorderRadius.circular(15),
                       boxShadow    : [
                         BoxShadow(
-                          color     : Colors.black.withOpacity(0.12),
+                          color     : Colors.black.withValues(alpha: 0.12),
                           blurRadius: 15,
                           offset    : const Offset(0, 6),
                         )
