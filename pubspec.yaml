@@ -2,7 +2,7 @@ name: bmsmobileapp
 description: "Smart BMS - Battery Management System for monitoring and managing battery health via Bluetooth connection."
 publish_to: 'none'
 
-version: 1.0.11+11
+version: 1.0.13+13
 
 environment:
   sdk: ^3.10.8

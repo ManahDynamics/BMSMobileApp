@@ -909,7 +909,11 @@ class _BatteryCardState extends State<_BatteryCard>
     super.dispose();
   }
 
-  Color get _socColor => widget.soc > 20 ? Colors.green : Colors.red;
+Color get _socColor {
+  if (widget.soc <= 10) return const Color(0xFFE53935);  // red
+  if (widget.soc <= 30) return const Color(0xFFFFA726);  // orange
+  return const Color(0xFF4CAF50);                          // green
+}
 
   @override
     Widget build(BuildContext context) {
@@ -977,43 +981,31 @@ class _BatteryCardState extends State<_BatteryCard>
                       width: 28,
                       height: 28,
                       child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 250),
-                        child: widget.statusCode == 0x01
-                            ? Column(
-                                key: const ValueKey('charging'),
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    '${widget.soc}%',
-                                    style: const TextStyle(
-                                      fontSize: 8,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white,
-                                      height: 1.0,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 1),
-                                  BatteryIndicator(
-                                    soc: widget.soc.toDouble(),
-                                    mode: BatteryMode.charging,
-                                    width: 26,
-                                    height: 15,
-                                  ),
-                                ],
-                              )
-                            : widget.statusCode == 0x02
-                            ? Image.asset(
-                                'assets/images/idle-battery.png',
-                                key: const ValueKey('idle'),
-                                fit: BoxFit.contain,
-                              )
-                            : Image.asset(
-                                'assets/images/load_connect.png',
-                                key: const ValueKey('load'),
-                                fit: BoxFit.contain,
-                              ),
-                      ),
+  duration: const Duration(milliseconds: 250),
+  child: widget.statusCode == 0x01
+      ? BatteryIndicator(
+          key: const ValueKey('charging'),
+          soc: widget.soc.toDouble(),
+          mode: BatteryMode.charging,
+          width: 26,
+          height: 15,
+        )
+      : widget.statusCode == 0x02
+          ? BatteryIndicator(
+              key: const ValueKey('idle'),
+              soc: widget.soc.toDouble(),
+              mode: BatteryMode.idle,
+              width: 26,
+              height: 15,
+            )
+          : BatteryIndicator(
+              key: const ValueKey('load'),
+              soc: widget.soc.toDouble(),
+              mode: BatteryMode.loadConnected,
+              width: 26,
+              height: 15,
+            ),
+),
                     ),
                   ],
                 ),
