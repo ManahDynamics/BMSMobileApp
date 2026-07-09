@@ -292,7 +292,7 @@ class _BatteryPainter extends CustomPainter {
     final stroke = size.height * 0.085;
 
     final bodyWidth = size.width * 0.94;
-    final terminalWidth = size.width * 0.065;
+    final terminalWidth = size.width * 0.09;
     final terminalHeight = size.height * 0.40;
 
     final bodyRect = Rect.fromLTWH(
@@ -311,7 +311,7 @@ class _BatteryPainter extends CustomPainter {
     final borderPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.3;
+      ..strokeWidth = 1.5;
 
     canvas.drawRRect(body, borderPaint);
 
