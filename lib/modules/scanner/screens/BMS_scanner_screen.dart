@@ -127,6 +127,13 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
     TranslationService.instance.addListener(_onTranslationsChanged);
     _listenScan();
     _loadPairedDevices();
+    
+    // Auto-start scanning when screen opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _startScan();
+      }
+    });
   }
 
   Future<void> _loadPairedDevices() async {
@@ -267,6 +274,9 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
     );
 
     if (confirmed != true) return;
+
+    // Prevent auto-navigation to dashboard during logout
+    _dashboardOpened = true;
 
     try {
       await AppRouter.bmsService
