@@ -738,9 +738,25 @@ class _ScanTab extends StatelessWidget {
                             ),
                             child: Text(tr('scan.connect'), style: const TextStyle(fontSize: 14)),
                           )
-                        : TextButton(
+                        // Device not currently in the live scan list.
+                        // Replaced the old "Scan to connect" TextButton with a
+                        // Connect button that matches the style used for
+                        // available (scanned) devices. Since we don't yet have
+                        // a live BluetoothDevice for it, tapping triggers a
+                        // scan so it can be found and connected.
+                        : ElevatedButton(
                             onPressed: onScan,
-                            child: Text('Scan to connect', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Color(0xFF3A6EAC),
+                              foregroundColor: Colors.white,
+                              elevation: 1,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(6)),
+                            ),
+                            child: Text(tr('scan.connect'), style: const TextStyle(fontSize: 14)),
                           ),
           ],
         ),

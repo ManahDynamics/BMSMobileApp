@@ -119,7 +119,7 @@ class LocalAuthDB {
     final now = DateTime.now().toUtc().toIso8601String();
 
     await enqueueForSync(
-      'device_info_summary',
+      'paired_device_summary',
       {
         'device_name': name,
         'user_id': resolvedUserId,
