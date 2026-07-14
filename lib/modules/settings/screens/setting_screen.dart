@@ -1246,7 +1246,7 @@ class _BarcodeScanPlaceholderState extends State<_BarcodeScanPlaceholder> {
   }
 
   @override
-  Widget build(BuildContext context) {
+    Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B6B3A),

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'protocol.dart';
 import 'crc_service.dart';
 import 'parsed_packet.dart';
+import 'dart:typed_data';
 
 enum BMSParseError {
   tooShort,
@@ -66,16 +67,37 @@ class BMSPacketParser {
     if (bytes.length == BMSProtocol.bleNameResponseLength && isBmsFrame) {
       return _parseBleNameResponse(bytes, lastSentDataId: lastSentDataId);
     }
+    // 70-byte Device Details response
+if (bytes.length == BMSProtocol.deviceDetailsResponseLength &&
+    isBmsFrame) {
+  return _parseDeviceDetailsPacket(
+    bytes,
+    lastSentDataId: lastSentDataId,
+  );
+}
+   // Settings packets
+if (isBmsFrame) {
+  switch (bytes[2] & 0xFF) {
+    case BMSProtocol.idBatterySettingsResponse:
+      return _parseBatterySettingsPacket(bytes);
 
+    case BMSProtocol.idProtectionSettingsResponse:
+      return _parseProtectionSettingsPacket(bytes);
+
+    case BMSProtocol.idTemperatureSettingsResponse:
+      return _parseTemperatureSettingsPacket(bytes);
+
+    case BMSProtocol.idFactorySettingsResponse:
+      return _parseFactorySettingsPacket(bytes);
+  }
+}
     // 5-byte control packet
     if (bytes.length == 5) {
       return _parseControlPacket(bytes);
     }
 
     // 19-byte device-info packet (0x59–0x5C)
-    if (bytes.length == 19 && isBmsFrame) {
-      return _parseDeviceInfoPacket(bytes, lastSentDataId: lastSentDataId);
-    }
+   
 
     return BMSParseResult.failure(
       BMSParseError.invalidLength,
@@ -83,19 +105,206 @@ class BMSPacketParser {
     );
   }
 
+static BMSParseResult _parseBatterySettingsPacket(List<int> bytes) {
+
+  final int receivedCrc = bytes[BMSProtocol.batterySettingsCrcByte];
+
+  final int computedCrc = BMSCrcService.calculateCRC8(
+    bytes.sublist(1, BMSProtocol.batterySettingsCrcByte),
+  );
+
+  if (receivedCrc != computedCrc) {
+    return BMSParseResult.failure(
+      BMSParseError.crcMismatch,
+      errorDetail:
+          'computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
+          'received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
+    );
+  }
+
+  return BMSParseResult.success(
+    BMSParsedPacket(
+      startByte: bytes[0],
+      length: bytes[1],
+      dataId: bytes[2],
+      crc: receivedCrc,
+      stopByte: bytes[17],
+      rawBytes: Uint8List.fromList(bytes),
+      receivedAt: DateTime.now(),
+
+      batteryString: bytes[3],
+      ratedCapacity: _littleEndian16(bytes, 4) / 10.0,
+      socSet: bytes[6],
+      sleepWaitingTime: _littleEndian16(bytes, 7),
+      balancedStartDiffVolt: _littleEndian16(bytes, 9) / 1000.0,
+      balancedStartVolt: _littleEndian16(bytes, 11) / 1000.0,
+      nominalCellVoltage: _littleEndian16(bytes, 13) / 1000.0,
+      cellChemistry: bytes[15],
+    ),
+  );
+}
+static BMSParseResult _parseProtectionSettingsPacket(List<int> bytes) {
+
+  final int receivedCrc =
+      bytes[BMSProtocol.protectionSettingsCrcByte];
+
+  final int computedCrc = BMSCrcService.calculateCRC8(
+    bytes.sublist(1, BMSProtocol.protectionSettingsCrcByte),
+  );
+
+  if (computedCrc != receivedCrc) {
+    return BMSParseResult.failure(
+      BMSParseError.crcMismatch,
+      errorDetail:
+          'computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
+          'received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
+    );
+  }
+
+  final packet = BMSParsedPacket(
+    startByte: bytes[0],
+    length: bytes[1],
+    dataId: bytes[2],
+    crc: receivedCrc,
+    stopByte: bytes[BMSProtocol.protectionSettingsStopByte],
+
+    rawBytes: Uint8List.fromList(bytes),
+    receivedAt: DateTime.now(),
+
+    singleCellHighVoltProtection:
+        _littleEndian16(bytes, 3) / 1000.0,
+
+    singleCellLowVoltProtection:
+        _littleEndian16(bytes, 5) / 1000.0,
+
+    sumVoltHighProtection:
+        _littleEndian16(bytes, 7) / 10.0,
+
+    sumVoltLowProtection:
+        _littleEndian16(bytes, 9) / 10.0,
+
+    chargeOverCurrentProtection:
+        _littleEndian16(bytes, 11) / 10.0,
+
+    dischargeOverCurrentProtection:
+        _littleEndian16(bytes, 13) / 10.0,
+  );
+
+  return BMSParseResult.success(packet);
+}
+static BMSParseResult _parseTemperatureSettingsPacket(List<int> bytes) {
+
+  final int receivedCrc =
+      bytes[BMSProtocol.temperatureSettingsCrcByte];
+
+  final int computedCrc = BMSCrcService.calculateCRC8(
+    bytes.sublist(1, BMSProtocol.temperatureSettingsCrcByte),
+  );
+
+  if (computedCrc != receivedCrc) {
+    return BMSParseResult.failure(
+      BMSParseError.crcMismatch,
+      errorDetail:
+          'computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
+          'received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
+    );
+  }
+
+  final packet = BMSParsedPacket(
+    startByte: bytes[0],
+    length: bytes[1],
+    dataId: bytes[2],
+    crc: receivedCrc,
+    stopByte: bytes[BMSProtocol.temperatureSettingsStopByte],
+
+    rawBytes: Uint8List.fromList(bytes),
+    receivedAt: DateTime.now(),
+
+    noOfTempChannels: bytes[3],
+
+    chargeHighTempProtection:
+        _littleEndian16(bytes, 4),
+
+    chargeLowTempProtection:
+        _littleEndian16(bytes, 6),
+
+    dischargeHighTempProtection:
+        _littleEndian16(bytes, 8),
+
+    dischargeLowTempProtection:
+        _littleEndian16(bytes, 10),
+
+    diffTempProtection:
+        _littleEndian16(bytes, 12),
+  );
+
+  return BMSParseResult.success(packet);
+}
+static BMSParseResult _parseFactorySettingsPacket(List<int> bytes) {
+
+  final int receivedCrc =
+      bytes[BMSProtocol.factorySettingsCrcByte];
+
+  final int computedCrc = BMSCrcService.calculateCRC8(
+    bytes.sublist(1, BMSProtocol.factorySettingsCrcByte),
+  );
+
+  if (computedCrc != receivedCrc) {
+    return BMSParseResult.failure(
+      BMSParseError.crcMismatch,
+      errorDetail:
+          'computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
+          'received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
+    );
+  }
+
+  final packet = BMSParsedPacket(
+    startByte: bytes[0],
+    length: bytes[1],
+    dataId: bytes[2],
+    crc: receivedCrc,
+    stopByte: bytes[BMSProtocol.factorySettingsStopByte],
+
+    rawBytes: Uint8List.fromList(bytes),
+    receivedAt: DateTime.now(),
+
+    batterySlNo:
+        _decodeAscii(bytes, 3, 19),
+
+    bmsSerialNo:
+        _decodeAscii(bytes, 19, 35),
+
+    bleDeviceName:
+        _decodeAscii(bytes, 35, 51),
+  );
+
+  return BMSParseResult.success(packet);
+}
   // ─────────────────────────────────────────────────────────────────────────
   // REQUEST / RESPONSE ID MATCHING
   // ─────────────────────────────────────────────────────────────────────────
   static const Map<int, int> _expectedResponseId = {
-    BMSProtocol.idHandshake:          BMSProtocol.idAck,
-    BMSProtocol.idBleNameRequest:     BMSProtocol.idBleNameResponse,
-    BMSProtocol.idDashboardRequest:   BMSProtocol.idDashboardResponse,
-    BMSProtocol.idCellVoltageRequest: BMSProtocol.idCellVoltageResponse,
-    BMSProtocol.idBatterySerial:      BMSProtocol.idBatterySerial,
-    BMSProtocol.idSoftwareVersion:    BMSProtocol.idSoftwareVersion,
-    BMSProtocol.idHardwareVersion:    BMSProtocol.idHardwareVersion,
-    BMSProtocol.idSnCode:             BMSProtocol.idSnCode,
-  };
+
+  BMSProtocol.idHandshake: BMSProtocol.idAck,
+  BMSProtocol.idBleNameRequest: BMSProtocol.idBleNameResponse,
+  BMSProtocol.idDashboardRequest: BMSProtocol.idDashboardResponse,
+  BMSProtocol.idCellVoltageRequest: BMSProtocol.idCellVoltageResponse,
+
+  BMSProtocol.idDeviceDetailsRequest:
+      BMSProtocol.idDeviceDetailsResponse,
+
+  BMSProtocol.idBatterySettingsRequest:
+      BMSProtocol.idBatterySettingsResponse,
+
+  BMSProtocol.idProtectionSettingsRequest:
+      BMSProtocol.idProtectionSettingsResponse,
+
+  BMSProtocol.idTemperatureSettingsRequest:
+      BMSProtocol.idTemperatureSettingsResponse,
+
+  BMSProtocol.idFactorySettingsRequest:
+      BMSProtocol.idFactorySettingsResponse,
+};
 
   static bool _responseMatchesRequest(int sentDataId, int responseDataId) {
     if (responseDataId == BMSProtocol.idAck) return true;
@@ -440,63 +649,48 @@ class BMSPacketParser {
     ),
   );
 }
-  // ─────────────────────────────────────────────────────────────────────────
-  // 19-BYTE DEVICE INFO PACKET (dataId 0x59–0x5C)
-  // CRC-8 over bytes[1..16]
-  // ─────────────────────────────────────────────────────────────────────────
-  static BMSParseResult _parseDeviceInfoPacket(
-    List<int> bytes, {
-    int? lastSentDataId,
-  }) {
-    final int start  = bytes[0]  & 0xFF;
-    final int length = bytes[1]  & 0xFF;
-    final int dataId = bytes[2]  & 0xFF;
-    final int crc    = bytes[17] & 0xFF;
-    final int stop   = bytes[18] & 0xFF;
+static BMSParseResult _parseDeviceDetailsPacket(
+  List<int> bytes, {
+  int? lastSentDataId,
+}) {
 
-    const validIds = {0x59, 0x5A, 0x5B, 0x5C};
-    if (!validIds.contains(dataId)) {
-      return const BMSParseResult.failure(BMSParseError.unknownDataId);
-    }
+  final receivedCrc =
+      (bytes[BMSProtocol.deviceDetailsCrcLow] & 0xFF) |
+      ((bytes[BMSProtocol.deviceDetailsCrcHigh] & 0xFF) << 8);
 
-    if (lastSentDataId != null &&
-        !_responseMatchesRequest(lastSentDataId, dataId)) {
-      return BMSParseResult.failure(
-        BMSParseError.unexpectedResponse,
-        errorDetail: 'sent=0x${lastSentDataId.toRadixString(16).toUpperCase().padLeft(2,"0")}'
-            ' got=0x${dataId.toRadixString(16).toUpperCase().padLeft(2,"0")}',
-      );
-    }
+  final computedCrc =
+      BMSCrcService.calculateCRC16(bytes.sublist(1, 67));
 
-    final crcData     = bytes.sublist(1, 17);
-    final computedCrc = BMSCrcService.calculateCRC8(crcData);
-    if (computedCrc != crc) {
-      debugPrint('❌ CRC8 MISMATCH [DeviceInfo 0x${dataId.toRadixString(16).toUpperCase()}]');
-      return BMSParseResult.failure(
-        BMSParseError.crcMismatch,
-        errorDetail: 'computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(2,"0")}'
-            ' received=0x${crc.toRadixString(16).toUpperCase().padLeft(2,"0")}',
-      );
-    }
-
-    debugPrint('✅ CRC8 OK [DeviceInfo 0x${dataId.toRadixString(16).toUpperCase()}]');
-    final value = _decodeAscii(bytes, 3, 17);
-
-    return BMSParseResult.success(BMSParsedPacket(
-      startByte:       start,
-      length:          length,
-      dataId:          dataId,
-      crc:             crc,
-      stopByte:        stop,
-      rawBytes:        Uint8List.fromList(bytes),
-      receivedAt:      DateTime.now(),
-      batterySerial:   dataId == 0x59 ? value : null,
-      softwareVersion: dataId == 0x5A ? value : null,
-      hardwareVersion: dataId == 0x5B ? value : null,
-      snCode:          dataId == 0x5C ? value : null,
-    ));
+  if (receivedCrc != computedCrc) {
+    return BMSParseResult.failure(
+      BMSParseError.crcMismatch,
+    );
   }
 
+  return BMSParseResult.success(
+    BMSParsedPacket(
+      startByte: bytes[0],
+      length: bytes[1],
+      dataId: bytes[2],
+      crc: receivedCrc,
+      stopByte: bytes[69],
+      rawBytes: Uint8List.fromList(bytes),
+      receivedAt: DateTime.now(),
+
+      batterySerial:
+          _decodeAscii(bytes, 3, 19),
+
+      softwareVersion:
+          _decodeAscii(bytes, 19, 35),
+
+      hardwareVersion:
+          _decodeAscii(bytes, 35, 51),
+
+      firmwareVersion:
+          _decodeAscii(bytes, 51, 67),
+    ),
+  );
+}
   // ─────────────────────────────────────────────────────────────────────────
   // HELPERS
   // ─────────────────────────────────────────────────────────────────────────

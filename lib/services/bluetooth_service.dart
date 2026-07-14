@@ -58,7 +58,15 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   // ── Latest valid packets ──────────────────────────────────────────────────
   BMSParsedPacket? latestDashboard;
   BMSParsedPacket? latestCellVoltage;
+   BMSParsedPacket? latestBatterySettings;
+BMSParsedPacket? latestProtectionSettings;
+BMSParsedPacket? latestTempSettings;
+BMSParsedPacket? latestFactorySettings;
 
+int batterySettingsPulse = 0;
+int protectionSettingsPulse = 0;
+int tempSettingsPulse = 0;
+int factorySettingsPulse = 0;
    int dashboardPulse = 0;
   int cellVoltagePulse = 0;
 
@@ -304,6 +312,38 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
             debugPrint('📋 BLE Name: $bleName');
             addDebugLog('📋 BLE Name: $bleName');
           }
+          else if (packet.isBatterySettingsResponse) {
+
+  latestBatterySettings = packet;
+  batterySettingsPulse++;
+
+  notifyListeners();
+
+}
+else if (packet.isProtectionSettingsResponse) {
+
+  latestProtectionSettings = packet;
+  protectionSettingsPulse++;
+
+  notifyListeners();
+
+}
+else if (packet.isTemperatureSettingsResponse) {
+
+  latestTempSettings = packet;
+  tempSettingsPulse++;
+
+  notifyListeners();
+
+}
+else if (packet.isFactorySettingsResponse) {
+
+  latestFactorySettings = packet;
+  factorySettingsPulse++;
+
+  notifyListeners();
+
+}
           notifyListeners();
           if (_bleNameCompleter != null && !_bleNameCompleter!.isCompleted) {
             _bleNameCompleter!.complete(true);
@@ -341,6 +381,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
     }
     notifyListeners();
   }
+
 
   // ─────────────────────────────────────────────────────────────────────────
   // SEND PACKET
@@ -471,18 +512,29 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
     if (!bleOk) return;
 
-    // Dashboard
-    final dashOk = await _sendAndWait(
-      send: requestDashboard,
-      name: 'Dashboard',
-      setCompleter: (c) => _dashboardCompleter = c,
-      setLoading: (v) => isDashboardLoading = v,
-      setError: (v) => dashboardError = v,
-    );
+   // Dashboard
+final dashOk = await _sendAndWait(
+  send: requestDashboard,
+  name: 'Dashboard',
+  setCompleter: (c) => _dashboardCompleter = c,
+  setLoading: (v) => isDashboardLoading = v,
+  setError: (v) => dashboardError = v,
+);
 
-    if (!dashOk) return;
+if (!dashOk) return;
 
-    addDebugLog('✅ Initial data loaded');
+// Cell Voltage
+final cellOk = await _sendAndWait(
+  send: requestCellVoltages,
+  name: 'Cell Voltage',
+  setCompleter: (c) => _cellVoltageCompleter = c,
+  setLoading: (v) => isCellVoltageLoading = v,
+  setError: (v) => cellVoltageError = v,
+);
+
+if (!cellOk) return;
+
+addDebugLog('✅ Initial data loaded');
 
     // Both pollers run independently from here on, regardless of which
     // screen is currently on-screen — Dashboard packets and Cell Voltage
@@ -550,7 +602,100 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
       setError: (v) => cellVoltageError = v,
     );
   }
+  Future<void> _sendDeviceDetailsRequest() async {
+  if (_writeChar == null || state != BMSConnectionState.ready) return;
 
+  final crc = BMSCrcService.calculateCRC8([
+    BMSProtocol.packetLength,
+    BMSProtocol.idDeviceDetailsRequest,
+  ]);
+
+  await _sendPacket(
+    [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idDeviceDetailsRequest,
+      crc,
+      BMSProtocol.stopByte,
+    ],
+  );
+}
+Future<void> _sendBatterySettingsRequest() async {
+  if (_writeChar == null || state != BMSConnectionState.ready) return;
+
+  final crc = BMSCrcService.calculateCRC8([
+    BMSProtocol.packetLength,
+    BMSProtocol.idBatterySettingsRequest,
+  ]);
+
+  await _sendPacket(
+    [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idBatterySettingsRequest,
+      crc,
+      BMSProtocol.stopByte,
+    ],
+
+  );
+}
+Future<void> _sendProtectionSettingsRequest() async {
+  if (_writeChar == null || state != BMSConnectionState.ready) return;
+
+  final crc = BMSCrcService.calculateCRC8([
+    BMSProtocol.packetLength,
+    BMSProtocol.idProtectionSettingsRequest,
+  ]);
+
+  await _sendPacket(
+    [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idProtectionSettingsRequest,
+      crc,
+      BMSProtocol.stopByte,
+    ],
+   
+  );
+}
+Future<void> _sendTemperatureSettingsRequest() async {
+  if (_writeChar == null || state != BMSConnectionState.ready) return;
+
+  final crc = BMSCrcService.calculateCRC8([
+    BMSProtocol.packetLength,
+    BMSProtocol.idTemperatureSettingsRequest,
+  ]);
+
+  await _sendPacket(
+    [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idTemperatureSettingsRequest,
+      crc,
+      BMSProtocol.stopByte,
+    ],
+  
+  );
+}
+Future<void> _sendFactorySettingsRequest() async {
+  if (_writeChar == null || state != BMSConnectionState.ready) return;
+
+  final crc = BMSCrcService.calculateCRC8([
+    BMSProtocol.packetLength,
+    BMSProtocol.idFactorySettingsRequest,
+  ]);
+
+  await _sendPacket(
+    [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idFactorySettingsRequest,
+      crc,
+      BMSProtocol.stopByte,
+    ],
+
+  );
+}
   // ─────────────────────────────────────────────────────────────────────────
   // POLLING
   // ─────────────────────────────────────────────────────────────────────────
@@ -622,6 +767,52 @@ void startCellVoltagePolling() {
 void stopAllPolling() {
   _stopDashboardPolling();
   _stopCellVoltagePolling();
+}
+
+Timer? _settingsPollingTimer;
+void stopSettingsPolling() {
+  _settingsPollingTimer?.cancel();
+  _settingsPollingTimer = null;
+}
+void startBatterySettingsPolling() {
+  stopSettingsPolling();
+
+  _sendBatterySettingsRequest();
+
+  _settingsPollingTimer =
+      Timer.periodic(const Duration(seconds: 10), (_) {
+    _sendBatterySettingsRequest();
+  });
+}
+void startProtectionSettingsPolling() {
+  stopSettingsPolling();
+
+  _sendProtectionSettingsRequest();
+
+  _settingsPollingTimer =
+      Timer.periodic(const Duration(seconds: 2), (_) {
+    _sendProtectionSettingsRequest();
+  });
+}
+void startTempSettingsPolling() {
+  stopSettingsPolling();
+
+  _sendTemperatureSettingsRequest();
+
+  _settingsPollingTimer =
+      Timer.periodic(const Duration(seconds: 2), (_) {
+    _sendTemperatureSettingsRequest();
+  });
+}
+void startFactorySettingsPolling() {
+  stopSettingsPolling();
+
+  _sendFactorySettingsRequest();
+
+  _settingsPollingTimer =
+      Timer.periodic(const Duration(seconds: 2), (_) {
+    _sendFactorySettingsRequest();
+  });
 }
   // ─────────────────────────────────────────────────────────────────────────
   // DISCONNECT
@@ -709,6 +900,15 @@ void stopAllPolling() {
     hardwareVersion   = null;
     firmwareVersion   = null;
     snCode            = null;
+    latestBatterySettings = null;
+latestProtectionSettings = null;
+latestTempSettings = null;
+latestFactorySettings = null;
+
+batterySettingsPulse = 0;
+protectionSettingsPulse = 0;
+tempSettingsPulse = 0;
+factorySettingsPulse = 0;
     _pendingRequests.clear();
     dashboardReady    = false;
     dashboardNavigationTriggered = false;
@@ -734,6 +934,7 @@ void stopAllPolling() {
   void _cleanup() {
     _stopDashboardPolling();
     _stopCellVoltagePolling();
+    stopSettingsPolling();
     _notifyChar = null;
     _writeChar  = null;
     _notifySub?.cancel();
@@ -751,6 +952,7 @@ void stopAllPolling() {
     _stopPolling();
     _stopDashboardPolling();
     _stopCellVoltagePolling();
+    stopSettingsPolling();
     super.dispose();
   }
 

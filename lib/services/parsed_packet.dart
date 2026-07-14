@@ -61,6 +61,49 @@ class BMSParsedPacket {
   final String? hardwareVersion;
   final String? snCode;
 
+  // ─────────────────────────────────────────────────────────────────────────────
+// Battery Settings (0x58)
+// ─────────────────────────────────────────────────────────────────────────────
+
+final int? batteryString;
+final double? ratedCapacity;
+final int? socSet;
+final int? sleepWaitingTime;
+final double? balancedStartDiffVolt;
+final double? balancedStartVolt;
+final double? nominalCellVoltage;
+final int? cellChemistry;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Protection Settings (0x59)
+// ─────────────────────────────────────────────────────────────────────────────
+
+final double? singleCellHighVoltProtection;
+final double? singleCellLowVoltProtection;
+final double? sumVoltHighProtection;
+final double? sumVoltLowProtection;
+final double? chargeOverCurrentProtection;
+final double? dischargeOverCurrentProtection;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Temperature Settings (0x5A)
+// ─────────────────────────────────────────────────────────────────────────────
+
+final int? noOfTempChannels;
+final int? chargeHighTempProtection;
+final int? chargeLowTempProtection;
+final int? dischargeHighTempProtection;
+final int? dischargeLowTempProtection;
+final int? diffTempProtection;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Factory Settings (0x5B)
+// ─────────────────────────────────────────────────────────────────────────────
+
+final String? batterySlNo;
+final String? bmsSerialNo;
+final String? bleDeviceName;
+
   const BMSParsedPacket({
     required this.startByte,
     required this.length,
@@ -111,6 +154,34 @@ class BMSParsedPacket {
     this.softwareVersion,
     this.hardwareVersion,
     this.snCode,
+    this.batteryString,
+    this.ratedCapacity,
+    this.socSet,
+    this.sleepWaitingTime,
+    this.balancedStartDiffVolt,
+    this.balancedStartVolt,
+    this.nominalCellVoltage,
+    this.cellChemistry,
+
+    this.singleCellHighVoltProtection,
+    this.singleCellLowVoltProtection,
+    this.sumVoltHighProtection,
+    this.sumVoltLowProtection,
+    this.chargeOverCurrentProtection,
+    this.dischargeOverCurrentProtection,
+
+    this.noOfTempChannels,
+    this.chargeHighTempProtection,
+    this.chargeLowTempProtection,
+    this.dischargeHighTempProtection,
+    this.dischargeLowTempProtection,
+    this.diffTempProtection,
+
+    this.batterySlNo,
+    this.bmsSerialNo,
+    this.bleDeviceName,
+ 
+ 
   });
 
   // ── Convenience flags ─────────────────────────────────────────────────────
@@ -130,6 +201,17 @@ class BMSParsedPacket {
 
   bool get isDeviceInfo =>
       dataId == 0x59 || dataId == 0x5A || dataId == 0x5B || dataId == 0x5C;
+  bool get isBatterySettingsResponse =>
+    dataId == BMSProtocol.idBatterySettingsResponse;
+
+bool get isProtectionSettingsResponse =>
+    dataId == BMSProtocol.idProtectionSettingsResponse;
+
+bool get isTemperatureSettingsResponse =>
+    dataId == BMSProtocol.idTemperatureSettingsResponse;
+
+bool get isFactorySettingsResponse =>
+    dataId == BMSProtocol.idFactorySettingsResponse;
 
   // ── Decoded label fields ──────────────────────────────────────────────────
 
@@ -260,6 +342,32 @@ class BMSParsedPacket {
     String?          softwareVersion,
     String?          hardwareVersion,
     String?          snCode,
+    int? batteryString,
+      double? ratedCapacity,
+      int? socSet,
+      int? sleepWaitingTime,
+      double? balancedStartDiffVolt,
+      double? balancedStartVolt,
+      double? nominalCellVoltage,
+      int? cellChemistry,
+
+      double? singleCellHighVoltProtection,
+      double? singleCellLowVoltProtection,
+      double? sumVoltHighProtection,
+      double? sumVoltLowProtection,
+      double? chargeOverCurrentProtection,
+      double? dischargeOverCurrentProtection,
+
+      int? noOfTempChannels,
+      int? chargeHighTempProtection,
+      int? chargeLowTempProtection,
+      int? dischargeHighTempProtection,
+      int? dischargeLowTempProtection,
+      int? diffTempProtection,
+
+      String? batterySlNo,
+      String? bmsSerialNo,
+      String? bleDeviceName,
   }) {
     return BMSParsedPacket(
       startByte:           startByte           ?? this.startByte,
@@ -305,6 +413,74 @@ class BMSParsedPacket {
       softwareVersion:     softwareVersion     ?? this.softwareVersion,
       hardwareVersion:     hardwareVersion     ?? this.hardwareVersion,
       snCode:              snCode              ?? this.snCode,
+      batteryString:
+    batteryString ?? this.batteryString,
+
+ratedCapacity:
+    ratedCapacity ?? this.ratedCapacity,
+
+socSet:
+    socSet ?? this.socSet,
+
+sleepWaitingTime:
+    sleepWaitingTime ?? this.sleepWaitingTime,
+
+balancedStartDiffVolt:
+    balancedStartDiffVolt ?? this.balancedStartDiffVolt,
+
+balancedStartVolt:
+    balancedStartVolt ?? this.balancedStartVolt,
+
+nominalCellVoltage:
+    nominalCellVoltage ?? this.nominalCellVoltage,
+
+cellChemistry:
+    cellChemistry ?? this.cellChemistry,
+
+singleCellHighVoltProtection:
+    singleCellHighVoltProtection ?? this.singleCellHighVoltProtection,
+
+singleCellLowVoltProtection:
+    singleCellLowVoltProtection ?? this.singleCellLowVoltProtection,
+
+sumVoltHighProtection:
+    sumVoltHighProtection ?? this.sumVoltHighProtection,
+
+sumVoltLowProtection:
+    sumVoltLowProtection ?? this.sumVoltLowProtection,
+
+chargeOverCurrentProtection:
+    chargeOverCurrentProtection ?? this.chargeOverCurrentProtection,
+
+dischargeOverCurrentProtection:
+    dischargeOverCurrentProtection ?? this.dischargeOverCurrentProtection,
+
+noOfTempChannels:
+    noOfTempChannels ?? this.noOfTempChannels,
+
+chargeHighTempProtection:
+    chargeHighTempProtection ?? this.chargeHighTempProtection,
+
+chargeLowTempProtection:
+    chargeLowTempProtection ?? this.chargeLowTempProtection,
+
+dischargeHighTempProtection:
+    dischargeHighTempProtection ?? this.dischargeHighTempProtection,
+
+dischargeLowTempProtection:
+    dischargeLowTempProtection ?? this.dischargeLowTempProtection,
+
+diffTempProtection:
+    diffTempProtection ?? this.diffTempProtection,
+
+batterySlNo:
+    batterySlNo ?? this.batterySlNo,
+
+bmsSerialNo:
+    bmsSerialNo ?? this.bmsSerialNo,
+
+bleDeviceName:
+    bleDeviceName ?? this.bleDeviceName,
     );
   }
 
