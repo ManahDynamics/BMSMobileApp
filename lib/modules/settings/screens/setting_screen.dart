@@ -8,6 +8,7 @@ import '../../../modules/scanner/screens/BMS_scanner_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
+import 'package:bmsmobileapp/services/protocol.dart';
 
 class SettingsScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -25,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool isLocked = true;
 
   // ── Tab state ──────────────────────────────────────────────────────────────
+  // ── Tab state ──────────────────────────────────────────────────────────────
   int _selectedTab = 0; // 0 Battery, 1 Protection, 2 Temp, 3 Factory
   final List<String> _tabLabels = const [
     'Battery Settings',
@@ -33,6 +35,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     'Factory Settings',
   ];
 
+  void _pollForTab(int i) {
+    switch (i) {
+      case 0: widget.service.startBatterySettingsPolling(); break;
+      case 1: widget.service.startProtectionSettingsPolling(); break;
+      case 2: widget.service.startTempSettingsPolling(); break;
+      case 3: widget.service.startFactorySettingsPolling(); break;
+    }
+  }
   // ── Battery Settings ────────────────────────────────────────────────────────
   int batteryStringCount = 0; // "S"
   double ratedCapacity = 0; // AH
@@ -42,7 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double balancedStartVolt = 0; // V
   double nominalCellVolt = 0; // V
   String cellChemistry = ' ';
-  final List<String> _chemistryOptions = const ['Li-Ion', 'LiFePO4', 'NiMH', 'Lead Acid'];
+  final List<String> _chemistryOptions = const ['Li-Ion', 'LiHv', 'LipO', 'Solid State', 'LFP', 'NMC'];
 
   // ── Protection Settings ─────────────────────────────────────────────────────
   double singleCellHighVoltProtection =0;
@@ -62,6 +72,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   // ── Factory Settings ─────────────────────────────────────────────────────────
   String batterySerialNo = ' ';
+  String bmsSerialNo = ' ';
   String bleDeviceName = ' ';
 
   // ── Offline-cache state ───────────────────────────────────────────────────
@@ -79,24 +90,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
     TranslationService.instance.addListener(_onTranslationsChanged);
     widget.service.addListener(_onServiceChanged);
     _loadCachedSettings();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _pollForTab(_selectedTab));
   }
 
   void _onTranslationsChanged() {
     if (mounted) setState(() {});
   }
 
+  int _lastBatteryPulse = -1;
+  int _lastProtectionPulse = -1;
+  int _lastTempPulse = -1;
+  int _lastFactoryPulse = -1;
+
   void _onServiceChanged() {
     if (!mounted) return;
     setState(() {
       _isOffline = widget.service.latestDashboard == null;
       isConnected = !_isOffline;
+
+      final bs = widget.service.latestBatterySettings;
+      if (bs != null && widget.service.batterySettingsPulse != _lastBatteryPulse) {
+        _lastBatteryPulse = widget.service.batterySettingsPulse;
+        batteryStringCount = bs.batteryString ?? batteryStringCount;
+        ratedCapacity = bs.ratedCapacity ?? ratedCapacity;
+        socSet = bs.socSet ?? socSet;
+        sleepWaitingTime = bs.sleepWaitingTime ?? sleepWaitingTime;
+        balancedStartDifferenceVolt = bs.balancedStartDiffVolt ?? balancedStartDifferenceVolt;
+        balancedStartVolt = bs.balancedStartVolt ?? balancedStartVolt;
+        nominalCellVolt = bs.nominalCellVoltage ?? nominalCellVolt;
+        if (bs.cellChemistry != null) cellChemistry = BMSProtocol.chemistryName(bs.cellChemistry!);
+        _persistSettings();
+      }
+
+      final ps = widget.service.latestProtectionSettings;
+      if (ps != null && widget.service.protectionSettingsPulse != _lastProtectionPulse) {
+        _lastProtectionPulse = widget.service.protectionSettingsPulse;
+        singleCellHighVoltProtection = ps.singleCellHighVoltProtection ?? singleCellHighVoltProtection;
+        singleCellLowVoltProtection = ps.singleCellLowVoltProtection ?? singleCellLowVoltProtection;
+        sumVoltHighProtection = ps.sumVoltHighProtection ?? sumVoltHighProtection;
+        sumVoltLowProtection = ps.sumVoltLowProtection ?? sumVoltLowProtection;
+        chargeOverCurrentProtection = ps.chargeOverCurrentProtection ?? chargeOverCurrentProtection;
+        dischargeOverCurrentProtection = ps.dischargeOverCurrentProtection ?? dischargeOverCurrentProtection;
+        _persistSettings();
+      }
+
+      final ts = widget.service.latestTemperatureSettings;
+      if (ts != null && widget.service.temperatureSettingsPulse != _lastTempPulse) {
+        _lastTempPulse = widget.service.temperatureSettingsPulse;
+        noOfTempChannels = ts.noOfTempChannels ?? noOfTempChannels;
+        chargeHighTempProtection = ts.chargeHighTempProtection ?? chargeHighTempProtection;
+        chargeLowTempProtection = ts.chargeLowTempProtection ?? chargeLowTempProtection;
+        dischargeHighTempProtection = ts.dischargeHighTempProtection ?? dischargeHighTempProtection;
+        dischargeLowTempProtection = ts.dischargeLowTempProtection ?? dischargeLowTempProtection;
+        diffTempProtection = ts.diffTempProtection ?? diffTempProtection;
+        _persistSettings();
+      }
+
+      final fs = widget.service.latestFactorySettings;
+      if (fs != null && widget.service.factorySettingsPulse != _lastFactoryPulse) {
+        _lastFactoryPulse = widget.service.factorySettingsPulse;
+        batterySerialNo = fs.batterySlNo ?? batterySerialNo;
+        bmsSerialNo = fs.bmsSerialNo ?? bmsSerialNo;
+        bleDeviceName = fs.bleDeviceName ?? bleDeviceName;
+        _persistSettings();
+      }
     });
   }
 
   @override
   void dispose() {
     TranslationService.instance.removeListener(_onTranslationsChanged);
-    widget.service.removeListener(_onServiceChanged);
+   widget.service.removeListener(_onServiceChanged);
+    widget.service.stopSettingsPolling();
     super.dispose();
   }
 
@@ -140,6 +205,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         diffTempProtection = (cached['diffTempProtection'] as num?)?.toInt() ?? diffTempProtection;
 
         batterySerialNo = (cached['batterySerialNo'] as String?) ?? batterySerialNo;
+        bmsSerialNo = (cached['bmsSerialNo'] as String?) ?? bmsSerialNo;
         bleDeviceName = (cached['bleDeviceName'] as String?) ?? bleDeviceName;
       });
     }
@@ -175,6 +241,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'dischargeLowTempProtection': dischargeLowTempProtection,
       'diffTempProtection': diffTempProtection,
       'batterySerialNo': batterySerialNo,
+      'bmsSerialNo': bmsSerialNo,
       'bleDeviceName': bleDeviceName,
     });
   }
@@ -450,9 +517,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _handleSetNow(String context_) {
+  Future<void> _handleSetNow(String context_, Future<bool> Function() onSetNow) async {
+    setState(() => _isSending = true);
+    bool ok = false;
+    try {
+      ok = await onSetNow();
+    } catch (e) {
+      ok = false;
+    }
+    if (!mounted) return;
+    setState(() => _isSending = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$context_ settings sent to device')),
+      SnackBar(
+        content: Text(ok ? '$context_ settings sent to device' : '$context_ settings failed — no ACK received'),
+        backgroundColor: ok ? const Color(0xFF1B6B3A) : Colors.red,
+      ),
+    );
+  }
+
+  Future<void> _handleAction(String actionName, Future<bool> Function() action) async {
+    setState(() => _isSending = true);
+    bool ok = false;
+    try {
+      ok = await action();
+    } catch (e) {
+      ok = false;
+    }
+    if (!mounted) return;
+    setState(() => _isSending = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok ? '$actionName sent successfully' : '$actionName failed — no ACK received'),
+        backgroundColor: ok ? const Color(0xFF1B6B3A) : Colors.red,
+      ),
     );
   }
 
@@ -617,7 +714,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final selected = _selectedTab == i;
         return Expanded(
           child: GestureDetector(
-            onTap: () => setState(() => _selectedTab = i),
+            onTap: () {
+              setState(() => _selectedTab = i);
+              _pollForTab(i);
+            },
             child: Container(
               height: 48,
               margin: const EdgeInsets.symmetric(horizontal: 2),
@@ -721,7 +821,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSetNowFooter(String sectionName) {
+bool _isSending = false;
+
+  Widget _buildSetNowFooter(String sectionName, Future<bool> Function() onSetNow) {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Row(
@@ -732,8 +834,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             ),
-            onPressed: () => _handleSetNow(sectionName),
-            child: Text(tr('save').isNotEmpty ? 'Set Now' : 'Set Now'),
+            onPressed: (isLocked || _isSending) ? null : () => _handleSetNow(sectionName, onSetNow),
+            child: _isSending
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Text('Set Now'),
           ),
           const SizedBox(width: 10),
           const Expanded(
@@ -837,17 +945,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             ),
-            onPressed: isLocked
-                ? null
-                : () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Zero drift current calibration started')),
-                    );
-                  },
+            onPressed: (isLocked || _isSending)
+              ? null
+              : () => _handleAction('Zero drift current calibration', () => widget.service.sendCalibration()),
             child: const Text('Calibrate Now', style: TextStyle(fontSize: 12)),
           ),
         ),
-        _buildSetNowFooter('Battery'),
+        _buildSetNowFooter('Battery', () => widget.service.sendBatterySettingsWrite(
+              batteryString: batteryStringCount,
+              ratedCapacityAh: ratedCapacity,
+              socSetPercent: socSet,
+              sleepWaitingTime: sleepWaitingTime,
+              balancedStartDiffVolt: balancedStartDifferenceVolt,
+              balancedStartVolt: balancedStartVolt,
+              nominalCellVolt: nominalCellVolt,
+              cellChemistry: BMSProtocol.chemistryCode(cellChemistry),
+            )),
       ],
     );
   }
@@ -915,7 +1028,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               : () => _editDoubleParam('Discharge Over Current Protection', dischargeOverCurrentProtection, 'A',
                   (v) => setState(() => dischargeOverCurrentProtection = v)),
         ),
-        _buildSetNowFooter('Protection'),
+       _buildSetNowFooter('Protection', () => widget.service.sendProtectionSettingsWrite(
+              singleCellHighVolt: singleCellHighVoltProtection,
+              singleCellLowVolt: singleCellLowVoltProtection,
+              sumVoltHigh: sumVoltHighProtection,
+              sumVoltLow: sumVoltLowProtection,
+              chargeOverCurrent: chargeOverCurrentProtection,
+              dischargeOverCurrent: dischargeOverCurrentProtection,
+            )),
       ],
     );
   }
@@ -983,7 +1103,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? null
               : () => _editIntParam('Diff Temp Protection', diffTempProtection, '°C', (v) => setState(() => diffTempProtection = v)),
         ),
-        _buildSetNowFooter('Temp'),
+        _buildSetNowFooter('Temp', () => widget.service.sendTemperatureSettingsWrite(
+              noOfTempChannels: noOfTempChannels,
+              chargeHighTemp: chargeHighTempProtection,
+              chargeLowTemp: chargeLowTempProtection,
+              dischargeHighTemp: dischargeHighTempProtection,
+              dischargeLowTemp: dischargeLowTempProtection,
+              diffTempProtection: diffTempProtection,
+            )),
       ],
     );
   }
@@ -1061,32 +1188,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           onScan: () => _scanCode('Battery Serial No', (v) => setState(() => batterySerialNo = v)),
         ),
         _buildFactoryTextField(
+          label: 'BMS Serial No',
+          value: bmsSerialNo,
+          onEdit: () => _editStringParam('BMS Serial No', bmsSerialNo, (v) => setState(() => bmsSerialNo = v)),
+          onScan: () => _scanCode('BMS Serial No', (v) => setState(() => bmsSerialNo = v)),
+        ),
+        _buildFactoryTextField(
           label: 'BLE Device Name',
           value: bleDeviceName,
           onEdit: () => _editStringParam('BLE Device Name', bleDeviceName, (v) => setState(() => bleDeviceName = v)),
           onScan: () => _scanCode('BLE Device Name', (v) => setState(() => bleDeviceName = v)),
         ),
-        Row(
-          children: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF6FA88A),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              ),
-              onPressed: () => _handleSetNow('Factory'),
-              child: const Text('Set Now'),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                '( Set here after parameter changes )',
-                style: TextStyle(fontSize: 11, color: Colors.black45),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+        _buildSetNowFooter('Factory', () => widget.service.sendFactorySettingsWrite(
+              batterySlNo: batterySerialNo,
+              bmsSerialNo: bmsSerialNo,
+              bleDeviceName: bleDeviceName,
+            )),
         const SizedBox(height: 20),
 
         // Firmware upgrade card
@@ -1124,13 +1241,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                 ),
-                onPressed: isLocked
+                onPressed: (isLocked || _isSending)
                     ? null
-                    : () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Checking for firmware updates...')),
-                        );
-                      },
+                    : () => _handleAction('Firmware upgrade', () => widget.service.sendFirmwareUpgrade()),
                 child: const Text('Upgrade', style: TextStyle(fontSize: 12)),
               ),
             ],
@@ -1149,13 +1262,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                 ),
-                onPressed: isLocked
+                onPressed: (isLocked || _isSending)
                     ? null
                     : () => _showResetConfirmation(
                           'Restart',
                           'Are you sure you want to restart the BMS device?',
-                          () => ScaffoldMessenger.of(context)
-                              .showSnackBar(const SnackBar(content: Text('Device restarting...'))),
+                          () => _handleAction('Restart', () => widget.service.sendRestart()),
                         ),
                 icon: const Icon(Icons.restart_alt_rounded, size: 18),
                 label: const Text('Restart', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -1176,38 +1288,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   padding: const EdgeInsets.symmetric(vertical: 10),
                 ),
-                onPressed: isLocked
+                onPressed: (isLocked || _isSending)
                     ? null
                     : () => _showResetConfirmation(
                           'Factory Data Reset',
                           'This will erase all settings and restore factory defaults. Continue?',
-                          () {
-                            setState(() {
-                            widget.service.latestBatterySettings?.batteryString;
-widget.service.latestBatterySettings?.ratedCapacity;
-widget.service.latestBatterySettings?.socSet;
-widget.service.latestBatterySettings?.sleepWaitingTime;
-widget.service.latestBatterySettings?.balancedStartDiffVolt;
-widget.service.latestBatterySettings?.balancedStartVolt;
-widget.service.latestBatterySettings?.nominalCellVoltage;
-widget.service.latestBatterySettings?.cellChemistry;
-                             widget.service.latestProtectionSettings?.singleCellHighVoltProtection;
-widget.service.latestProtectionSettings?.singleCellLowVoltProtection;
-widget.service.latestProtectionSettings?.sumVoltHighProtection;
-widget.service.latestProtectionSettings?.sumVoltLowProtection;
-widget.service.latestProtectionSettings?.chargeOverCurrentProtection;
-widget.service.latestProtectionSettings?.dischargeOverCurrentProtection;
-                             widget.service.latestTemperatureSettings?.noOfTempChannels;
-widget.service.latestTemperatureSettings?.chargeHighTempProtection;
-widget.service.latestTemperatureSettings?.chargeLowTempProtection;
-widget.service.latestTemperatureSettings?.dischargeHighTempProtection;
-widget.service.latestTemperatureSettings?.dischargeLowTempProtection;
-widget.service.latestTemperatureSettings?.diffTempProtection;
-                            });
-                            _persistSettings();
-                            ScaffoldMessenger.of(context)
-                                .showSnackBar(const SnackBar(content: Text('Factory reset complete')));
-                          },
+                          () => _handleAction('Factory data reset', () => widget.service.sendFactoryReset()),
                         ),
                 icon: const Icon(Icons.settings_backup_restore_rounded, size: 18),
                 label: const Text('Factory Data Reset', style: TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
