@@ -34,35 +34,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
   ];
 
   // ── Battery Settings ────────────────────────────────────────────────────────
-  int batteryStringCount = 14; // "S"
-  double ratedCapacity = 30.0; // AH
-  int socSet = 99; // %
-  int sleepWaitingTime = 3600; // ms
-  double balancedStartDifferenceVolt = 0.03; // V
-  double balancedStartVolt = 3.20; // V
-  double nominalCellVolt = 3.0; // V
-  String cellChemistry = 'Li-Ion';
+  int batteryStringCount = 0; // "S"
+  double ratedCapacity = 0; // AH
+  int socSet = 0; // %
+  int sleepWaitingTime = 0; // ms
+  double balancedStartDifferenceVolt = 0; // V
+  double balancedStartVolt = 0; // V
+  double nominalCellVolt = 0; // V
+  String cellChemistry = ' ';
   final List<String> _chemistryOptions = const ['Li-Ion', 'LiFePO4', 'NiMH', 'Lead Acid'];
 
   // ── Protection Settings ─────────────────────────────────────────────────────
-  double singleCellHighVoltProtection = 3.200;
-  double singleCellLowVoltProtection = 3.00;
-  double sumVoltHighProtection = 58.8;
-  double sumVoltLowProtection = 42.0;
-  double chargeOverCurrentProtection = 40.0;
-  double dischargeOverCurrentProtection = 60.0;
+  double singleCellHighVoltProtection =0;
+  double singleCellLowVoltProtection = 0;
+  double sumVoltHighProtection = 0;
+  double sumVoltLowProtection = 0;
+  double chargeOverCurrentProtection = 0;
+  double dischargeOverCurrentProtection = 0;
 
   // ── Temp Settings ────────────────────────────────────────────────────────────
-  int noOfTempChannels = 4;
-  int chargeHighTempProtection = 60;
-  int chargeLowTempProtection = -10;
-  int dischargeHighTempProtection = 70;
-  int dischargeLowTempProtection = -10;
-  int diffTempProtection = 15;
+  int noOfTempChannels = 0;
+  int chargeHighTempProtection = 0;
+  int chargeLowTempProtection = 0;
+  int dischargeHighTempProtection = 0;
+  int dischargeLowTempProtection = 0;
+  int diffTempProtection = 0;
 
   // ── Factory Settings ─────────────────────────────────────────────────────────
-  String batterySerialNo = 'CHP8510262400001';
-  String bleDeviceName = 'MCH_BAT_1AF0001';
+  String batterySerialNo = ' ';
+  String bleDeviceName = ' ';
 
   // ── Offline-cache state ───────────────────────────────────────────────────
   bool _isOffline = false;
@@ -1183,26 +1183,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           'This will erase all settings and restore factory defaults. Continue?',
                           () {
                             setState(() {
-                              batteryStringCount = 14;
-                              ratedCapacity = 30.0;
-                              socSet = 99;
-                              sleepWaitingTime = 3600;
-                              balancedStartDifferenceVolt = 0.03;
-                              balancedStartVolt = 3.20;
-                              nominalCellVolt = 3.0;
-                              cellChemistry = 'Li-Ion';
-                              singleCellHighVoltProtection = 3.200;
-                              singleCellLowVoltProtection = 3.00;
-                              sumVoltHighProtection = 58.8;
-                              sumVoltLowProtection = 42.0;
-                              chargeOverCurrentProtection = 40.0;
-                              dischargeOverCurrentProtection = 60.0;
-                              noOfTempChannels = 4;
-                              chargeHighTempProtection = 60;
-                              chargeLowTempProtection = -10;
-                              dischargeHighTempProtection = 70;
-                              dischargeLowTempProtection = -10;
-                              diffTempProtection = 15;
+                            widget.service.latestBatterySettings?.batteryString;
+widget.service.latestBatterySettings?.ratedCapacity;
+widget.service.latestBatterySettings?.socSet;
+widget.service.latestBatterySettings?.sleepWaitingTime;
+widget.service.latestBatterySettings?.balancedStartDiffVolt;
+widget.service.latestBatterySettings?.balancedStartVolt;
+widget.service.latestBatterySettings?.nominalCellVoltage;
+widget.service.latestBatterySettings?.cellChemistry;
+                             widget.service.latestProtectionSettings?.singleCellHighVoltProtection;
+widget.service.latestProtectionSettings?.singleCellLowVoltProtection;
+widget.service.latestProtectionSettings?.sumVoltHighProtection;
+widget.service.latestProtectionSettings?.sumVoltLowProtection;
+widget.service.latestProtectionSettings?.chargeOverCurrentProtection;
+widget.service.latestProtectionSettings?.dischargeOverCurrentProtection;
+                             widget.service.latestTemperatureSettings?.noOfTempChannels;
+widget.service.latestTemperatureSettings?.chargeHighTempProtection;
+widget.service.latestTemperatureSettings?.chargeLowTempProtection;
+widget.service.latestTemperatureSettings?.dischargeHighTempProtection;
+widget.service.latestTemperatureSettings?.dischargeLowTempProtection;
+widget.service.latestTemperatureSettings?.diffTempProtection;
                             });
                             _persistSettings();
                             ScaffoldMessenger.of(context)
@@ -1246,7 +1246,7 @@ class _BarcodeScanPlaceholderState extends State<_BarcodeScanPlaceholder> {
   }
 
   @override
-    Widget build(BuildContext context) {
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         backgroundColor: const Color(0xFF1B6B3A),

@@ -38,7 +38,9 @@ class BMSParsedPacket {
   final double? voltageDiff;       // Bytes 38–39 (×0.001 V)
   final double? maxCellVoltage;    // Bytes 40–41 (×0.001 V)
   final double? minCellVoltage;    // Bytes 42–43 (×0.001 V)
-  final String? firmwareVersion;   // Bytes 98–116 (19 ASCII bytes)
+  final String? firmwareVersion;   // Bytes 98–116 (19 ASCII bytes) — ALSO
+                                    // reused for the Device Details Response
+                                    // (0x57) firmware-version ASCII field.
   final int? warningAlerts;        // Byte 108 (v2 dashboard only)
   final int? faultAlerts;          // Byte 109 (v2 dashboard only)
   final int? clearedAlerts;        // Byte 110 (v2 dashboard only)
@@ -55,54 +57,53 @@ class BMSParsedPacket {
   final bool?   cellBalancingActive;
   final int?    cellTotalCells;
 
-  // ── Device info fields (dataId 0x59–0x5C) ────────────────────────────────
+  // ── Device Details Response fields (dataId == 0x57, 70-byte response) ───
+  // NOTE: reuses the batterySerial / softwareVersion / hardwareVersion /
+  // firmwareVersion fields below (legacy 0x59-0x5C device-info IDs are no
+  // longer used in this build of the protocol, so there's no collision).
   final String? batterySerial;
   final String? softwareVersion;
   final String? hardwareVersion;
   final String? snCode;
 
-  // ─────────────────────────────────────────────────────────────────────────────
-// Battery Settings (0x58)
-// ─────────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // Battery Settings (0x58 read-back / 0xB0 Set Now)
+  // ─────────────────────────────────────────────────────────────────────────
+  final int? batteryString;
+  final double? ratedCapacity;
+  final int? socSet;
+  final int? sleepWaitingTime;
+  final double? balancedStartDiffVolt;
+  final double? balancedStartVolt;
+  final double? nominalCellVoltage;
+  final int? cellChemistry;
 
-final int? batteryString;
-final double? ratedCapacity;
-final int? socSet;
-final int? sleepWaitingTime;
-final double? balancedStartDiffVolt;
-final double? balancedStartVolt;
-final double? nominalCellVoltage;
-final int? cellChemistry;
+  // ─────────────────────────────────────────────────────────────────────────
+  // Protection Settings (0x59 read-back / 0xB2 Set Now)
+  // ─────────────────────────────────────────────────────────────────────────
+  final double? singleCellHighVoltProtection;
+  final double? singleCellLowVoltProtection;
+  final double? sumVoltHighProtection;
+  final double? sumVoltLowProtection;
+  final double? chargeOverCurrentProtection;
+  final double? dischargeOverCurrentProtection;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Protection Settings (0x59)
-// ─────────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // Temperature Settings (0x5A read-back / 0xB3 Set Now)
+  // ─────────────────────────────────────────────────────────────────────────
+  final int? noOfTempChannels;
+  final int? chargeHighTempProtection;
+  final int? chargeLowTempProtection;
+  final int? dischargeHighTempProtection;
+  final int? dischargeLowTempProtection;
+  final int? diffTempProtection;
 
-final double? singleCellHighVoltProtection;
-final double? singleCellLowVoltProtection;
-final double? sumVoltHighProtection;
-final double? sumVoltLowProtection;
-final double? chargeOverCurrentProtection;
-final double? dischargeOverCurrentProtection;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Temperature Settings (0x5A)
-// ─────────────────────────────────────────────────────────────────────────────
-
-final int? noOfTempChannels;
-final int? chargeHighTempProtection;
-final int? chargeLowTempProtection;
-final int? dischargeHighTempProtection;
-final int? dischargeLowTempProtection;
-final int? diffTempProtection;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Factory Settings (0x5B)
-// ─────────────────────────────────────────────────────────────────────────────
-
-final String? batterySlNo;
-final String? bmsSerialNo;
-final String? bleDeviceName;
+  // ─────────────────────────────────────────────────────────────────────────
+  // Factory Settings (0x5B read-back / 0xB4 Set Now)
+  // ─────────────────────────────────────────────────────────────────────────
+  final String? batterySlNo;
+  final String? bmsSerialNo;
+  final String? bleDeviceName;
 
   const BMSParsedPacket({
     required this.startByte,
@@ -138,7 +139,6 @@ final String? bleDeviceName;
     this.faultAlerts,
     this.clearedAlerts,
     this.totalAlerts,
-    
     // Cell voltage response
     this.cellVoltages,
     this.cellBalancing,
@@ -149,11 +149,12 @@ final String? bleDeviceName;
     this.cellAvgVoltage,
     this.cellBalancingActive,
     this.cellTotalCells,
-    // Device info
+    // Device info / Device Details
     this.batterySerial,
     this.softwareVersion,
     this.hardwareVersion,
     this.snCode,
+    // Battery Settings
     this.batteryString,
     this.ratedCapacity,
     this.socSet,
@@ -162,26 +163,24 @@ final String? bleDeviceName;
     this.balancedStartVolt,
     this.nominalCellVoltage,
     this.cellChemistry,
-
+    // Protection Settings
     this.singleCellHighVoltProtection,
     this.singleCellLowVoltProtection,
     this.sumVoltHighProtection,
     this.sumVoltLowProtection,
     this.chargeOverCurrentProtection,
     this.dischargeOverCurrentProtection,
-
+    // Temperature Settings
     this.noOfTempChannels,
     this.chargeHighTempProtection,
     this.chargeLowTempProtection,
     this.dischargeHighTempProtection,
     this.dischargeLowTempProtection,
     this.diffTempProtection,
-
+    // Factory Settings
     this.batterySlNo,
     this.bmsSerialNo,
     this.bleDeviceName,
- 
- 
   });
 
   // ── Convenience flags ─────────────────────────────────────────────────────
@@ -199,19 +198,23 @@ final String? bleDeviceName;
 
   bool get isCellVoltageResponse => dataId == 0x53 && cellVoltages != null;
 
-  bool get isDeviceInfo =>
-      dataId == 0x59 || dataId == 0x5A || dataId == 0x5B || dataId == 0x5C;
+  /// FIXED: this getter was missing entirely — without it,
+  /// bluetooth_service.dart had no way to recognize a parsed Device Details
+  /// (0x57) packet, so it was parsed successfully and then silently dropped.
+  bool get isDeviceDetailsResponse =>
+      dataId == BMSProtocol.idDeviceDetailsResponse;
+
   bool get isBatterySettingsResponse =>
-    dataId == BMSProtocol.idBatterySettingsResponse;
+      dataId == BMSProtocol.idBatterySettingsResponse;
 
-bool get isProtectionSettingsResponse =>
-    dataId == BMSProtocol.idProtectionSettingsResponse;
+  bool get isProtectionSettingsResponse =>
+      dataId == BMSProtocol.idProtectionSettingsResponse;
 
-bool get isTemperatureSettingsResponse =>
-    dataId == BMSProtocol.idTemperatureSettingsResponse;
+  bool get isTemperatureSettingsResponse =>
+      dataId == BMSProtocol.idTemperatureSettingsResponse;
 
-bool get isFactorySettingsResponse =>
-    dataId == BMSProtocol.idFactorySettingsResponse;
+  bool get isFactorySettingsResponse =>
+      dataId == BMSProtocol.idFactorySettingsResponse;
 
   // ── Decoded label fields ──────────────────────────────────────────────────
 
@@ -277,13 +280,22 @@ bool get isFactorySettingsResponse =>
       case 0x90: return 'HANDSHAKE';
       case 0x50: return 'ACK';
       case 0x91: return 'DISCONNECT';
-      case 0x51: return 'BLE Name Response (19-byte)';
-      case 0x52: return 'Dashboard Response (120-byte)';
+      case 0x51: return 'BLE Name Response (21-byte)';
+      case 0x52: return 'Dashboard Response (115-byte)';
       case 0x53: return 'Cell Voltage Response (88-byte)';
-      case 0x59: return 'Battery Serial No';
-      case 0x5A: return 'Software Version';
-      case 0x5B: return 'Hardware Version';
-      case 0x5C: return 'SN Code';
+      case 0x57: return 'Device Details Response (70-byte)';
+      case 0x58: return 'Battery Settings Response (18-byte)';
+      case 0x59: return 'Protection Settings Response (17-byte)';
+      case 0x5A: return 'Temperature Settings Response (11-byte)';
+      case 0x5B: return 'Factory Settings Response (53-byte)';
+      case 0xB0: return 'Battery Settings Set Now';
+      case 0xB1: return 'Calibrate Now';
+      case 0xB2: return 'Protection Settings Set Now';
+      case 0xB3: return 'Temperature Settings Set Now';
+      case 0xB4: return 'Factory Settings Set Now';
+      case 0xB5: return 'Firmware Upgrade';
+      case 0xB6: return 'Restart';
+      case 0xB7: return 'Factory Data Reset';
       default:
         return 'Unknown (0x${dataId.toRadixString(16).toUpperCase().padLeft(2, "0")})';
     }
@@ -342,32 +354,29 @@ bool get isFactorySettingsResponse =>
     String?          softwareVersion,
     String?          hardwareVersion,
     String?          snCode,
-    int? batteryString,
-      double? ratedCapacity,
-      int? socSet,
-      int? sleepWaitingTime,
-      double? balancedStartDiffVolt,
-      double? balancedStartVolt,
-      double? nominalCellVoltage,
-      int? cellChemistry,
-
-      double? singleCellHighVoltProtection,
-      double? singleCellLowVoltProtection,
-      double? sumVoltHighProtection,
-      double? sumVoltLowProtection,
-      double? chargeOverCurrentProtection,
-      double? dischargeOverCurrentProtection,
-
-      int? noOfTempChannels,
-      int? chargeHighTempProtection,
-      int? chargeLowTempProtection,
-      int? dischargeHighTempProtection,
-      int? dischargeLowTempProtection,
-      int? diffTempProtection,
-
-      String? batterySlNo,
-      String? bmsSerialNo,
-      String? bleDeviceName,
+    int?             batteryString,
+    double?          ratedCapacity,
+    int?             socSet,
+    int?             sleepWaitingTime,
+    double?          balancedStartDiffVolt,
+    double?          balancedStartVolt,
+    double?          nominalCellVoltage,
+    int?             cellChemistry,
+    double?          singleCellHighVoltProtection,
+    double?          singleCellLowVoltProtection,
+    double?          sumVoltHighProtection,
+    double?          sumVoltLowProtection,
+    double?          chargeOverCurrentProtection,
+    double?          dischargeOverCurrentProtection,
+    int?             noOfTempChannels,
+    int?             chargeHighTempProtection,
+    int?             chargeLowTempProtection,
+    int?             dischargeHighTempProtection,
+    int?             dischargeLowTempProtection,
+    int?             diffTempProtection,
+    String?          batterySlNo,
+    String?          bmsSerialNo,
+    String?          bleDeviceName,
   }) {
     return BMSParsedPacket(
       startByte:           startByte           ?? this.startByte,
@@ -413,74 +422,37 @@ bool get isFactorySettingsResponse =>
       softwareVersion:     softwareVersion     ?? this.softwareVersion,
       hardwareVersion:     hardwareVersion     ?? this.hardwareVersion,
       snCode:              snCode              ?? this.snCode,
-      batteryString:
-    batteryString ?? this.batteryString,
-
-ratedCapacity:
-    ratedCapacity ?? this.ratedCapacity,
-
-socSet:
-    socSet ?? this.socSet,
-
-sleepWaitingTime:
-    sleepWaitingTime ?? this.sleepWaitingTime,
-
-balancedStartDiffVolt:
-    balancedStartDiffVolt ?? this.balancedStartDiffVolt,
-
-balancedStartVolt:
-    balancedStartVolt ?? this.balancedStartVolt,
-
-nominalCellVoltage:
-    nominalCellVoltage ?? this.nominalCellVoltage,
-
-cellChemistry:
-    cellChemistry ?? this.cellChemistry,
-
-singleCellHighVoltProtection:
-    singleCellHighVoltProtection ?? this.singleCellHighVoltProtection,
-
-singleCellLowVoltProtection:
-    singleCellLowVoltProtection ?? this.singleCellLowVoltProtection,
-
-sumVoltHighProtection:
-    sumVoltHighProtection ?? this.sumVoltHighProtection,
-
-sumVoltLowProtection:
-    sumVoltLowProtection ?? this.sumVoltLowProtection,
-
-chargeOverCurrentProtection:
-    chargeOverCurrentProtection ?? this.chargeOverCurrentProtection,
-
-dischargeOverCurrentProtection:
-    dischargeOverCurrentProtection ?? this.dischargeOverCurrentProtection,
-
-noOfTempChannels:
-    noOfTempChannels ?? this.noOfTempChannels,
-
-chargeHighTempProtection:
-    chargeHighTempProtection ?? this.chargeHighTempProtection,
-
-chargeLowTempProtection:
-    chargeLowTempProtection ?? this.chargeLowTempProtection,
-
-dischargeHighTempProtection:
-    dischargeHighTempProtection ?? this.dischargeHighTempProtection,
-
-dischargeLowTempProtection:
-    dischargeLowTempProtection ?? this.dischargeLowTempProtection,
-
-diffTempProtection:
-    diffTempProtection ?? this.diffTempProtection,
-
-batterySlNo:
-    batterySlNo ?? this.batterySlNo,
-
-bmsSerialNo:
-    bmsSerialNo ?? this.bmsSerialNo,
-
-bleDeviceName:
-    bleDeviceName ?? this.bleDeviceName,
+      batteryString:       batteryString       ?? this.batteryString,
+      ratedCapacity:       ratedCapacity       ?? this.ratedCapacity,
+      socSet:              socSet              ?? this.socSet,
+      sleepWaitingTime:    sleepWaitingTime    ?? this.sleepWaitingTime,
+      balancedStartDiffVolt: balancedStartDiffVolt ?? this.balancedStartDiffVolt,
+      balancedStartVolt:   balancedStartVolt   ?? this.balancedStartVolt,
+      nominalCellVoltage:  nominalCellVoltage  ?? this.nominalCellVoltage,
+      cellChemistry:       cellChemistry       ?? this.cellChemistry,
+      singleCellHighVoltProtection:
+          singleCellHighVoltProtection ?? this.singleCellHighVoltProtection,
+      singleCellLowVoltProtection:
+          singleCellLowVoltProtection ?? this.singleCellLowVoltProtection,
+      sumVoltHighProtection: sumVoltHighProtection ?? this.sumVoltHighProtection,
+      sumVoltLowProtection:  sumVoltLowProtection  ?? this.sumVoltLowProtection,
+      chargeOverCurrentProtection:
+          chargeOverCurrentProtection ?? this.chargeOverCurrentProtection,
+      dischargeOverCurrentProtection:
+          dischargeOverCurrentProtection ?? this.dischargeOverCurrentProtection,
+      noOfTempChannels:    noOfTempChannels    ?? this.noOfTempChannels,
+      chargeHighTempProtection:
+          chargeHighTempProtection ?? this.chargeHighTempProtection,
+      chargeLowTempProtection:
+          chargeLowTempProtection ?? this.chargeLowTempProtection,
+      dischargeHighTempProtection:
+          dischargeHighTempProtection ?? this.dischargeHighTempProtection,
+      dischargeLowTempProtection:
+          dischargeLowTempProtection ?? this.dischargeLowTempProtection,
+      diffTempProtection:  diffTempProtection  ?? this.diffTempProtection,
+      batterySlNo:         batterySlNo         ?? this.batterySlNo,
+      bmsSerialNo:         bmsSerialNo         ?? this.bmsSerialNo,
+      bleDeviceName:       bleDeviceName       ?? this.bleDeviceName,
     );
   }
 
@@ -506,8 +478,25 @@ bleDeviceName:
           ', avg=${cellAvgVoltage?.toStringAsFixed(3)}V'
           ', balancing=${cellBalancingActive == true ? "Active" : "Inactive"}');
     }
-    if (isDeviceInfo) {
-      sb.write(', value=${batterySerial ?? softwareVersion ?? hardwareVersion ?? snCode}');
+    if (isDeviceDetailsResponse) {
+      sb.write(', serial=$batterySerial, sw=$softwareVersion, hw=$hardwareVersion, fw=$firmwareVersion');
+    }
+    if (isBatterySettingsResponse) {
+      sb.write(', string=$batteryString, capacity=$ratedCapacity, soc=$socSet'
+          ', sleep=$sleepWaitingTime, chemistry=$cellChemistry');
+    }
+    if (isProtectionSettingsResponse) {
+      sb.write(', cellHigh=$singleCellHighVoltProtection, cellLow=$singleCellLowVoltProtection'
+          ', sumHigh=$sumVoltHighProtection, sumLow=$sumVoltLowProtection'
+          ', chargeOc=$chargeOverCurrentProtection, dischargeOc=$dischargeOverCurrentProtection');
+    }
+    if (isTemperatureSettingsResponse) {
+      sb.write(', channels=$noOfTempChannels, chargeHigh=$chargeHighTempProtection'
+          ', chargeLow=$chargeLowTempProtection, dischargeHigh=$dischargeHighTempProtection'
+          ', dischargeLow=$dischargeLowTempProtection, diff=$diffTempProtection');
+    }
+    if (isFactorySettingsResponse) {
+      sb.write(', batterySl=$batterySlNo, bmsSerial=$bmsSerialNo, bleName=$bleDeviceName');
     }
     sb.write(')');
     return sb.toString();

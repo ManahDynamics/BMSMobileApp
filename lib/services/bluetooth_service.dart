@@ -29,9 +29,6 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   bool dashboardNavigationTriggered = false;
 
   // ── Sequential request flow ─────────────────────────────────────────────
-  // readyForDashboard becomes true right after the BLE Name step finishes
-  // (success OR failure) — this is the single signal the scan screen uses
-  // to navigate to the Dashboard screen.
   bool readyForDashboard = false;
 
   bool isBleNameLoading = false;
@@ -48,9 +45,6 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
   final List<BMSParsedPacket> packetLog = [];
 
-  // ── On-screen debug log ────────────────────────────────────────────────
-  // Stores human-readable trace lines for the DebugLogOverlay widget.
-  // Capped so it doesn't grow unbounded during long sessions.
   final List<String> _debugLogs = [];
   List<String> get debugLogs => List.unmodifiable(_debugLogs);
   static const int _maxDebugLogs = 300;
@@ -58,17 +52,33 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   // ── Latest valid packets ──────────────────────────────────────────────────
   BMSParsedPacket? latestDashboard;
   BMSParsedPacket? latestCellVoltage;
-   BMSParsedPacket? latestBatterySettings;
-BMSParsedPacket? latestProtectionSettings;
-BMSParsedPacket? latestTempSettings;
-BMSParsedPacket? latestFactorySettings;
+  BMSParsedPacket? latestBatterySettings;
+  BMSParsedPacket? latestProtectionSettings;
+BMSParsedPacket? latestTemperatureSettings;
+  BMSParsedPacket? latestFactorySettings;
 
-int batterySettingsPulse = 0;
-int protectionSettingsPulse = 0;
-int tempSettingsPulse = 0;
-int factorySettingsPulse = 0;
-   int dashboardPulse = 0;
+  // FIXED: this was parsed correctly by packet_parser.dart but had nowhere
+  // to land in the service — no field, no branch in the notify listener.
+  BMSParsedPacket? latestDeviceDetails;
+
+  int batterySettingsPulse = 0;
+  int protectionSettingsPulse = 0;
+  int temperatureSettingsPulse = 0;
+  int factorySettingsPulse = 0;
+  int deviceDetailsPulse = 0;
+
+  int dashboardPulse = 0;
   int cellVoltagePulse = 0;
+
+  // ── Settings-page "Set Now" / action state ────────────────────────────────
+  // FIXED: previously there was no sender and no ACK-wait mechanism at all
+  // for 0xB0-0xB7 (Set Now / Calibrate / Restart / Firmware Upgrade /
+  // Factory Reset). The old ACK handling only fired when
+  // `state == BMSConnectionState.waitingAck`, which only happens during the
+  // handshake — an ACK received in the normal `ready` state (i.e. after any
+  // of these actions) was simply ignored.
+  bool isActionInFlight = false;
+  Completer<bool>? _actionAckCompleter;
 
   // ── Device info ───────────────────────────────────────────────────────────
   String? bleName;
@@ -234,9 +244,6 @@ int factorySettingsPulse = 0;
     _notifySub = _notifyChar!.onValueReceived.listen((raw) {
       if (raw.isEmpty) return;
 
-      // debugPrint('📥 RX [${raw.length} bytes] : ${_toHex(raw)}');
-      // addDebugLog('📥 RX [${raw.length}B]: ${_toHex(raw)}');
-
       final result = BMSPacketParser.parse(
         Uint8List.fromList(raw),
       );
@@ -244,8 +251,6 @@ int factorySettingsPulse = 0;
       if (result.isSuccess && result.packet != null) {
         final packet = result.packet!.copyWith(direction: PacketDirection.receive);
         _addToLog(packet);
-        // debugPrint('✅ RX Parsed: ${packet.typeName}');
-        // addDebugLog('✅ Parsed: ${packet.typeName}');
         addDebugLog(
           '✅ Response received: 0x${result.packet!.dataId.toRadixString(16).toUpperCase()}',
         );
@@ -254,7 +259,7 @@ int factorySettingsPulse = 0;
           addDebugLog('🔋 Cell Voltage Response received');
           latestCellVoltage = packet;
           cellVoltagePulse++;
-          cellVoltageError = null;     
+          cellVoltageError = null;
           isCellVoltageLoading = false;
           notifyListeners();
           if (_cellVoltageCompleter != null && !_cellVoltageCompleter!.isCompleted) {
@@ -265,17 +270,11 @@ int factorySettingsPulse = 0;
           addDebugLog('📊 Dashboard Response received — CRC passed');
           addDebugLog('   Battery Serial = "${packet.batterySerial}"');
 
-          // Dashboard packet now also carries the cell voltage data, so it
-          // doubles as the source for latestCellVoltage. This is why the
-          // initial sequence and dashboard polling no longer send a
-          // separate cell-voltage request — the Cell Details screen's own
-          // requestCellVoltages()/refreshCellVoltages() calls are untouched
-          // and still use the dedicated cell-voltage request/response.
           latestDashboard   = packet;
           latestCellVoltage = packet;
-           dashboardPulse++;
+          dashboardPulse++;
           cellVoltagePulse++;
-           dashboardError = null;       
+          dashboardError = null;
           isDashboardLoading = false;
 
           if (_cellVoltageCompleter != null && !_cellVoltageCompleter!.isCompleted) {
@@ -312,76 +311,71 @@ int factorySettingsPulse = 0;
             debugPrint('📋 BLE Name: $bleName');
             addDebugLog('📋 BLE Name: $bleName');
           }
-          else if (packet.isBatterySettingsResponse) {
-
-  latestBatterySettings = packet;
-  batterySettingsPulse++;
-
-  notifyListeners();
-
-}
-else if (packet.isProtectionSettingsResponse) {
-
-  latestProtectionSettings = packet;
-  protectionSettingsPulse++;
-
-  notifyListeners();
-
-}
-else if (packet.isTemperatureSettingsResponse) {
-
-  latestTempSettings = packet;
-  tempSettingsPulse++;
-
-  notifyListeners();
-
-}
-else if (packet.isFactorySettingsResponse) {
-
-  latestFactorySettings = packet;
-  factorySettingsPulse++;
-
-  notifyListeners();
-
-}
           notifyListeners();
           if (_bleNameCompleter != null && !_bleNameCompleter!.isCompleted) {
             _bleNameCompleter!.complete(true);
           }
 
-        } else if (packet.isDeviceInfo) {
-          addDebugLog('ℹ️ Device info packet: 0x${packet.dataId.toRadixString(16)}');
-          _updateDeviceInfo(packet);
+        // FIXED: these four branches used to live *inside* the
+        // `isBleNameResponse` block above (as an `else if` chained off
+        // `if (packet.bleName != null)`), which meant they could never run
+        // — isBleNameResponse requires dataId == 0x51, while these all
+        // require dataId == 0x58/0x59/0x5A/0x5B. They're now proper
+        // top-level siblings, same as isCellVoltageResponse /
+        // isDashboardResponse above.
+        } else if (packet.isDeviceDetailsResponse) {
+          addDebugLog('ℹ️ Device Details Response received');
+          latestDeviceDetails = packet;
+          deviceDetailsPulse++;
+          notifyListeners();
 
-        } else if (state == BMSConnectionState.waitingAck && packet.isAck) {
-          addDebugLog('🤝 ACK packet received — accepting without validation');
-          _onAckReceived(packet);
+        } else if (packet.isBatterySettingsResponse) {
+          addDebugLog('🔋 Battery Settings Response received');
+          latestBatterySettings = packet;
+          batterySettingsPulse++;
+          notifyListeners();
+
+        } else if (packet.isProtectionSettingsResponse) {
+          addDebugLog('🛡️ Protection Settings Response received');
+          latestProtectionSettings = packet;
+          protectionSettingsPulse++;
+          notifyListeners();
+
+        } else if (packet.isTemperatureSettingsResponse) {
+          addDebugLog('🌡️ Temperature Settings Response received');
+          latestTemperatureSettings = packet;
+          temperatureSettingsPulse++;
+          notifyListeners();
+
+        } else if (packet.isFactorySettingsResponse) {
+          addDebugLog('🏭 Factory Settings Response received');
+          latestFactorySettings = packet;
+          factorySettingsPulse++;
+          notifyListeners();
+
+        // FIXED: ACK handling used to only run
+        // `if (state == BMSConnectionState.waitingAck && packet.isAck)`,
+        // so an ACK arriving in the normal `ready` state (i.e. after every
+        // Set Now / Calibrate / Restart / Firmware Upgrade / Factory Reset
+        // packet) was invisible to the app — there was no sender for these
+        // packets either, see below. Handshake-ACK handling is preserved;
+        // the generic action-ACK completer now also fires independently.
+        } else if (packet.isAck) {
+          if (state == BMSConnectionState.waitingAck) {
+            addDebugLog('🤝 ACK packet received — accepting without validation');
+            _onAckReceived(packet);
+          }
+          if (_actionAckCompleter != null && !_actionAckCompleter!.isCompleted) {
+            addDebugLog('🤝 ACK packet received — completing pending action');
+            _actionAckCompleter!.complete(true);
+          }
         }
 
       } else {
-        final reason = result.error?.name ?? 'unknown';
-        final detail = result.errorDetail ?? '';
-        // debugPrint('❌ RX Parse Failed [$reason] $detail — last valid data retained');
-        // addDebugLog('❌ Parse FAILED [$reason] $detail');
+        // Parse failed — last valid data retained, nothing to do.
       }
     });
   }
-
-  void _updateDeviceInfo(BMSParsedPacket packet) {
-    switch (packet.dataId) {
-      case 0x59:
-        batterySerial   = packet.batterySerial;
-        addDebugLog('ℹ️ batterySerial (from 0x59) = "$batterySerial"');
-      case 0x5A:
-        softwareVersion = packet.softwareVersion;
-      case 0x5B:
-        hardwareVersion = packet.hardwareVersion;
-      case 0x5C:
-        snCode          = packet.snCode;
-    }
-    notifyListeners();
-  }
-
 
   // ─────────────────────────────────────────────────────────────────────────
   // SEND PACKET
@@ -395,7 +389,6 @@ else if (packet.isFactorySettingsResponse) {
 
     if (sentDataId != null) {
       _pendingRequests.add(sentDataId);
-
       addDebugLog(
         '📤 Pending Requests: ${_pendingRequests.map((e) => "0x${e.toRadixString(16).toUpperCase()}").join(", ")}',
       );
@@ -428,8 +421,6 @@ else if (packet.isFactorySettingsResponse) {
     await Future.delayed(const Duration(milliseconds: 300));
     await _sendPacket(packet, logName: 'HANDSHAKE', sentDataId: BMSProtocol.idHandshake);
 
-    // No ACK wait / validation — proceed straight to ready and start
-    // requesting data once the handshake packet has been sent.
     addDebugLog('➡️ Handshake sent — skipping ACK wait, proceeding to ready');
     state = BMSConnectionState.ready;
     isConnecting = false;
@@ -475,13 +466,10 @@ else if (packet.isFactorySettingsResponse) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // ACK HANDLING (validation removed — any ACK packet received while
-  // waiting is accepted as-is, with no byte-for-byte comparison against an
-  // expected packet and no handshake-content check).
+  // ACK HANDLING (handshake path — no validation)
   // ─────────────────────────────────────────────────────────────────────────
   void _onAckReceived(BMSParsedPacket packet) {
     _ackTimer?.cancel();
-
     addDebugLog('✅ ACK received — state = ready (no validation performed)');
     state = BMSConnectionState.ready;
     isConnecting = false;
@@ -490,18 +478,14 @@ else if (packet.isFactorySettingsResponse) {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SEQUENTIAL DATA FETCH: BLE Name → Dashboard
-  // (Dashboard response packet now also carries cell voltage data, so no
-  // separate cell-voltage step is needed here.)
+  // SEQUENTIAL DATA FETCH: BLE Name → Dashboard → Cell Voltage
   // ─────────────────────────────────────────────────────────────────────────
-
   Future<void> _startDataSequence() async {
     addDebugLog('▶️ Starting packet sequence');
 
     readyForDashboard = true;
     notifyListeners();
 
-    // BLE Name (once)
     final bleOk = await _sendAndWait(
       send: requestBleName,
       name: 'BLE Name',
@@ -512,33 +496,27 @@ else if (packet.isFactorySettingsResponse) {
 
     if (!bleOk) return;
 
-   // Dashboard
-final dashOk = await _sendAndWait(
-  send: requestDashboard,
-  name: 'Dashboard',
-  setCompleter: (c) => _dashboardCompleter = c,
-  setLoading: (v) => isDashboardLoading = v,
-  setError: (v) => dashboardError = v,
-);
+    final dashOk = await _sendAndWait(
+      send: requestDashboard,
+      name: 'Dashboard',
+      setCompleter: (c) => _dashboardCompleter = c,
+      setLoading: (v) => isDashboardLoading = v,
+      setError: (v) => dashboardError = v,
+    );
 
-if (!dashOk) return;
+    if (!dashOk) return;
 
-// Cell Voltage
-final cellOk = await _sendAndWait(
-  send: requestCellVoltages,
-  name: 'Cell Voltage',
-  setCompleter: (c) => _cellVoltageCompleter = c,
-  setLoading: (v) => isCellVoltageLoading = v,
-  setError: (v) => cellVoltageError = v,
-);
+    final cellOk = await _sendAndWait(
+      send: requestCellVoltages,
+      name: 'Cell Voltage',
+      setCompleter: (c) => _cellVoltageCompleter = c,
+      setLoading: (v) => isCellVoltageLoading = v,
+      setError: (v) => cellVoltageError = v,
+    );
 
-if (!cellOk) return;
+    if (!cellOk) return;
 
-addDebugLog('✅ Initial data loaded');
-
-    // Both pollers run independently from here on, regardless of which
-    // screen is currently on-screen — Dashboard packets and Cell Voltage
-    // packets are each requested on their own 5-second timer.
+    addDebugLog('✅ Initial data loaded');
   }
 
   Future<void> refreshCellVoltages() async {
@@ -579,7 +557,6 @@ addDebugLog('✅ Initial data loaded');
     final success = await completer.future.timeout(
       const Duration(seconds: 10),
       onTimeout: () => false,
-    
     );
 
     setLoading(false);
@@ -602,100 +579,366 @@ addDebugLog('✅ Initial data loaded');
       setError: (v) => cellVoltageError = v,
     );
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SETTINGS PAGE — REQUEST SENDERS (read-back)
+  // ─────────────────────────────────────────────────────────────────────────
   Future<void> _sendDeviceDetailsRequest() async {
-  if (_writeChar == null || state != BMSConnectionState.ready) return;
-
-  final crc = BMSCrcService.calculateCRC8([
-    BMSProtocol.packetLength,
-    BMSProtocol.idDeviceDetailsRequest,
-  ]);
-
-  await _sendPacket(
-    [
-      BMSProtocol.startByte,
+    if (_writeChar == null || state != BMSConnectionState.ready) return;
+    final crc = BMSCrcService.calculateCRC8([
       BMSProtocol.packetLength,
       BMSProtocol.idDeviceDetailsRequest,
-      crc,
-      BMSProtocol.stopByte,
-    ],
-  );
-}
-Future<void> _sendBatterySettingsRequest() async {
-  if (_writeChar == null || state != BMSConnectionState.ready) return;
+    ]);
+    await _sendPacket(
+      [
+        BMSProtocol.startByte,
+        BMSProtocol.packetLength,
+        BMSProtocol.idDeviceDetailsRequest,
+        crc,
+        BMSProtocol.stopByte,
+      ],
+      logName: 'DEVICE_DETAILS_REQUEST',
+      sentDataId: BMSProtocol.idDeviceDetailsRequest,
+    );
+  }
 
-  final crc = BMSCrcService.calculateCRC8([
-    BMSProtocol.packetLength,
-    BMSProtocol.idBatterySettingsRequest,
-  ]);
+  /// Public one-shot request — call this when opening the Device Details
+  /// sheet. (FIXED: previously this only existed as the private
+  /// `_sendDeviceDetailsRequest`, which nothing in the app ever called.)
+  Future<void> requestDeviceDetails() => _sendDeviceDetailsRequest();
 
-  await _sendPacket(
-    [
-      BMSProtocol.startByte,
+  Future<void> _sendBatterySettingsRequest() async {
+    if (_writeChar == null || state != BMSConnectionState.ready) return;
+    final crc = BMSCrcService.calculateCRC8([
       BMSProtocol.packetLength,
       BMSProtocol.idBatterySettingsRequest,
-      crc,
-      BMSProtocol.stopByte,
-    ],
+    ]);
+    await _sendPacket(
+      [
+        BMSProtocol.startByte,
+        BMSProtocol.packetLength,
+        BMSProtocol.idBatterySettingsRequest,
+        crc,
+        BMSProtocol.stopByte,
+      ],
+      logName: 'BATTERY_SETTINGS_REQUEST',
+      sentDataId: BMSProtocol.idBatterySettingsRequest,
+    );
+  }
 
-  );
-}
-Future<void> _sendProtectionSettingsRequest() async {
-  if (_writeChar == null || state != BMSConnectionState.ready) return;
-
-  final crc = BMSCrcService.calculateCRC8([
-    BMSProtocol.packetLength,
-    BMSProtocol.idProtectionSettingsRequest,
-  ]);
-
-  await _sendPacket(
-    [
-      BMSProtocol.startByte,
+  Future<void> _sendProtectionSettingsRequest() async {
+    if (_writeChar == null || state != BMSConnectionState.ready) return;
+    final crc = BMSCrcService.calculateCRC8([
       BMSProtocol.packetLength,
       BMSProtocol.idProtectionSettingsRequest,
-      crc,
-      BMSProtocol.stopByte,
-    ],
-   
-  );
-}
-Future<void> _sendTemperatureSettingsRequest() async {
-  if (_writeChar == null || state != BMSConnectionState.ready) return;
+    ]);
+    await _sendPacket(
+      [
+        BMSProtocol.startByte,
+        BMSProtocol.packetLength,
+        BMSProtocol.idProtectionSettingsRequest,
+        crc,
+        BMSProtocol.stopByte,
+      ],
+      logName: 'PROTECTION_SETTINGS_REQUEST',
+      sentDataId: BMSProtocol.idProtectionSettingsRequest,
+    );
+  }
 
-  final crc = BMSCrcService.calculateCRC8([
-    BMSProtocol.packetLength,
-    BMSProtocol.idTemperatureSettingsRequest,
-  ]);
-
-  await _sendPacket(
-    [
-      BMSProtocol.startByte,
+  Future<void> _sendTemperatureSettingsRequest() async {
+    if (_writeChar == null || state != BMSConnectionState.ready) return;
+    final crc = BMSCrcService.calculateCRC8([
       BMSProtocol.packetLength,
       BMSProtocol.idTemperatureSettingsRequest,
-      crc,
-      BMSProtocol.stopByte,
-    ],
-  
-  );
-}
-Future<void> _sendFactorySettingsRequest() async {
-  if (_writeChar == null || state != BMSConnectionState.ready) return;
+    ]);
+    await _sendPacket(
+      [
+        BMSProtocol.startByte,
+        BMSProtocol.packetLength,
+        BMSProtocol.idTemperatureSettingsRequest,
+        crc,
+        BMSProtocol.stopByte,
+      ],
+      logName: 'TEMPERATURE_SETTINGS_REQUEST',
+      sentDataId: BMSProtocol.idTemperatureSettingsRequest,
+    );
+  }
 
-  final crc = BMSCrcService.calculateCRC8([
-    BMSProtocol.packetLength,
-    BMSProtocol.idFactorySettingsRequest,
-  ]);
-
-  await _sendPacket(
-    [
-      BMSProtocol.startByte,
+  Future<void> _sendFactorySettingsRequest() async {
+    if (_writeChar == null || state != BMSConnectionState.ready) return;
+    final crc = BMSCrcService.calculateCRC8([
       BMSProtocol.packetLength,
       BMSProtocol.idFactorySettingsRequest,
+    ]);
+    await _sendPacket(
+      [
+        BMSProtocol.startByte,
+        BMSProtocol.packetLength,
+        BMSProtocol.idFactorySettingsRequest,
+        crc,
+        BMSProtocol.stopByte,
+      ],
+      logName: 'FACTORY_SETTINGS_REQUEST',
+      sentDataId: BMSProtocol.idFactorySettingsRequest,
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // SETTINGS PAGE — "SET NOW" / ACTION SENDERS  (all new — FIXED)
+  // Every one of these previously had a Data ID defined in protocol.dart
+  // but NO sender at all anywhere in the service. They all share the
+  // generic ACK-wait helper below, which (unlike the old handshake-only
+  // path) works regardless of `state`.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<bool> _sendActionAndWaitAck(
+    List<int> packet, {
+    required String logName,
+    required int dataId,
+  }) async {
+    if (_writeChar == null) return false;
+
+    final completer = Completer<bool>();
+    _actionAckCompleter = completer;
+    isActionInFlight = true;
+    notifyListeners();
+
+    try {
+      await _sendPacket(packet, logName: logName, sentDataId: dataId);
+    } catch (e) {
+      isActionInFlight = false;
+      addDebugLog('❌ $logName send failed: $e');
+      notifyListeners();
+      return false;
+    }
+
+    final success = await completer.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => false,
+    );
+
+    isActionInFlight = false;
+    addDebugLog(success ? '✅ $logName — ACK received' : '❌ $logName — no ACK received');
+    notifyListeners();
+    return success;
+  }
+
+  static List<int> _u16le(int value) {
+    final v = value.clamp(0, 0xFFFF);
+    return [v & 0xFF, (v >> 8) & 0xFF];
+  }
+
+  static int _i8(int value) {
+    final v = value.clamp(-128, 127);
+    return v < 0 ? (0x100 + v) & 0xFF : v & 0xFF;
+  }
+
+  static List<int> _asciiField(String value, int widthBytes) {
+    final bytes = value.codeUnits.take(widthBytes).toList();
+    while (bytes.length < widthBytes) {
+      bytes.add(0x20); // space-pad — matches _decodeAscii's ignore-space logic
+    }
+    return bytes;
+  }
+
+  /// Battery Settings "Set Now" (0xB0, 18 bytes).
+  Future<bool> sendBatterySettingsWrite({
+    required int batteryString,          // 1-14
+    required double ratedCapacityAh,     // 9.0-100.0
+    required int socSetPercent,          // 0-100
+    required int sleepWaitingTime,       // 0-65535
+    required double balancedStartDiffVolt,  // 0.001-4.300
+    required double balancedStartVolt,      // 0.001-4.300
+    required double nominalCellVolt,        // 0-9.999
+    required int cellChemistry,             // BMSProtocol.chemistry*
+  }) {
+    final buffer = <int>[
+      BMSProtocol.startByte,
+      BMSProtocol.batterySettingsResponseLength, // 18
+      BMSProtocol.idBatterySettingsWrite,
+      batteryString & 0xFF,
+      ..._u16le((ratedCapacityAh * 10).round()),
+      socSetPercent & 0xFF,
+      ..._u16le(sleepWaitingTime),
+      ..._u16le((balancedStartDiffVolt * 1000).round()),
+      ..._u16le((balancedStartVolt * 1000).round()),
+      ..._u16le((nominalCellVolt * 1000).round()),
+      cellChemistry & 0xFF,
+    ];
+    final crc = BMSCrcService.calculateCRC8(buffer.sublist(1));
+    buffer.add(crc);
+    buffer.add(BMSProtocol.stopByte);
+    return _sendActionAndWaitAck(
+      buffer,
+      logName: 'BATTERY_SETTINGS_SET_NOW',
+      dataId: BMSProtocol.idBatterySettingsWrite,
+    );
+  }
+
+  /// Calibrate Now (0xB1, 5-byte control packet).
+  Future<bool> sendCalibration() {
+    final crc = BMSCrcService.calculateCRC8([
+      BMSProtocol.packetLength,
+      BMSProtocol.idCalibration,
+    ]);
+    final packet = [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idCalibration,
       crc,
       BMSProtocol.stopByte,
-    ],
+    ];
+    return _sendActionAndWaitAck(
+      packet,
+      logName: 'CALIBRATE_NOW',
+      dataId: BMSProtocol.idCalibration,
+    );
+  }
 
-  );
-}
+  /// Protection Settings "Set Now" (0xB2, 17 bytes).
+  Future<bool> sendProtectionSettingsWrite({
+    required double singleCellHighVolt,   // 2.000-4.300
+    required double singleCellLowVolt,    // 2.000-4.300
+    required double sumVoltHigh,          // 20-99.5
+    required double sumVoltLow,           // 20-99.5
+    required double chargeOverCurrent,    // 0-80.0
+    required double dischargeOverCurrent, // 0-160.0
+  }) {
+    final buffer = <int>[
+      BMSProtocol.startByte,
+      BMSProtocol.protectionSettingsResponseLength, // 17
+      BMSProtocol.idProtectionSettingsWrite,
+      ..._u16le((singleCellHighVolt * 1000).round()),
+      ..._u16le((singleCellLowVolt * 1000).round()),
+      ..._u16le((sumVoltHigh * 10).round()),
+      ..._u16le((sumVoltLow * 10).round()),
+      ..._u16le((chargeOverCurrent * 10).round()),
+      ..._u16le((dischargeOverCurrent * 10).round()),
+    ];
+    final crc = BMSCrcService.calculateCRC8(buffer.sublist(1));
+    buffer.add(crc);
+    buffer.add(BMSProtocol.stopByte);
+    return _sendActionAndWaitAck(
+      buffer,
+      logName: 'PROTECTION_SETTINGS_SET_NOW',
+      dataId: BMSProtocol.idProtectionSettingsWrite,
+    );
+  }
+
+  /// Temperature Settings "Set Now" (0xB3, 11 bytes, single-byte fields).
+  Future<bool> sendTemperatureSettingsWrite({
+    required int noOfTempChannels,   // 1-9
+    required int chargeHighTemp,     // 0..200
+    required int chargeLowTemp,      // 0..-60
+    required int dischargeHighTemp,  // 0..200
+    required int dischargeLowTemp,   // 0..-60
+    required int diffTempProtection, // 0..200
+  }) {
+    final buffer = <int>[
+      BMSProtocol.startByte,
+      BMSProtocol.temperatureSettingsResponseLength, // 11
+      BMSProtocol.idTemperatureSettingsWrite,
+      noOfTempChannels & 0xFF,
+      chargeHighTemp & 0xFF,
+      _i8(chargeLowTemp),
+      dischargeHighTemp & 0xFF,
+      _i8(dischargeLowTemp),
+      diffTempProtection & 0xFF,
+    ];
+    final crc = BMSCrcService.calculateCRC8(buffer.sublist(1));
+    buffer.add(crc);
+    buffer.add(BMSProtocol.stopByte);
+    return _sendActionAndWaitAck(
+      buffer,
+      logName: 'TEMPERATURE_SETTINGS_SET_NOW',
+      dataId: BMSProtocol.idTemperatureSettingsWrite,
+    );
+  }
+
+  /// Factory Settings "Set Now" (0xB4, 53 bytes).
+  Future<bool> sendFactorySettingsWrite({
+    required String batterySlNo,
+    required String bmsSerialNo,
+    required String bleDeviceName,
+  }) {
+    final buffer = <int>[
+      BMSProtocol.startByte,
+      BMSProtocol.factorySettingsResponseLength, // 53
+      BMSProtocol.idFactorySettingsWrite,
+      ..._asciiField(batterySlNo, 16),
+      ..._asciiField(bmsSerialNo, 16),
+      ..._asciiField(bleDeviceName, 16),
+    ];
+    final crc = BMSCrcService.calculateCRC8(buffer.sublist(1));
+    buffer.add(crc);
+    buffer.add(BMSProtocol.stopByte);
+    return _sendActionAndWaitAck(
+      buffer,
+      logName: 'FACTORY_SETTINGS_SET_NOW',
+      dataId: BMSProtocol.idFactorySettingsWrite,
+    );
+  }
+
+  /// Firmware Upgrade (0xB5, 5-byte control packet).
+  Future<bool> sendFirmwareUpgrade() {
+    final crc = BMSCrcService.calculateCRC8([
+      BMSProtocol.packetLength,
+      BMSProtocol.idFirmwareUpgrade,
+    ]);
+    final packet = [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idFirmwareUpgrade,
+      crc,
+      BMSProtocol.stopByte,
+    ];
+    return _sendActionAndWaitAck(
+      packet,
+      logName: 'FIRMWARE_UPGRADE',
+      dataId: BMSProtocol.idFirmwareUpgrade,
+    );
+  }
+
+  /// Restart (0xB6, 5-byte control packet).
+  Future<bool> sendRestart() {
+    final crc = BMSCrcService.calculateCRC8([
+      BMSProtocol.packetLength,
+      BMSProtocol.idRestart,
+    ]);
+    final packet = [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idRestart,
+      crc,
+      BMSProtocol.stopByte,
+    ];
+    return _sendActionAndWaitAck(
+      packet,
+      logName: 'RESTART',
+      dataId: BMSProtocol.idRestart,
+    );
+  }
+
+  /// Factory Data Reset (0xB7, 5-byte control packet).
+  Future<bool> sendFactoryReset() {
+    final crc = BMSCrcService.calculateCRC8([
+      BMSProtocol.packetLength,
+      BMSProtocol.idFactoryReset,
+    ]);
+    final packet = [
+      BMSProtocol.startByte,
+      BMSProtocol.packetLength,
+      BMSProtocol.idFactoryReset,
+      crc,
+      BMSProtocol.stopByte,
+    ];
+    return _sendActionAndWaitAck(
+      packet,
+      logName: 'FACTORY_DATA_RESET',
+      dataId: BMSProtocol.idFactoryReset,
+    );
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // POLLING
   // ─────────────────────────────────────────────────────────────────────────
@@ -708,18 +951,13 @@ Future<void> _sendFactorySettingsRequest() async {
     _pollTimer = null;
   }
 
-  /// Polls the Dashboard request every 5 seconds while connection is ready.
-  /// Runs independently of the Cell Voltage poller and of which screen is
-  /// currently active.
   void _startDashboardPolling() {
     _dashboardPollTimer?.cancel();
-
     _dashboardPollTimer = Timer.periodic(
       const Duration(seconds: 10),
       (_) async {
         if (state != BMSConnectionState.ready) return;
-        if (isDashboardLoading) return; // avoid overlapping requests
-
+        if (isDashboardLoading) return;
         addDebugLog('🔁 Auto Refresh (Dashboard)');
         await requestDashboard();
       },
@@ -731,18 +969,13 @@ Future<void> _sendFactorySettingsRequest() async {
     _dashboardPollTimer = null;
   }
 
-  /// Polls the Cell Voltage request every 5 seconds while connection is
-  /// ready. Runs independently of the Dashboard poller and of which screen
-  /// is currently active.
   void _startCellVoltagePolling() {
     _cellVoltagePollTimer?.cancel();
-
     _cellVoltagePollTimer = Timer.periodic(
       const Duration(seconds: 10),
       (_) async {
         if (state != BMSConnectionState.ready) return;
-        if (isCellVoltageLoading) return; // avoid overlapping requests
-
+        if (isCellVoltageLoading) return;
         addDebugLog('🔁 Auto Refresh (Cell Voltage)');
         await requestCellVoltages();
       },
@@ -754,66 +987,60 @@ Future<void> _sendFactorySettingsRequest() async {
     _cellVoltagePollTimer = null;
   }
 
-void startDashboardPolling() {
-  _stopCellVoltagePolling();
-  _startDashboardPolling();
-}
+  void startDashboardPolling() {
+    _stopCellVoltagePolling();
+    _startDashboardPolling();
+  }
 
-void startCellVoltagePolling() {
-  _stopDashboardPolling();
-  _startCellVoltagePolling();
-}
+  void startCellVoltagePolling() {
+    _stopDashboardPolling();
+    _startCellVoltagePolling();
+  }
 
-void stopAllPolling() {
-  _stopDashboardPolling();
-  _stopCellVoltagePolling();
-}
+  void stopAllPolling() {
+    _stopDashboardPolling();
+    _stopCellVoltagePolling();
+  }
 
-Timer? _settingsPollingTimer;
-void stopSettingsPolling() {
-  _settingsPollingTimer?.cancel();
-  _settingsPollingTimer = null;
-}
-void startBatterySettingsPolling() {
-  stopSettingsPolling();
+  Timer? _settingsPollingTimer;
 
-  _sendBatterySettingsRequest();
+  void stopSettingsPolling() {
+    _settingsPollingTimer?.cancel();
+    _settingsPollingTimer = null;
+  }
 
-  _settingsPollingTimer =
-      Timer.periodic(const Duration(seconds: 10), (_) {
+  void startBatterySettingsPolling() {
+    stopSettingsPolling();
     _sendBatterySettingsRequest();
-  });
-}
-void startProtectionSettingsPolling() {
-  stopSettingsPolling();
+    _settingsPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _sendBatterySettingsRequest();
+    });
+  }
 
-  _sendProtectionSettingsRequest();
-
-  _settingsPollingTimer =
-      Timer.periodic(const Duration(seconds: 2), (_) {
+  void startProtectionSettingsPolling() {
+    stopSettingsPolling();
     _sendProtectionSettingsRequest();
-  });
-}
-void startTempSettingsPolling() {
-  stopSettingsPolling();
+    _settingsPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _sendProtectionSettingsRequest();
+    });
+  }
 
-  _sendTemperatureSettingsRequest();
-
-  _settingsPollingTimer =
-      Timer.periodic(const Duration(seconds: 2), (_) {
+  void startTempSettingsPolling() {
+    stopSettingsPolling();
     _sendTemperatureSettingsRequest();
-  });
-}
-void startFactorySettingsPolling() {
-  stopSettingsPolling();
+    _settingsPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _sendTemperatureSettingsRequest();
+    });
+  }
 
-  _sendFactorySettingsRequest();
-
-  _settingsPollingTimer =
-      Timer.periodic(const Duration(seconds: 2), (_) {
+  void startFactorySettingsPolling() {
+    stopSettingsPolling();
     _sendFactorySettingsRequest();
-  });
-}
+    _settingsPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _sendFactorySettingsRequest();
+    });
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // DISCONNECT
   // ─────────────────────────────────────────────────────────────────────────
@@ -825,6 +1052,7 @@ void startFactorySettingsPolling() {
     _stopPolling();
     _stopDashboardPolling();
     _stopCellVoltagePolling();
+    stopSettingsPolling();
 
     if (_writeChar != null) {
       final int crc = BMSCrcService.calculateCRC8([BMSProtocol.packetLength, BMSProtocol.idDisconnect]);
@@ -865,8 +1093,6 @@ void startFactorySettingsPolling() {
     notifyListeners();
   }
 
-  /// Appends a line to the on-screen debug log (used by DebugLogOverlay)
-  /// AND prints it to the regular debug console, so both views stay in sync.
   void addDebugLog(String message) {
     debugPrint(message);
     _debugLogs.add('[${_timeNow()}] $message');
@@ -900,15 +1126,22 @@ void startFactorySettingsPolling() {
     hardwareVersion   = null;
     firmwareVersion   = null;
     snCode            = null;
-    latestBatterySettings = null;
-latestProtectionSettings = null;
-latestTempSettings = null;
-latestFactorySettings = null;
 
-batterySettingsPulse = 0;
-protectionSettingsPulse = 0;
-tempSettingsPulse = 0;
-factorySettingsPulse = 0;
+    latestBatterySettings = null;
+    latestProtectionSettings = null;
+    latestTemperatureSettings = null;
+    latestFactorySettings = null;
+    latestDeviceDetails = null;
+
+    batterySettingsPulse = 0;
+    protectionSettingsPulse = 0;
+    temperatureSettingsPulse = 0;
+    factorySettingsPulse = 0;
+    deviceDetailsPulse = 0;
+
+    isActionInFlight = false;
+    _actionAckCompleter = null;
+
     _pendingRequests.clear();
     dashboardReady    = false;
     dashboardNavigationTriggered = false;
@@ -926,9 +1159,6 @@ factorySettingsPulse = 0;
 
     _ackTimer?.cancel();
     _stopPolling();
-    // Note: _debugLogs is intentionally NOT cleared on new session, so you
-    // can see the full history across a reconnect attempt. Use the trash
-    // icon in DebugLogOverlay (or call clearDebugLogs()) to reset manually.
   }
 
   void _cleanup() {
@@ -959,5 +1189,4 @@ factorySettingsPulse = 0;
   String _toHex(List<int> bytes) => bytes
       .map((b) => b.toRadixString(16).toUpperCase().padLeft(2, '0'))
       .join(' ');
-
 }
