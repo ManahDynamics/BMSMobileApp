@@ -1,6 +1,7 @@
 // lib/screens/settings_screen.dart
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
+import 'package:bmsmobileapp/widgets/bar_code_scanner_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
@@ -9,6 +10,7 @@ import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
 import 'package:bmsmobileapp/services/protocol.dart';
+import 'package:bmsmobileapp/services/master_data_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -21,11 +23,11 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   final LocalAuthDB _localAuthDB = LocalAuthDB();
+  final MasterDataService _masterDataService = MasterDataService();
 
   bool isConnected = true;
   bool isLocked = true;
 
-  // ── Tab state ──────────────────────────────────────────────────────────────
   // ── Tab state ──────────────────────────────────────────────────────────────
   int _selectedTab = 0; // 0 Battery, 1 Protection, 2 Temp, 3 Factory
   final List<String> _tabLabels = const [
@@ -43,6 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case 3: widget.service.startFactorySettingsPolling(); break;
     }
   }
+
   // ── Battery Settings ────────────────────────────────────────────────────────
   int batteryStringCount = 0; // "S"
   double ratedCapacity = 0; // AH
@@ -79,6 +82,289 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _isOffline = false;
   bool _isLoadingCache = true;
   DateTime? _lastSync;
+
+  // ── Validation ranges (per the device protocol spec) ───────────────────────
+  static const int _kBatteryStringMin = 1, _kBatteryStringMax = 14;
+  static const double _kRatedCapacityMin = 9.0, _kRatedCapacityMax = 100.0;
+  static const int _kSocSetMin = 0, _kSocSetMax = 100;
+  static const int _kSleepWaitMin = 0, _kSleepWaitMax = 65535;
+  static const double _kBalStartDiffMin = 0.001, _kBalStartDiffMax = 4.300;
+  static const double _kBalStartVoltMin = 0.001, _kBalStartVoltMax = 4.300;
+  static const double _kNominalCellMin = 0.000, _kNominalCellMax = 9.999;
+
+  static const double _kCellHighVoltMin = 2.000, _kCellHighVoltMax = 4.300;
+  static const double _kCellLowVoltMin = 2.000, _kCellLowVoltMax = 4.300;
+  static const double _kSumVoltHighMin = 20.0, _kSumVoltHighMax = 99.5;
+  static const double _kSumVoltLowMin = 20.0, _kSumVoltLowMax = 99.5;
+  static const double _kChargeOCMin = 0.0, _kChargeOCMax = 80.0;
+  static const double _kDischargeOCMin = 0.0, _kDischargeOCMax = 160.0;
+
+  static const int _kTempChannelsMin = 1, _kTempChannelsMax = 9;
+  static const int _kChargeHighTempMin = 0, _kChargeHighTempMax = 200;
+  static const int _kChargeLowTempMin = -60, _kChargeLowTempMax = 0;
+  static const int _kDischargeHighTempMin = 0, _kDischargeHighTempMax = 200;
+  static const int _kDischargeLowTempMin = -60, _kDischargeLowTempMax = 0;
+  static const int _kDiffTempMin = 0, _kDiffTempMax = 200;
+
+  // ── Field labels (used for change-tracking + the "unsaved changes" dialog) ─
+  static const Map<String, String> _batteryFieldLabels = {
+    'batteryStringCount': 'Battery String',
+    'ratedCapacity': 'Rated Capacity',
+    'socSet': 'SOC Set',
+    'sleepWaitingTime': 'Sleep Waiting Time',
+    'balancedStartDifferenceVolt': 'Balanced Start Difference Volt',
+    'balancedStartVolt': 'Balanced Start Volt',
+    'nominalCellVolt': 'Nominal Cell Volt',
+    'cellChemistry': 'Cell Chemistry',
+  };
+
+  static const Map<String, String> _protectionFieldLabels = {
+    'singleCellHighVoltProtection': 'Single Cell High Volt Protection',
+    'singleCellLowVoltProtection': 'Single Cell Low Volt Protection',
+    'sumVoltHighProtection': 'Sum Volt High Protection',
+    'sumVoltLowProtection': 'Sum Volt Low Protection',
+    'chargeOverCurrentProtection': 'Charge Over Current Protection',
+    'dischargeOverCurrentProtection': 'Discharge Over Current Protection',
+  };
+
+  static const Map<String, String> _tempFieldLabels = {
+    'noOfTempChannels': 'No of Temp Channels',
+    'chargeHighTempProtection': 'Charge High Temp Protection',
+    'chargeLowTempProtection': 'Charge Low Temp Protection',
+    'dischargeHighTempProtection': 'Discharge High Temp Protection',
+    'dischargeLowTempProtection': 'Discharge Low Temp Protection',
+    'diffTempProtection': 'Diff Temp Protection',
+  };
+
+  static const Map<String, String> _factoryFieldLabels = {
+    'batterySerialNo': 'Battery Serial No',
+    'bmsSerialNo': 'BMS Serial No',
+    'bleDeviceName': 'BLE Device Name',
+  };
+
+  // ── Dirty-tracking baselines (last known "saved" values per tab) ───────────
+  // Empty map == baseline not established yet for that tab (no highlighting).
+  Map<String, dynamic> _batteryBaseline = {};
+  Map<String, dynamic> _protectionBaseline = {};
+  Map<String, dynamic> _tempBaseline = {};
+  Map<String, dynamic> _factoryBaseline = {};
+
+  Map<String, dynamic> get _batteryCurrent => {
+        'batteryStringCount': batteryStringCount,
+        'ratedCapacity': ratedCapacity,
+        'socSet': socSet,
+        'sleepWaitingTime': sleepWaitingTime,
+        'balancedStartDifferenceVolt': balancedStartDifferenceVolt,
+        'balancedStartVolt': balancedStartVolt,
+        'nominalCellVolt': nominalCellVolt,
+        'cellChemistry': cellChemistry,
+      };
+
+  Map<String, dynamic> get _protectionCurrent => {
+        'singleCellHighVoltProtection': singleCellHighVoltProtection,
+        'singleCellLowVoltProtection': singleCellLowVoltProtection,
+        'sumVoltHighProtection': sumVoltHighProtection,
+        'sumVoltLowProtection': sumVoltLowProtection,
+        'chargeOverCurrentProtection': chargeOverCurrentProtection,
+        'dischargeOverCurrentProtection': dischargeOverCurrentProtection,
+      };
+
+  Map<String, dynamic> get _tempCurrent => {
+        'noOfTempChannels': noOfTempChannels,
+        'chargeHighTempProtection': chargeHighTempProtection,
+        'chargeLowTempProtection': chargeLowTempProtection,
+        'dischargeHighTempProtection': dischargeHighTempProtection,
+        'dischargeLowTempProtection': dischargeLowTempProtection,
+        'diffTempProtection': diffTempProtection,
+      };
+
+  Map<String, dynamic> get _factoryCurrent => {
+        'batterySerialNo': batterySerialNo,
+        'bmsSerialNo': bmsSerialNo,
+        'bleDeviceName': bleDeviceName,
+      };
+
+  void _snapshotBaseline(int tabIndex) {
+    switch (tabIndex) {
+      case 0:
+        _batteryBaseline = Map<String, dynamic>.of(_batteryCurrent);
+        break;
+      case 1:
+        _protectionBaseline = Map<String, dynamic>.of(_protectionCurrent);
+        break;
+      case 2:
+        _tempBaseline = Map<String, dynamic>.of(_tempCurrent);
+        break;
+      case 3:
+        _factoryBaseline = Map<String, dynamic>.of(_factoryCurrent);
+        break;
+    }
+  }
+
+  Map<String, dynamic> _currentMapForTab(int tabIndex) {
+    switch (tabIndex) {
+      case 0: return _batteryCurrent;
+      case 1: return _protectionCurrent;
+      case 2: return _tempCurrent;
+      case 3: return _factoryCurrent;
+      default: return {};
+    }
+  }
+
+  Map<String, dynamic> _baselineForTab(int tabIndex) {
+    switch (tabIndex) {
+      case 0: return _batteryBaseline;
+      case 1: return _protectionBaseline;
+      case 2: return _tempBaseline;
+      case 3: return _factoryBaseline;
+      default: return {};
+    }
+  }
+
+  Map<String, String> _labelsForTab(int tabIndex) {
+    switch (tabIndex) {
+      case 0: return _batteryFieldLabels;
+      case 1: return _protectionFieldLabels;
+      case 2: return _tempFieldLabels;
+      case 3: return _factoryFieldLabels;
+      default: return {};
+    }
+  }
+
+  /// Keys whose current value differs from the last-saved baseline for [tabIndex].
+  List<String> _changedFieldKeys(int tabIndex) {
+    final baseline = _baselineForTab(tabIndex);
+    if (baseline.isEmpty) return [];
+    final current = _currentMapForTab(tabIndex);
+    final changed = <String>[];
+    current.forEach((k, v) {
+      if (baseline.containsKey(k) && baseline[k] != v) changed.add(k);
+    });
+    return changed;
+  }
+
+  bool _isFieldChanged(int tabIndex, String key) => _changedFieldKeys(tabIndex).contains(key);
+
+  void _discardChangesForTab(int tabIndex) {
+    final baseline = _baselineForTab(tabIndex);
+    if (baseline.isEmpty) return;
+    setState(() {
+      switch (tabIndex) {
+        case 0:
+          batteryStringCount = baseline['batteryStringCount'] as int;
+          ratedCapacity = baseline['ratedCapacity'] as double;
+          socSet = baseline['socSet'] as int;
+          sleepWaitingTime = baseline['sleepWaitingTime'] as int;
+          balancedStartDifferenceVolt = baseline['balancedStartDifferenceVolt'] as double;
+          balancedStartVolt = baseline['balancedStartVolt'] as double;
+          nominalCellVolt = baseline['nominalCellVolt'] as double;
+          cellChemistry = baseline['cellChemistry'] as String;
+          break;
+        case 1:
+          singleCellHighVoltProtection = baseline['singleCellHighVoltProtection'] as double;
+          singleCellLowVoltProtection = baseline['singleCellLowVoltProtection'] as double;
+          sumVoltHighProtection = baseline['sumVoltHighProtection'] as double;
+          sumVoltLowProtection = baseline['sumVoltLowProtection'] as double;
+          chargeOverCurrentProtection = baseline['chargeOverCurrentProtection'] as double;
+          dischargeOverCurrentProtection = baseline['dischargeOverCurrentProtection'] as double;
+          break;
+        case 2:
+          noOfTempChannels = baseline['noOfTempChannels'] as int;
+          chargeHighTempProtection = baseline['chargeHighTempProtection'] as int;
+          chargeLowTempProtection = baseline['chargeLowTempProtection'] as int;
+          dischargeHighTempProtection = baseline['dischargeHighTempProtection'] as int;
+          dischargeLowTempProtection = baseline['dischargeLowTempProtection'] as int;
+          diffTempProtection = baseline['diffTempProtection'] as int;
+          break;
+        case 3:
+          batterySerialNo = baseline['batterySerialNo'] as String;
+          bmsSerialNo = baseline['bmsSerialNo'] as String;
+          bleDeviceName = baseline['bleDeviceName'] as String;
+          break;
+      }
+    });
+    _persistSettings();
+  }
+
+  /// Called when the user taps a different tab. Blocks the switch with a
+  /// confirmation dialog if the current tab has unsaved edits.
+  void _onTabTapped(int i) {
+    if (i == _selectedTab) return;
+    final fromTab = _selectedTab;
+    final changedKeys = _changedFieldKeys(fromTab);
+
+    if (changedKeys.isEmpty) {
+      setState(() => _selectedTab = i);
+      _pollForTab(i);
+      return;
+    }
+
+    final labels = _labelsForTab(fromTab);
+    final changedNames = changedKeys.map((k) => labels[k] ?? k).toList();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Unsaved Changes'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'These values were changed but not sent to the device with "Set Now":',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            ...changedNames.map(
+              (n) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(top: 5),
+                      child: Icon(Icons.circle, size: 6, color: Color(0xFFD4621A)),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(n, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Continue without saving?',
+              style: TextStyle(color: Colors.black54, fontSize: 12.5),
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFD4621A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _discardChangesForTab(fromTab);
+              setState(() => _selectedTab = i);
+              _pollForTab(i);
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 
   String tr(String key) {
     return TranslationService.t(key);
@@ -119,6 +405,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         balancedStartVolt = bs.balancedStartVolt ?? balancedStartVolt;
         nominalCellVolt = bs.nominalCellVoltage ?? nominalCellVolt;
         if (bs.cellChemistry != null) cellChemistry = BMSProtocol.chemistryName(bs.cellChemistry!);
+        _snapshotBaseline(0);
         _persistSettings();
       }
 
@@ -131,6 +418,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         sumVoltLowProtection = ps.sumVoltLowProtection ?? sumVoltLowProtection;
         chargeOverCurrentProtection = ps.chargeOverCurrentProtection ?? chargeOverCurrentProtection;
         dischargeOverCurrentProtection = ps.dischargeOverCurrentProtection ?? dischargeOverCurrentProtection;
+        _snapshotBaseline(1);
         _persistSettings();
       }
 
@@ -143,6 +431,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         dischargeHighTempProtection = ts.dischargeHighTempProtection ?? dischargeHighTempProtection;
         dischargeLowTempProtection = ts.dischargeLowTempProtection ?? dischargeLowTempProtection;
         diffTempProtection = ts.diffTempProtection ?? diffTempProtection;
+        _snapshotBaseline(2);
         _persistSettings();
       }
 
@@ -152,6 +441,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         batterySerialNo = fs.batterySlNo ?? batterySerialNo;
         bmsSerialNo = fs.bmsSerialNo ?? bmsSerialNo;
         bleDeviceName = fs.bleDeviceName ?? bleDeviceName;
+        _snapshotBaseline(3);
         _persistSettings();
       }
     });
@@ -215,6 +505,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _isOffline = widget.service.latestDashboard == null;
       isConnected = !_isOffline;
       _isLoadingCache = false;
+      // Establish baselines from whatever we just loaded/started with, so
+      // no field appears "changed" until the user actually edits something.
+      _snapshotBaseline(0);
+      _snapshotBaseline(1);
+      _snapshotBaseline(2);
+      _snapshotBaseline(3);
     });
   }
 
@@ -405,63 +701,139 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  // ── Generic edit dialogs ────────────────────────────────────────────────────
-  void _editDoubleParam(String title, double current, String unit, Function(double) onSave) {
-    final controller = TextEditingController(text: current.toStringAsFixed(2));
+  // ── Generic edit dialogs (with range validation) ────────────────────────────
+  void _editDoubleParam(
+    String title,
+    double current,
+    String unit,
+    Function(double) onSave, {
+    double? min,
+    double? max,
+  }) {
+    final controller = TextEditingController(text: current.toStringAsFixed(3));
+    String? errorText;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(suffixText: unit, border: const OutlineInputBorder()),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B6B3A), foregroundColor: Colors.white),
-            onPressed: () {
-              final val = double.tryParse(controller.text);
-              if (val != null) {
-                onSave(val);
-                _persistSettings();
-                Navigator.pop(context);
-              }
-            },
-            child: Text(tr('save')),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text(title),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    suffixText: unit,
+                    border: const OutlineInputBorder(),
+                    errorText: errorText,
+                  ),
+                ),
+                if (min != null && max != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Allowed range: ${min.toStringAsFixed(3)} - ${max.toStringAsFixed(3)} $unit',
+                      style: const TextStyle(fontSize: 11, color: Colors.black54),
+                    ),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B6B3A), foregroundColor: Colors.white),
+                onPressed: () {
+                  final val = double.tryParse(controller.text);
+                  if (val == null) {
+                    setDialogState(() => errorText = 'Enter a valid number');
+                    return;
+                  }
+                  if (min != null && max != null && (val < min || val > max)) {
+                    setDialogState(
+                      () => errorText = 'Must be between ${min.toStringAsFixed(3)} and ${max.toStringAsFixed(3)}',
+                    );
+                    return;
+                  }
+                  onSave(val);
+                  _persistSettings();
+                  Navigator.pop(context);
+                },
+                child: Text(tr('save')),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 
-  void _editIntParam(String title, int current, String unit, Function(int) onSave) {
+  void _editIntParam(
+    String title,
+    int current,
+    String unit,
+    Function(int) onSave, {
+    int? min,
+    int? max,
+  }) {
     final controller = TextEditingController(text: current.toString());
+    String? errorText;
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(suffixText: unit, border: const OutlineInputBorder()),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B6B3A), foregroundColor: Colors.white),
-            onPressed: () {
-              final val = int.tryParse(controller.text);
-              if (val != null) {
-                onSave(val);
-                _persistSettings();
-                Navigator.pop(context);
-              }
-            },
-            child: Text(tr('save')),
-          ),
-        ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Text(title),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    suffixText: unit,
+                    border: const OutlineInputBorder(),
+                    errorText: errorText,
+                  ),
+                ),
+                if (min != null && max != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Allowed range: $min - $max $unit',
+                      style: const TextStyle(fontSize: 11, color: Colors.black54),
+                    ),
+                  ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B6B3A), foregroundColor: Colors.white),
+                onPressed: () {
+                  final val = int.tryParse(controller.text);
+                  if (val == null) {
+                    setDialogState(() => errorText = 'Enter a valid whole number');
+                    return;
+                  }
+                  if (min != null && max != null && (val < min || val > max)) {
+                    setDialogState(() => errorText = 'Must be between $min and $max');
+                    return;
+                  }
+                  onSave(val);
+                  _persistSettings();
+                  Navigator.pop(context);
+                },
+                child: Text(tr('save')),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -517,7 +889,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _handleSetNow(String context_, Future<bool> Function() onSetNow) async {
+  Future<void> _handleSetNow(String context_, Future<bool> Function() onSetNow, {int? tabIndex}) async {
     setState(() => _isSending = true);
     bool ok = false;
     try {
@@ -526,7 +898,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ok = false;
     }
     if (!mounted) return;
-    setState(() => _isSending = false);
+    setState(() {
+      _isSending = false;
+      // On a successful send, the values just sent become the new "saved"
+      // baseline, so they stop showing up as unsaved/changed.
+      if (ok && tabIndex != null) _snapshotBaseline(tabIndex);
+    });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(ok ? '$context_ settings sent to device' : '$context_ settings failed — no ACK received'),
@@ -550,6 +927,106 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Text(ok ? '$actionName sent successfully' : '$actionName failed — no ACK received'),
         backgroundColor: ok ? const Color(0xFF1B6B3A) : Colors.red,
       ),
+    );
+  }
+
+  /// Applies a master-data map (from [MasterDataService]) onto the current
+  /// in-memory fields, updates every tab's baseline so nothing shows as
+  /// "changed" afterwards, and persists the result to the offline cache.
+  /// Any key missing from [data] simply leaves that field untouched.
+  void _applyMasterData(Map<String, dynamic> data) {
+    setState(() {
+      batteryStringCount = (data['batteryStringCount'] as num?)?.toInt() ?? batteryStringCount;
+      ratedCapacity = (data['ratedCapacity'] as num?)?.toDouble() ?? ratedCapacity;
+      socSet = (data['socSet'] as num?)?.toInt() ?? socSet;
+      sleepWaitingTime = (data['sleepWaitingTime'] as num?)?.toInt() ?? sleepWaitingTime;
+      balancedStartDifferenceVolt =
+          (data['balancedStartDifferenceVolt'] as num?)?.toDouble() ?? balancedStartDifferenceVolt;
+      balancedStartVolt = (data['balancedStartVolt'] as num?)?.toDouble() ?? balancedStartVolt;
+      nominalCellVolt = (data['nominalCellVolt'] as num?)?.toDouble() ?? nominalCellVolt;
+      cellChemistry = (data['cellChemistry'] as String?) ?? cellChemistry;
+
+      singleCellHighVoltProtection =
+          (data['singleCellHighVoltProtection'] as num?)?.toDouble() ?? singleCellHighVoltProtection;
+      singleCellLowVoltProtection =
+          (data['singleCellLowVoltProtection'] as num?)?.toDouble() ?? singleCellLowVoltProtection;
+      sumVoltHighProtection = (data['sumVoltHighProtection'] as num?)?.toDouble() ?? sumVoltHighProtection;
+      sumVoltLowProtection = (data['sumVoltLowProtection'] as num?)?.toDouble() ?? sumVoltLowProtection;
+      chargeOverCurrentProtection =
+          (data['chargeOverCurrentProtection'] as num?)?.toDouble() ?? chargeOverCurrentProtection;
+      dischargeOverCurrentProtection =
+          (data['dischargeOverCurrentProtection'] as num?)?.toDouble() ?? dischargeOverCurrentProtection;
+
+      noOfTempChannels = (data['noOfTempChannels'] as num?)?.toInt() ?? noOfTempChannels;
+      chargeHighTempProtection = (data['chargeHighTempProtection'] as num?)?.toInt() ?? chargeHighTempProtection;
+      chargeLowTempProtection = (data['chargeLowTempProtection'] as num?)?.toInt() ?? chargeLowTempProtection;
+      dischargeHighTempProtection =
+          (data['dischargeHighTempProtection'] as num?)?.toInt() ?? dischargeHighTempProtection;
+      dischargeLowTempProtection =
+          (data['dischargeLowTempProtection'] as num?)?.toInt() ?? dischargeLowTempProtection;
+      diffTempProtection = (data['diffTempProtection'] as num?)?.toInt() ?? diffTempProtection;
+
+      batterySerialNo = (data['batterySerialNo'] as String?) ?? batterySerialNo;
+      bmsSerialNo = (data['bmsSerialNo'] as String?) ?? bmsSerialNo;
+      bleDeviceName = (data['bleDeviceName'] as String?) ?? bleDeviceName;
+
+      // These values are now the "saved" state — clear unsaved-change
+      // highlighting on every tab.
+      _snapshotBaseline(0);
+      _snapshotBaseline(1);
+      _snapshotBaseline(2);
+      _snapshotBaseline(3);
+    });
+    _persistSettings();
+  }
+
+  /// Factory Data Reset flow:
+  ///  1. Tell the device to reset (existing BLE write).
+  ///  2. On ACK, pull the master/default parameter set from Firebase.
+  ///  3. Repopulate every tab's fields from that master data and clear all
+  ///     unsaved-change highlighting, so the screen reflects the true
+  ///     factory-default state rather than stale on-screen values.
+  Future<void> _handleFactoryReset() async {
+    setState(() => _isSending = true);
+    bool ok = false;
+    try {
+      ok = await widget.service.sendFactoryReset();
+    } catch (e) {
+      ok = false;
+    }
+    if (!mounted) return;
+
+    String snackMessage;
+    Color snackColor;
+
+    if (!ok) {
+      snackMessage = 'Factory data reset failed — no ACK received';
+      snackColor = Colors.red;
+    } else {
+      snackMessage = 'Factory data reset sent to device';
+      snackColor = const Color(0xFF1B6B3A);
+      try {
+        final master = await _masterDataService.fetchMasterSettings(
+          deviceId: bmsSerialNo.trim().isNotEmpty ? bmsSerialNo.trim() : null,
+        );
+        if (master != null && master.isNotEmpty) {
+          _applyMasterData(master);
+          snackMessage = 'Factory data reset — values restored from master data';
+        } else {
+          // Device reset succeeded, but master data isn't available yet
+          // (e.g. MasterDataService not wired up). Not treated as an error.
+          snackMessage = 'Factory data reset sent — master data not available yet';
+        }
+      } catch (e) {
+        snackMessage = 'Factory data reset sent, but restoring master data failed';
+        snackColor = Colors.orange.shade800;
+      }
+    }
+
+    if (!mounted) return;
+    setState(() => _isSending = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(snackMessage), backgroundColor: snackColor),
     );
   }
 
@@ -629,7 +1106,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     if (_isOffline) _buildOfflineBanner(),
 
                     // ── Unlock Settings / Device Details row ─────────────
-                    // Equal-width tiles spanning the row, matching the screenshot.
                     Row(
                       children: [
                         Expanded(
@@ -712,12 +1188,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: List.generate(_tabLabels.length, (i) {
         final selected = _selectedTab == i;
+        final hasUnsaved = _changedFieldKeys(i).isNotEmpty;
         return Expanded(
           child: GestureDetector(
-            onTap: () {
-              setState(() => _selectedTab = i);
-              _pollForTab(i);
-            },
+            onTap: () => _onTabTapped(i),
             child: Container(
               height: 48,
               margin: const EdgeInsets.symmetric(horizontal: 2),
@@ -727,15 +1201,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: selected ? const Color(0xFF16324F) : Colors.grey.shade300),
               ),
-              child: Text(
-                _tabLabels[i],
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  height: 1.15,
-                  color: selected ? Colors.white : Colors.black87,
-                ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Center(
+                    child: Text(
+                      _tabLabels[i],
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        height: 1.15,
+                        color: selected ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ),
+                  if (hasUnsaved)
+                    Positioned(
+                      top: -2,
+                      right: 4,
+                      child: Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(color: Color(0xFFD4621A), shape: BoxShape.circle),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -777,12 +1268,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     VoidCallback? onEdit,
     Widget? trailingOverride,
     Color iconColor = Colors.black54,
+    bool changed = false,
   }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        border: Border.all(color: Colors.grey.shade300),
+        color: changed ? const Color(0xFFFFF3E6) : null,
+        border: Border.all(color: changed ? const Color(0xFFD4621A) : Colors.grey.shade300, width: changed ? 1.4 : 1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -794,9 +1287,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87),
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    label,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87),
+                  ),
+                ),
+                if (changed) ...[
+                  const SizedBox(width: 6),
+                  const Icon(Icons.circle, size: 7, color: Color(0xFFD4621A)),
+                ],
+              ],
             ),
           ),
           if (trailingOverride != null)
@@ -804,7 +1307,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           else ...[
             Text(
               value,
-              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: changed ? const Color(0xFFD4621A) : Colors.black,
+              ),
             ),
             SizedBox(
               width: 32,
@@ -823,7 +1330,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 bool _isSending = false;
 
-  Widget _buildSetNowFooter(String sectionName, Future<bool> Function() onSetNow) {
+  Widget _buildSetNowFooter(String sectionName, Future<bool> Function() onSetNow, {int? tabIndex}) {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Row(
@@ -834,7 +1341,7 @@ bool _isSending = false;
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             ),
-            onPressed: (isLocked || _isSending) ? null : () => _handleSetNow(sectionName, onSetNow),
+            onPressed: (isLocked || _isSending) ? null : () => _handleSetNow(sectionName, onSetNow, tabIndex: tabIndex),
             child: _isSending
                 ? const SizedBox(
                     width: 16,
@@ -865,61 +1372,119 @@ bool _isSending = false;
           icon: Icons.battery_std_rounded,
           label: 'Battery String',
           value: '$batteryStringCount S',
+          changed: _isFieldChanged(0, 'batteryStringCount'),
           onEdit: isLocked
               ? null
-              : () => _editIntParam('Battery String', batteryStringCount, 'S', (v) => setState(() => batteryStringCount = v)),
+              : () => _editIntParam(
+                    'Battery String',
+                    batteryStringCount,
+                    'S',
+                    (v) => setState(() => batteryStringCount = v),
+                    min: _kBatteryStringMin,
+                    max: _kBatteryStringMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.battery_charging_full_rounded,
           label: 'Rated Capacity',
           value: '${ratedCapacity.toStringAsFixed(1)} AH',
+          changed: _isFieldChanged(0, 'ratedCapacity'),
           onEdit: isLocked
               ? null
-              : () => _editDoubleParam('Rated Capacity', ratedCapacity, 'AH', (v) => setState(() => ratedCapacity = v)),
+              : () => _editDoubleParam(
+                    'Rated Capacity',
+                    ratedCapacity,
+                    'AH',
+                    (v) => setState(() => ratedCapacity = v),
+                    min: _kRatedCapacityMin,
+                    max: _kRatedCapacityMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.battery_5_bar_rounded,
           label: 'SOC Set',
           value: '$socSet %',
-          onEdit: isLocked ? null : () => _editIntParam('SOC Set', socSet, '%', (v) => setState(() => socSet = v)),
+          changed: _isFieldChanged(0, 'socSet'),
+          onEdit: isLocked
+              ? null
+              : () => _editIntParam(
+                    'SOC Set',
+                    socSet,
+                    '%',
+                    (v) => setState(() => socSet = v),
+                    min: _kSocSetMin,
+                    max: _kSocSetMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.access_time_rounded,
           label: 'Sleep Waiting Time',
           value: '$sleepWaitingTime ms',
+          changed: _isFieldChanged(0, 'sleepWaitingTime'),
           onEdit: isLocked
               ? null
-              : () => _editIntParam('Sleep Waiting Time', sleepWaitingTime, 'ms', (v) => setState(() => sleepWaitingTime = v)),
+              : () => _editIntParam(
+                    'Sleep Waiting Time',
+                    sleepWaitingTime,
+                    'ms',
+                    (v) => setState(() => sleepWaitingTime = v),
+                    min: _kSleepWaitMin,
+                    max: _kSleepWaitMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.balance_rounded,
           label: 'Balanced Start Difference Volt',
-          value: '${balancedStartDifferenceVolt.toStringAsFixed(2)} V',
+          value: '${balancedStartDifferenceVolt.toStringAsFixed(3)} V',
+          changed: _isFieldChanged(0, 'balancedStartDifferenceVolt'),
           onEdit: isLocked
               ? null
-              : () => _editDoubleParam('Balanced Start Difference Volt', balancedStartDifferenceVolt, 'V',
-                  (v) => setState(() => balancedStartDifferenceVolt = v)),
+              : () => _editDoubleParam(
+                    'Balanced Start Difference Volt',
+                    balancedStartDifferenceVolt,
+                    'V',
+                    (v) => setState(() => balancedStartDifferenceVolt = v),
+                    min: _kBalStartDiffMin,
+                    max: _kBalStartDiffMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.play_circle_outline_rounded,
           label: 'Balanced Start Volt',
-          value: '${balancedStartVolt.toStringAsFixed(2)} V',
+          value: '${balancedStartVolt.toStringAsFixed(3)} V',
+          changed: _isFieldChanged(0, 'balancedStartVolt'),
           onEdit: isLocked
               ? null
-              : () => _editDoubleParam('Balanced Start Volt', balancedStartVolt, 'V', (v) => setState(() => balancedStartVolt = v)),
+              : () => _editDoubleParam(
+                    'Balanced Start Volt',
+                    balancedStartVolt,
+                    'V',
+                    (v) => setState(() => balancedStartVolt = v),
+                    min: _kBalStartVoltMin,
+                    max: _kBalStartVoltMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.bolt_rounded,
           label: 'Nominal Cell Volt',
-          value: '${nominalCellVolt.toStringAsFixed(1)} V',
+          value: '${nominalCellVolt.toStringAsFixed(3)} V',
+          changed: _isFieldChanged(0, 'nominalCellVolt'),
           onEdit: isLocked
               ? null
-              : () => _editDoubleParam('Nominal Cell Volt', nominalCellVolt, 'V', (v) => setState(() => nominalCellVolt = v)),
+              : () => _editDoubleParam(
+                    'Nominal Cell Volt',
+                    nominalCellVolt,
+                    'V',
+                    (v) => setState(() => nominalCellVolt = v),
+                    min: _kNominalCellMin,
+                    max: _kNominalCellMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.science_outlined,
           label: 'Cell Chemistry',
           value: cellChemistry,
+          changed: _isFieldChanged(0, 'cellChemistry'),
           trailingOverride: GestureDetector(
             onTap: isLocked ? null : _pickCellChemistry,
             child: Container(
@@ -951,16 +1516,20 @@ bool _isSending = false;
             child: const Text('Calibrate Now', style: TextStyle(fontSize: 12)),
           ),
         ),
-        _buildSetNowFooter('Battery', () => widget.service.sendBatterySettingsWrite(
-              batteryString: batteryStringCount,
-              ratedCapacityAh: ratedCapacity,
-              socSetPercent: socSet,
-              sleepWaitingTime: sleepWaitingTime,
-              balancedStartDiffVolt: balancedStartDifferenceVolt,
-              balancedStartVolt: balancedStartVolt,
-              nominalCellVolt: nominalCellVolt,
-              cellChemistry: BMSProtocol.chemistryCode(cellChemistry),
-            )),
+        _buildSetNowFooter(
+          'Battery',
+          () => widget.service.sendBatterySettingsWrite(
+            batteryString: batteryStringCount,
+            ratedCapacityAh: ratedCapacity,
+            socSetPercent: socSet,
+            sleepWaitingTime: sleepWaitingTime,
+            balancedStartDiffVolt: balancedStartDifferenceVolt,
+            balancedStartVolt: balancedStartVolt,
+            nominalCellVolt: nominalCellVolt,
+            cellChemistry: BMSProtocol.chemistryCode(cellChemistry),
+          ),
+          tabIndex: 0,
+        ),
       ],
     );
   }
@@ -975,67 +1544,115 @@ bool _isSending = false;
           iconColor: const Color(0xFFD4621A),
           label: 'Single Cell High Volt Protection',
           value: '${singleCellHighVoltProtection.toStringAsFixed(3)} V',
+          changed: _isFieldChanged(1, 'singleCellHighVoltProtection'),
           onEdit: isLocked
               ? null
-              : () => _editDoubleParam('Single Cell High Volt Protection', singleCellHighVoltProtection, 'V',
-                  (v) => setState(() => singleCellHighVoltProtection = v)),
+              : () => _editDoubleParam(
+                    'Single Cell High Volt Protection',
+                    singleCellHighVoltProtection,
+                    'V',
+                    (v) => setState(() => singleCellHighVoltProtection = v),
+                    min: _kCellHighVoltMin,
+                    max: _kCellHighVoltMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.battery_alert_rounded,
           iconColor: const Color(0xFF2B5FA5),
           label: 'Single Cell Low Volt Protection',
-          value: '${singleCellLowVoltProtection.toStringAsFixed(2)} V',
+          value: '${singleCellLowVoltProtection.toStringAsFixed(3)} V',
+          changed: _isFieldChanged(1, 'singleCellLowVoltProtection'),
           onEdit: isLocked
               ? null
-              : () => _editDoubleParam('Single Cell Low Volt Protection', singleCellLowVoltProtection, 'V',
-                  (v) => setState(() => singleCellLowVoltProtection = v)),
+              : () => _editDoubleParam(
+                    'Single Cell Low Volt Protection',
+                    singleCellLowVoltProtection,
+                    'V',
+                    (v) => setState(() => singleCellLowVoltProtection = v),
+                    min: _kCellLowVoltMin,
+                    max: _kCellLowVoltMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.show_chart_rounded,
           iconColor: const Color(0xFF2B5FA5),
           label: 'Sum Volt High Protection',
           value: '${sumVoltHighProtection.toStringAsFixed(1)} V',
+          changed: _isFieldChanged(1, 'sumVoltHighProtection'),
           onEdit: isLocked
               ? null
-              : () => _editDoubleParam('Sum Volt High Protection', sumVoltHighProtection, 'V', (v) => setState(() => sumVoltHighProtection = v)),
+              : () => _editDoubleParam(
+                    'Sum Volt High Protection',
+                    sumVoltHighProtection,
+                    'V',
+                    (v) => setState(() => sumVoltHighProtection = v),
+                    min: _kSumVoltHighMin,
+                    max: _kSumVoltHighMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.stacked_line_chart_rounded,
           iconColor: const Color(0xFF2B5FA5),
           label: 'Sum Volt Low Protection',
           value: '${sumVoltLowProtection.toStringAsFixed(1)} V',
+          changed: _isFieldChanged(1, 'sumVoltLowProtection'),
           onEdit: isLocked
               ? null
-              : () => _editDoubleParam('Sum Volt Low Protection', sumVoltLowProtection, 'V', (v) => setState(() => sumVoltLowProtection = v)),
+              : () => _editDoubleParam(
+                    'Sum Volt Low Protection',
+                    sumVoltLowProtection,
+                    'V',
+                    (v) => setState(() => sumVoltLowProtection = v),
+                    min: _kSumVoltLowMin,
+                    max: _kSumVoltLowMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.battery_charging_full_rounded,
           iconColor: const Color(0xFFD4621A),
           label: 'Charge Over Current Protection',
           value: '${chargeOverCurrentProtection.toStringAsFixed(1)} A',
+          changed: _isFieldChanged(1, 'chargeOverCurrentProtection'),
           onEdit: isLocked
               ? null
-              : () => _editDoubleParam('Charge Over Current Protection', chargeOverCurrentProtection, 'A',
-                  (v) => setState(() => chargeOverCurrentProtection = v)),
+              : () => _editDoubleParam(
+                    'Charge Over Current Protection',
+                    chargeOverCurrentProtection,
+                    'A',
+                    (v) => setState(() => chargeOverCurrentProtection = v),
+                    min: _kChargeOCMin,
+                    max: _kChargeOCMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.electric_bolt_outlined,
           iconColor: Colors.redAccent.shade700,
           label: 'Discharge Over Current Protection',
           value: '${dischargeOverCurrentProtection.toStringAsFixed(1)} A',
+          changed: _isFieldChanged(1, 'dischargeOverCurrentProtection'),
           onEdit: isLocked
               ? null
-              : () => _editDoubleParam('Discharge Over Current Protection', dischargeOverCurrentProtection, 'A',
-                  (v) => setState(() => dischargeOverCurrentProtection = v)),
+              : () => _editDoubleParam(
+                    'Discharge Over Current Protection',
+                    dischargeOverCurrentProtection,
+                    'A',
+                    (v) => setState(() => dischargeOverCurrentProtection = v),
+                    min: _kDischargeOCMin,
+                    max: _kDischargeOCMax,
+                  ),
         ),
-       _buildSetNowFooter('Protection', () => widget.service.sendProtectionSettingsWrite(
-              singleCellHighVolt: singleCellHighVoltProtection,
-              singleCellLowVolt: singleCellLowVoltProtection,
-              sumVoltHigh: sumVoltHighProtection,
-              sumVoltLow: sumVoltLowProtection,
-              chargeOverCurrent: chargeOverCurrentProtection,
-              dischargeOverCurrent: dischargeOverCurrentProtection,
-            )),
+        _buildSetNowFooter(
+          'Protection',
+          () => widget.service.sendProtectionSettingsWrite(
+            singleCellHighVolt: singleCellHighVoltProtection,
+            singleCellLowVolt: singleCellLowVoltProtection,
+            sumVoltHigh: sumVoltHighProtection,
+            sumVoltLow: sumVoltLowProtection,
+            chargeOverCurrent: chargeOverCurrentProtection,
+            dischargeOverCurrent: dischargeOverCurrentProtection,
+          ),
+          tabIndex: 1,
+        ),
       ],
     );
   }
@@ -1050,67 +1667,115 @@ bool _isSending = false;
           iconColor: Colors.black54,
           label: 'No of Temp Channels',
           value: '$noOfTempChannels',
+          changed: _isFieldChanged(2, 'noOfTempChannels'),
           onEdit: isLocked
               ? null
-              : () => _editIntParam('No of Temp Channels', noOfTempChannels, '', (v) => setState(() => noOfTempChannels = v)),
+              : () => _editIntParam(
+                    'No of Temp Channels',
+                    noOfTempChannels,
+                    '',
+                    (v) => setState(() => noOfTempChannels = v),
+                    min: _kTempChannelsMin,
+                    max: _kTempChannelsMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.thermostat_rounded,
           iconColor: Colors.redAccent.shade700,
           label: 'Charge High Temp Protection',
           value: '$chargeHighTempProtection °C',
+          changed: _isFieldChanged(2, 'chargeHighTempProtection'),
           onEdit: isLocked
               ? null
-              : () => _editIntParam('Charge High Temp Protection', chargeHighTempProtection, '°C',
-                  (v) => setState(() => chargeHighTempProtection = v)),
+              : () => _editIntParam(
+                    'Charge High Temp Protection',
+                    chargeHighTempProtection,
+                    '°C',
+                    (v) => setState(() => chargeHighTempProtection = v),
+                    min: _kChargeHighTempMin,
+                    max: _kChargeHighTempMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.ac_unit_rounded,
           iconColor: const Color(0xFF2B5FA5),
           label: 'Charge Low Temp Protection',
           value: '$chargeLowTempProtection °C',
+          changed: _isFieldChanged(2, 'chargeLowTempProtection'),
           onEdit: isLocked
               ? null
-              : () => _editIntParam('Charge Low Temp Protection', chargeLowTempProtection, '°C',
-                  (v) => setState(() => chargeLowTempProtection = v)),
+              : () => _editIntParam(
+                    'Charge Low Temp Protection',
+                    chargeLowTempProtection,
+                    '°C',
+                    (v) => setState(() => chargeLowTempProtection = v),
+                    min: _kChargeLowTempMin,
+                    max: _kChargeLowTempMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.local_fire_department_rounded,
           iconColor: Colors.redAccent.shade700,
           label: 'Discharge High Temp Protection',
           value: '$dischargeHighTempProtection °C',
+          changed: _isFieldChanged(2, 'dischargeHighTempProtection'),
           onEdit: isLocked
               ? null
-              : () => _editIntParam('Discharge High Temp Protection', dischargeHighTempProtection, '°C',
-                  (v) => setState(() => dischargeHighTempProtection = v)),
+              : () => _editIntParam(
+                    'Discharge High Temp Protection',
+                    dischargeHighTempProtection,
+                    '°C',
+                    (v) => setState(() => dischargeHighTempProtection = v),
+                    min: _kDischargeHighTempMin,
+                    max: _kDischargeHighTempMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.severe_cold_rounded,
           iconColor: const Color(0xFF2B5FA5),
           label: 'Discharge Low Temp Protection',
           value: '$dischargeLowTempProtection °C',
+          changed: _isFieldChanged(2, 'dischargeLowTempProtection'),
           onEdit: isLocked
               ? null
-              : () => _editIntParam('Discharge Low Temp Protection', dischargeLowTempProtection, '°C',
-                  (v) => setState(() => dischargeLowTempProtection = v)),
+              : () => _editIntParam(
+                    'Discharge Low Temp Protection',
+                    dischargeLowTempProtection,
+                    '°C',
+                    (v) => setState(() => dischargeLowTempProtection = v),
+                    min: _kDischargeLowTempMin,
+                    max: _kDischargeLowTempMax,
+                  ),
         ),
         _buildSettingRow(
           icon: Icons.compare_arrows_rounded,
           iconColor: const Color(0xFFD4621A),
           label: 'Diff Temp Protection',
           value: '$diffTempProtection °C',
+          changed: _isFieldChanged(2, 'diffTempProtection'),
           onEdit: isLocked
               ? null
-              : () => _editIntParam('Diff Temp Protection', diffTempProtection, '°C', (v) => setState(() => diffTempProtection = v)),
+              : () => _editIntParam(
+                    'Diff Temp Protection',
+                    diffTempProtection,
+                    '°C',
+                    (v) => setState(() => diffTempProtection = v),
+                    min: _kDiffTempMin,
+                    max: _kDiffTempMax,
+                  ),
         ),
-        _buildSetNowFooter('Temp', () => widget.service.sendTemperatureSettingsWrite(
-              noOfTempChannels: noOfTempChannels,
-              chargeHighTemp: chargeHighTempProtection,
-              chargeLowTemp: chargeLowTempProtection,
-              dischargeHighTemp: dischargeHighTempProtection,
-              dischargeLowTemp: dischargeLowTempProtection,
-              diffTempProtection: diffTempProtection,
-            )),
+        _buildSetNowFooter(
+          'Temp',
+          () => widget.service.sendTemperatureSettingsWrite(
+            noOfTempChannels: noOfTempChannels,
+            chargeHighTemp: chargeHighTempProtection,
+            chargeLowTemp: chargeLowTempProtection,
+            dischargeHighTemp: dischargeHighTempProtection,
+            dischargeLowTemp: dischargeLowTempProtection,
+            diffTempProtection: diffTempProtection,
+          ),
+          tabIndex: 2,
+        ),
       ],
     );
   }
@@ -1121,21 +1786,41 @@ bool _isSending = false;
     required String value,
     required VoidCallback onEdit,
     required VoidCallback onScan,
+    bool changed = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontSize: 12.5, color: Colors.black87, fontWeight: FontWeight.w500)),
+          Row(
+            children: [
+              Text(label, style: const TextStyle(fontSize: 12.5, color: Colors.black87, fontWeight: FontWeight.w500)),
+              if (changed) ...[
+                const SizedBox(width: 6),
+                const Icon(Icons.circle, size: 7, color: Color(0xFFD4621A)),
+              ],
+            ],
+          ),
           const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+              color: changed ? const Color(0xFFFFF3E6) : null,
+              border: Border.all(color: changed ? const Color(0xFFD4621A) : Colors.grey.shade300, width: changed ? 1.4 : 1),
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Row(
               children: [
                 Expanded(
-                  child: Text(value, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: changed ? const Color(0xFFD4621A) : Colors.black,
+                    ),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.edit_rounded, size: 16, color: Colors.black54),
@@ -1161,21 +1846,28 @@ bool _isSending = false;
   /// Wire this up to your actual scanner screen / package
   /// (e.g. push BluetoothDeviceScanPage-style scanner, or a package such as
   /// `mobile_scanner`) — this stub shows the flow and a manual fallback.
-  Future<void> _scanCode(String title, Function(String) onResult) async {
-    final scanned = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _BarcodeScanPlaceholder(title: title),
+ Future<void> _scanCode(
+  String title,
+  Function(String) onResult,
+) async {
+
+  final result = await showDialog<String>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const BarcodeScannerDialog(),
+  );
+
+  if (result != null) {
+    onResult(result);
+    _persistSettings();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("$title scanned successfully"),
       ),
     );
-    if (scanned != null && scanned.trim().isNotEmpty) {
-      onResult(scanned.trim());
-      _persistSettings();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('$title scanned: $scanned')),
-      );
-    }
   }
+}
 
   Widget _buildFactorySettingsTab() {
     return Column(
@@ -1184,26 +1876,33 @@ bool _isSending = false;
         _buildFactoryTextField(
           label: 'Battery Serial No',
           value: batterySerialNo,
+          changed: _isFieldChanged(3, 'batterySerialNo'),
           onEdit: () => _editStringParam('Battery Serial No', batterySerialNo, (v) => setState(() => batterySerialNo = v)),
           onScan: () => _scanCode('Battery Serial No', (v) => setState(() => batterySerialNo = v)),
         ),
         _buildFactoryTextField(
           label: 'BMS Serial No',
           value: bmsSerialNo,
+          changed: _isFieldChanged(3, 'bmsSerialNo'),
           onEdit: () => _editStringParam('BMS Serial No', bmsSerialNo, (v) => setState(() => bmsSerialNo = v)),
           onScan: () => _scanCode('BMS Serial No', (v) => setState(() => bmsSerialNo = v)),
         ),
         _buildFactoryTextField(
           label: 'BLE Device Name',
           value: bleDeviceName,
+          changed: _isFieldChanged(3, 'bleDeviceName'),
           onEdit: () => _editStringParam('BLE Device Name', bleDeviceName, (v) => setState(() => bleDeviceName = v)),
           onScan: () => _scanCode('BLE Device Name', (v) => setState(() => bleDeviceName = v)),
         ),
-        _buildSetNowFooter('Factory', () => widget.service.sendFactorySettingsWrite(
-              batterySlNo: batterySerialNo,
-              bmsSerialNo: bmsSerialNo,
-              bleDeviceName: bleDeviceName,
-            )),
+        _buildSetNowFooter(
+          'Factory',
+          () => widget.service.sendFactorySettingsWrite(
+            batterySlNo: batterySerialNo,
+            bmsSerialNo: bmsSerialNo,
+            bleDeviceName: bleDeviceName,
+          ),
+          tabIndex: 3,
+        ),
         const SizedBox(height: 20),
 
         // Firmware upgrade card
@@ -1292,8 +1991,8 @@ bool _isSending = false;
                     ? null
                     : () => _showResetConfirmation(
                           'Factory Data Reset',
-                          'This will erase all settings and restore factory defaults. Continue?',
-                          () => _handleAction('Factory data reset', () => widget.service.sendFactoryReset()),
+                          'This will erase all settings and restore factory defaults from master data. Continue?',
+                          _handleFactoryReset,
                         ),
                 icon: const Icon(Icons.settings_backup_restore_rounded, size: 18),
                 label: const Text('Factory Data Reset', style: TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
