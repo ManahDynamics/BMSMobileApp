@@ -3,6 +3,7 @@
 
 import 'package:bmsmobileapp/widgets/bar_code_scanner_dialog.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import '../../../modules/scanner/screens/BMS_scanner_screen.dart';
@@ -21,12 +22,20 @@ class SettingsScreen extends StatefulWidget {
   State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
+class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
   final LocalAuthDB _localAuthDB = LocalAuthDB();
   final MasterDataService _masterDataService = MasterDataService();
 
   bool isConnected = true;
   bool isLocked = true;
+
+  // ── App lifecycle tracking ──────────────────────────────────────────────
+  // We ignore BLE-driven setState() calls while the app isn't in the
+  // foreground / actively resumed. This avoids triggering a rebuild (and a
+  // layout pass) on a view that isn't fully attached, which is what caused
+  // the intermittent "RenderBox was not laid out" exception and the
+  // associated blank-screen flash around background/foreground transitions.
+  AppLifecycleState _lifecycleState = AppLifecycleState.resumed;
 
   // ── Tab state ──────────────────────────────────────────────────────────────
   int _selectedTab = 0; // 0 Battery, 1 Protection, 2 Temp, 3 Factory
@@ -374,9 +383,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return TranslationService.t(key);
   }
 
+  /// setState() that is safe to call from asynchronous, non-gesture-driven
+  /// sources (BLE platform-channel callbacks, ChangeNotifier listeners,
+  /// timers). Those callbacks can fire at any point in the event loop,
+  /// including while the current frame is still mid build/layout/paint. If
+  /// we call the raw setState() at that moment, the pending frame's own
+  /// layout pass can be interleaved with the new one we just triggered,
+  /// which is what caused the intermittent:
+  ///   "RenderBox was not laid out: _RenderSingleChildViewport ... NEEDS-PAINT"
+  /// and the associated blank-screen flash — most visible here because the
+  /// screen's RefreshIndicator + SingleChildScrollView combo is sensitive
+  /// to being rebuilt mid-animation/mid-layout.
+  ///
+  /// If the engine is idle, we just call setState() right away (no need to
+  /// wait an extra frame for ordinary cases). If a frame is currently being
+  /// produced, we defer the state change to run immediately after that
+  /// frame finishes, via addPostFrameCallback, which guarantees it never
+  /// overlaps an in-flight layout/paint pass.
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    final phase = SchedulerBinding.instance.schedulerPhase;
+    if (phase == SchedulerPhase.idle || phase == SchedulerPhase.postFrameCallbacks) {
+      setState(fn);
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        setState(fn);
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.service.stopAllPolling();
     TranslationService.instance.addListener(_onTranslationsChanged);
     widget.service.addListener(_onServiceChanged);
     _loadCachedSettings();
@@ -384,7 +425,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _onTranslationsChanged() {
-    if (mounted) setState(() {});
+    _safeSetState(() {});
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Track lifecycle so BLE-driven updates can be safely ignored while the
+    // app isn't in the foreground. We deliberately do NOT call setState()
+    // here beyond what's needed — just record the state.
+    _lifecycleState = state;
   }
 
   int _lastBatteryPulse = -1;
@@ -394,12 +443,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _onServiceChanged() {
     if (!mounted) return;
-    setState(() {
-      _isOffline = widget.service.latestDashboard == null;
+
+    // Ignore updates while the app isn't actively resumed in the
+    // foreground (e.g. backgrounded, inactive, paused, detached). Calling
+    // setState() during these transitions was triggering a layout pass on
+    // a view that wasn't fully attached, which surfaced as:
+    //   "RenderBox was not laid out: _RenderSingleChildViewport ..."
+    // and showed up to the user as a brief blank screen.
+    if (_lifecycleState != AppLifecycleState.resumed) return;
+
+    // Compute what (if anything) actually changed before calling
+    // setState(). The service notifies listeners on every BLE response,
+    // including ones unrelated to whatever's on screen (e.g. dashboard
+    // auto-refresh 0x93 while the Settings screen is open). Rebuilding the
+    // whole screen — which mounts all 4 tabs inside an IndexedStack — on
+    // every single one of those was unnecessary and made the "not laid
+    // out" race far more likely to hit.
+    final newOffline = widget.service.latestDashboard == null;
+
+    final bs = widget.service.latestBatterySettings;
+    final bsChanged = bs != null && widget.service.batterySettingsPulse != _lastBatteryPulse;
+
+    final ps = widget.service.latestProtectionSettings;
+    final psChanged = ps != null && widget.service.protectionSettingsPulse != _lastProtectionPulse;
+
+    final ts = widget.service.latestTemperatureSettings;
+    final tsChanged = ts != null && widget.service.temperatureSettingsPulse != _lastTempPulse;
+
+    final fs = widget.service.latestFactorySettings;
+    final fsChanged = fs != null && widget.service.factorySettingsPulse != _lastFactoryPulse;
+
+    if (newOffline == _isOffline && !bsChanged && !psChanged && !tsChanged && !fsChanged) {
+      // Nothing relevant to this screen changed — skip the rebuild entirely.
+      return;
+    }
+
+    _safeSetState(() {
+      _isOffline = newOffline;
       isConnected = !_isOffline;
 
-      final bs = widget.service.latestBatterySettings;
-      if (bs != null && widget.service.batterySettingsPulse != _lastBatteryPulse) {
+      if (bsChanged) {
         _lastBatteryPulse = widget.service.batterySettingsPulse;
         batteryStringCount = bs.batteryString ?? batteryStringCount;
         ratedCapacity = bs.ratedCapacity ?? ratedCapacity;
@@ -413,8 +496,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _persistSettings();
       }
 
-      final ps = widget.service.latestProtectionSettings;
-      if (ps != null && widget.service.protectionSettingsPulse != _lastProtectionPulse) {
+      if (psChanged) {
         _lastProtectionPulse = widget.service.protectionSettingsPulse;
         singleCellHighVoltProtection = ps.singleCellHighVoltProtection ?? singleCellHighVoltProtection;
         singleCellLowVoltProtection = ps.singleCellLowVoltProtection ?? singleCellLowVoltProtection;
@@ -426,8 +508,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _persistSettings();
       }
 
-      final ts = widget.service.latestTemperatureSettings;
-      if (ts != null && widget.service.temperatureSettingsPulse != _lastTempPulse) {
+      if (tsChanged) {
         _lastTempPulse = widget.service.temperatureSettingsPulse;
         noOfTempChannels = ts.noOfTempChannels ?? noOfTempChannels;
         chargeHighTempProtection = ts.chargeHighTempProtection ?? chargeHighTempProtection;
@@ -439,8 +520,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _persistSettings();
       }
 
-      final fs = widget.service.latestFactorySettings;
-      if (fs != null && widget.service.factorySettingsPulse != _lastFactoryPulse) {
+      if (fsChanged) {
         _lastFactoryPulse = widget.service.factorySettingsPulse;
         batterySerialNo = fs.batterySlNo ?? batterySerialNo;
         bmsSerialNo = fs.bmsSerialNo ?? bmsSerialNo;
@@ -453,6 +533,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     TranslationService.instance.removeListener(_onTranslationsChanged);
    widget.service.removeListener(_onServiceChanged);
     widget.service.stopSettingsPolling();
@@ -1195,7 +1276,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // ── Tab bar (segmented-control style, matches design) ──────────────────────
   Widget _buildTabBar() {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      // NOTE: Do NOT use CrossAxisAlignment.stretch here. This Row lives
+      // inside a Column inside a SingleChildScrollView, which gives it an
+      // unbounded (0..Infinity) height constraint. `stretch` forces every
+      // child to be given the Row's own height as a tight constraint —
+      // when that height is unbounded, Flutter throws
+      // "BoxConstraints forces an infinite height" during layout. This was
+      // the real cause of the settings screen going blank: it's a
+      // layout-time assertion, so Flutter can't fall back to a red error
+      // screen — the whole body subtree just fails to paint.
+      // Each tab item already sets its own explicit height (48) on its
+      // Container below, so no cross-axis alignment is needed here.
       children: List.generate(_tabLabels.length, (i) {
         final selected = _selectedTab == i;
         final hasUnsaved = _changedFieldKeys(i).isNotEmpty;

@@ -243,10 +243,22 @@ BMSParsedPacket? latestTemperatureSettings;
 
     _notifySub = _notifyChar!.onValueReceived.listen((raw) {
       if (raw.isEmpty) return;
+      debugPrint("📥 RAW RX: ${_toHex(raw)}");
 
-      final result = BMSPacketParser.parse(
-        Uint8List.fromList(raw),
-      );
+final result = BMSPacketParser.parse(
+  Uint8List.fromList(raw),
+);
+
+debugPrint("Parse success : ${result.isSuccess}");
+
+if (!result.isSuccess) {
+  debugPrint("❌ Parse Error : ${result.error}");
+  debugPrint("❌ Detail      : ${result.errorDetail}");
+} else {
+  debugPrint(
+    "✅ Parsed DataId : 0x${result.packet!.dataId.toRadixString(16).toUpperCase()}",
+  );
+}
 
       if (result.isSuccess && result.packet != null) {
         final packet = result.packet!.copyWith(direction: PacketDirection.receive);
@@ -330,9 +342,20 @@ BMSParsedPacket? latestTemperatureSettings;
           notifyListeners();
 
         } else if (packet.isBatterySettingsResponse) {
-          addDebugLog('🔋 Battery Settings Response received');
-          latestBatterySettings = packet;
-          batterySettingsPulse++;
+          debugPrint("🎉 ENTERED BATTERY SETTINGS RESPONSE");
+
+  addDebugLog('🔋 Battery Settings Response received');
+
+  latestBatterySettings = packet;
+  batterySettingsPulse++;
+
+  debugPrint(
+      "Battery String : ${packet.batteryString}");
+  debugPrint(
+      "Rated Capacity : ${packet.ratedCapacity}");
+  debugPrint(
+      "SOC Set        : ${packet.socSet}");
+
           notifyListeners();
 
         } else if (packet.isProtectionSettingsResponse) {
@@ -371,9 +394,15 @@ BMSParsedPacket? latestTemperatureSettings;
           }
         }
 
-      } else {
-        // Parse failed — last valid data retained, nothing to do.
       }
+        else {
+  debugPrint("======================================");
+  debugPrint("❌ Packet Parse Failed");
+  debugPrint("Raw Packet : ${_toHex(raw)}");
+  debugPrint("Error      : ${result.error}");
+  debugPrint("Detail     : ${result.errorDetail}");
+  debugPrint("======================================");
+}
     });
   }
 
