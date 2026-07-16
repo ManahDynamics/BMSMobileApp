@@ -78,6 +78,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String bmsSerialNo = ' ';
   String bleDeviceName = ' ';
 
+  // ── Device Details (read-only, shown on the Factory Settings tab) ──────────
+  String swVersionNo = ' ';
+  String hwVersionNo = ' ';
+
   // ── Offline-cache state ───────────────────────────────────────────────────
   bool _isOffline = false;
   bool _isLoadingCache = true;
@@ -184,22 +188,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'bleDeviceName': bleDeviceName,
       };
 
-  void _snapshotBaseline(int tabIndex) {
-    switch (tabIndex) {
-      case 0:
-        _batteryBaseline = Map<String, dynamic>.of(_batteryCurrent);
-        break;
-      case 1:
-        _protectionBaseline = Map<String, dynamic>.of(_protectionCurrent);
-        break;
-      case 2:
-        _tempBaseline = Map<String, dynamic>.of(_tempCurrent);
-        break;
-      case 3:
-        _factoryBaseline = Map<String, dynamic>.of(_factoryCurrent);
-        break;
+    void _snapshotBaseline(int tabIndex) {
+      switch (tabIndex) {
+        case 0:
+          _batteryBaseline = Map<String, dynamic>.of(_batteryCurrent);
+          break;
+        case 1:
+          _protectionBaseline = Map<String, dynamic>.of(_protectionCurrent);
+          break;
+        case 2:
+          _tempBaseline = Map<String, dynamic>.of(_tempCurrent);
+          break;
+        case 3:
+          _factoryBaseline = Map<String, dynamic>.of(_factoryCurrent);
+          break;
+      }
     }
-  }
 
   Map<String, dynamic> _currentMapForTab(int tabIndex) {
     switch (tabIndex) {
@@ -497,6 +501,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         batterySerialNo = (cached['batterySerialNo'] as String?) ?? batterySerialNo;
         bmsSerialNo = (cached['bmsSerialNo'] as String?) ?? bmsSerialNo;
         bleDeviceName = (cached['bleDeviceName'] as String?) ?? bleDeviceName;
+        swVersionNo = (cached['swVersionNo'] as String?) ?? swVersionNo;
+        hwVersionNo = (cached['hwVersionNo'] as String?) ?? hwVersionNo;
       });
     }
 
@@ -539,6 +545,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'batterySerialNo': batterySerialNo,
       'bmsSerialNo': bmsSerialNo,
       'bleDeviceName': bleDeviceName,
+      'swVersionNo': swVersionNo,
+      'hwVersionNo': hwVersionNo,
     });
   }
 
@@ -969,6 +977,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       batterySerialNo = (data['batterySerialNo'] as String?) ?? batterySerialNo;
       bmsSerialNo = (data['bmsSerialNo'] as String?) ?? bmsSerialNo;
       bleDeviceName = (data['bleDeviceName'] as String?) ?? bleDeviceName;
+      swVersionNo = (data['swVersionNo'] as String?) ?? swVersionNo;
+      hwVersionNo = (data['hwVersionNo'] as String?) ?? hwVersionNo;
 
       // These values are now the "saved" state — clear unsaved-change
       // highlighting on every tab.
@@ -1869,6 +1879,62 @@ bool _isSending = false;
   }
 }
 
+  /// Single row inside the read-only "Device Details" card at the bottom of
+  /// the Factory Settings tab — a small coloured status dot, a label, and
+  /// its value (e.g. "BMS Serial No - CHB14SA262400001").
+  Widget _buildDeviceDetailDotRow(Color dotColor, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: RichText(
+              overflow: TextOverflow.ellipsis,
+              text: TextSpan(
+                style: const TextStyle(fontSize: 12.5, color: Colors.black87),
+                children: [
+                  TextSpan(text: '$label - ', style: const TextStyle(fontWeight: FontWeight.w500)),
+                  TextSpan(text: value, style: const TextStyle(fontWeight: FontWeight.w700)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Read-only "Device Details" summary card shown at the bottom of the
+  /// Factory Settings tab: BMS Serial No, SW Version No, HW Version No.
+  Widget _buildDeviceDetailsCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Device Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
+          const SizedBox(height: 8),
+          _buildDeviceDetailDotRow(const Color(0xFF2B5FA5), 'BMS Serial No', bmsSerialNo),
+          _buildDeviceDetailDotRow(const Color(0xFF1B6B3A), 'SW Version No', swVersionNo),
+          _buildDeviceDetailDotRow(const Color(0xFFD4A017), 'HW Version No', hwVersionNo),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFactorySettingsTab() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2002,6 +2068,11 @@ bool _isSending = false;
             Icon(Icons.info_outline_rounded, size: 18, color: Colors.grey.shade500),
           ],
         ),
+        const SizedBox(height: 20),
+
+        // ── Device Details summary (BMS Serial No / SW Version / HW Version) ──
+        _buildDeviceDetailsCard(),
+
         const SizedBox(height: 24),
       ],
     );
