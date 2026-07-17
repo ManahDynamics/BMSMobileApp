@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'app_navigator.dart';
+import 'widgets/common_dialog.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -69,7 +71,29 @@ void main() async {
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
+bmsService.onBmsDisconnectedFatal = () {
+  final context = appNavigatorKey.currentContext;
 
+  if (context == null) return;
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => CommonDialog(
+      icon: Icons.bluetooth_disabled_rounded,
+      iconColor: const Color(0xFFA63A3A),
+      iconBackgroundColor: const Color(0xFFFDEEEE),
+      title: "BMS disconnected",
+      message: "The BMS has disconnected. The app is going to close.",
+      buttonText: "OK",
+      buttonColor: const Color(0xFF1D6A43),
+      onPressed: () {
+        Navigator.of(context).pop();
+        SystemNavigator.pop();
+      },
+    ),
+  );
+};
   runApp(const MyApp());
 }
 
@@ -126,6 +150,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: appNavigatorKey, 
       title: 'Smart BMS',
       debugShowCheckedModeBanner: false,
 

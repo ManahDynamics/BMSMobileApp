@@ -71,12 +71,6 @@ BMSParsedPacket? latestTemperatureSettings;
   int cellVoltagePulse = 0;
 
   // ── Settings-page "Set Now" / action state ────────────────────────────────
-  // FIXED: previously there was no sender and no ACK-wait mechanism at all
-  // for 0xB0-0xB7 (Set Now / Calibrate / Restart / Firmware Upgrade /
-  // Factory Reset). The old ACK handling only fired when
-  // `state == BMSConnectionState.waitingAck`, which only happens during the
-  // handshake — an ACK received in the normal `ready` state (i.e. after any
-  // of these actions) was simply ignored.
   bool isActionInFlight = false;
   Completer<bool>? _actionAckCompleter;
 
@@ -101,11 +95,14 @@ BMSParsedPacket? latestTemperatureSettings;
   Timer? _dashboardPollTimer;
   Timer? _cellVoltagePollTimer;
   Timer? _liveStatusTimer;
-Timer? _liveStatusAckTimer;
+  Timer? _liveStatusAckTimer;
 
-/// UI hooks up a popup here. Called when the BMS misses the Live Status
-/// Ack within the 5s window — right before auto-disconnect fires.
-void Function()? onLiveStatusAckTimeout;
+  /// Called when the Live Status Ack isn't received within the timeout
+  /// window — BMS is considered disconnected. UI (wired in main.dart) shows
+  /// a blocking "BMS Disconnected" dialog and closes the app on OK, using
+  /// the global navigatorKey so it works regardless of which page the user
+  /// is currently on.
+  void Function()? onBmsDisconnectedFatal;
 
   int _sessionId = 0;
 
@@ -334,13 +331,6 @@ if (!result.isSuccess) {
             _bleNameCompleter!.complete(true);
           }
 
-        // FIXED: these four branches used to live *inside* the
-        // `isBleNameResponse` block above (as an `else if` chained off
-        // `if (packet.bleName != null)`), which meant they could never run
-        // — isBleNameResponse requires dataId == 0x51, while these all
-        // require dataId == 0x58/0x59/0x5A/0x5B. They're now proper
-        // top-level siblings, same as isCellVoltageResponse /
-        // isDashboardResponse above.
         } else if (packet.isDeviceDetailsResponse) {
           addDebugLog('ℹ️ Device Details Response received');
           latestDeviceDetails = packet;
@@ -382,16 +372,13 @@ if (!result.isSuccess) {
           factorySettingsPulse++;
           notifyListeners();
 
-        // FIXED: ACK handling used to only run
-        // `if (state == BMSConnectionState.waitingAck && packet.isAck)`,
-        // so an ACK arriving in the normal `ready` state (i.e. after every
-        // Set Now / Calibrate / Restart / Firmware Upgrade / Factory Reset
-        // packet) was invisible to the app — there was no sender for these
-        // packets either, see below. Handshake-ACK handling is preserved;
-        // the generic action-ACK completer now also fires independently.
+        } else if (packet.isLiveStatusAck) {
+          addDebugLog('✅ Live Status Ack received');
+          _liveStatusAckTimer?.cancel();
+
         } else if (packet.isAck) {
           if (state == BMSConnectionState.waitingAck) {
-            addDebugLog('🤝 ACK packet received — accepting without validation');
+            addDebugLog('🤝 ACK packet received — validating handshake');
             _onAckReceived(packet);
           }
           if (_actionAckCompleter != null && !_actionAckCompleter!.isCompleted) {
@@ -445,90 +432,94 @@ if (!result.isSuccess) {
   // HANDSHAKE
   // ─────────────────────────────────────────────────────────────────────────
   Future<void> sendHandshake() async {
-  final int crc = BMSCrcService.calculateCRC8([0x05, BMSProtocol.idHandshake]);
-  final List<int> packet = [
-    BMSProtocol.startByte, 0x05, BMSProtocol.idHandshake, crc, BMSProtocol.stopByte,
-  ];
+    final int crc = BMSCrcService.calculateCRC8([0x05, BMSProtocol.idHandshake]);
+    final List<int> packet = [
+      BMSProtocol.startByte, 0x05, BMSProtocol.idHandshake, crc, BMSProtocol.stopByte,
+    ];
 
-  state = BMSConnectionState.handshakeSent;
-  notifyListeners();
+    state = BMSConnectionState.handshakeSent;
+    notifyListeners();
 
-  await Future.delayed(const Duration(milliseconds: 300));
-  await _sendPacket(packet, logName: 'HANDSHAKE', sentDataId: BMSProtocol.idHandshake);
+    await Future.delayed(const Duration(milliseconds: 300));
+    await _sendPacket(packet, logName: 'HANDSHAKE', sentDataId: BMSProtocol.idHandshake);
 
-  state = BMSConnectionState.waitingAck;
-  isConnecting = true;
-  addDebugLog('🤝 Handshake sent — waiting for validated ACK');
-  notifyListeners();
+    state = BMSConnectionState.waitingAck;
+    isConnecting = true;
+    addDebugLog('🤝 Handshake sent — waiting for validated ACK');
+    notifyListeners();
 
-  _ackTimer?.cancel();
-  _ackTimer = Timer(const Duration(seconds: 10), () {
-    if (state == BMSConnectionState.waitingAck) {
-      addDebugLog('❌ Handshake ACK timeout — no response from BMS');
-      errorMessage = 'No response from BMS (handshake ACK timeout)';
-      state = BMSConnectionState.error;
-      isConnecting = false;
-      notifyListeners();
-    }
-  });
-}
-// ─────────────────────────────────────────────────────────────────────────
-// LIVE STATUS PACKET (Mobile → BMS, every 15s)
-// Confirms Mobile App is alive to the BMS. If the corresponding Ack
-// (0x52) is not received within 5s of sending, the connection is
-// considered stale and the app disconnects automatically.
-// ─────────────────────────────────────────────────────────────────────────
-Future<void> sendLiveStatusPacket() async {
-  if (_writeChar == null || state != BMSConnectionState.ready) return;
+    _ackTimer?.cancel();
+    _ackTimer = Timer(const Duration(seconds: 10), () {
+      if (state == BMSConnectionState.waitingAck) {
+        addDebugLog('❌ Handshake ACK timeout — no response from BMS');
+        errorMessage = 'No response from BMS (handshake ACK timeout)';
+        state = BMSConnectionState.error;
+        isConnecting = false;
+        notifyListeners();
+      }
+    });
+  }
 
-  final now = DateTime.now();
-  final List<int> body = [
-    BMSProtocol.liveStatusPacketLength,   // Length byte (0x0C)
-    BMSProtocol.idLiveStatusRequest,      // 0x92
-    now.hour & 0xFF,
-    now.minute & 0xFF,
-    now.second & 0xFF,
-    now.day & 0xFF,
-    now.month & 0xFF,
-    now.year & 0xFF,          // year low byte
-    (now.year >> 8) & 0xFF,   // year high byte
-  ];
+  // ─────────────────────────────────────────────────────────────────────────
+  // LIVE STATUS PACKET (Mobile → BMS, every 15s)
+  // Confirms Mobile App is alive to the BMS. If the corresponding Ack
+  // (0x52) is not received within 20s of sending, the connection is
+  // considered stale, the app disconnects automatically, and shows a
+  // blocking "BMS Disconnected" dialog (wired in main.dart via
+  // onBmsDisconnectedFatal) regardless of which page the user is on.
+  // ─────────────────────────────────────────────────────────────────────────
+  Future<void> sendLiveStatusPacket() async {
+    if (_writeChar == null || state != BMSConnectionState.ready) return;
 
-  final int crc = BMSCrcService.calculateCRC8(body);
-  final List<int> packet = [
-    BMSProtocol.startByte,
-    ...body,
-    crc,
-    BMSProtocol.stopByte,
-  ];
+    final now = DateTime.now();
+    final List<int> body = [
+      BMSProtocol.liveStatusPacketLength,   // Length byte (0x0C)
+      BMSProtocol.idLiveStatusRequest,      // 0x92
+      now.hour & 0xFF,
+      now.minute & 0xFF,
+      now.second & 0xFF,
+      now.day & 0xFF,
+      now.month & 0xFF,
+      now.year & 0xFF,          // year low byte
+      (now.year >> 8) & 0xFF,   // year high byte
+    ];
 
-  await _sendPacket(packet, logName: 'LIVE_STATUS', sentDataId: BMSProtocol.idLiveStatusRequest);
+    final int crc = BMSCrcService.calculateCRC8(body);
+    final List<int> packet = [
+      BMSProtocol.startByte,
+      ...body,
+      crc,
+      BMSProtocol.stopByte,
+    ];
 
-  _liveStatusAckTimer?.cancel();
-  _liveStatusAckTimer = Timer(const Duration(seconds: 20), _onLiveStatusAckTimeout);
-}
+    await _sendPacket(packet, logName: 'LIVE_STATUS', sentDataId: BMSProtocol.idLiveStatusRequest);
 
-void _onLiveStatusAckTimeout() {
-  addDebugLog('⛔ Live Status Ack not received within 10s — disconnecting');
-  onLiveStatusAckTimeout?.call();
-  disconnect();
-}
+    _liveStatusAckTimer?.cancel();
+    _liveStatusAckTimer = Timer(const Duration(seconds: 20), _onLiveStatusAckTimeout);
+  }
 
-void startLiveStatusMonitor() {
-  stopLiveStatusMonitor();
-  addDebugLog('▶️ Live Status monitor started (interval 15s, ack timeout 10s)');
-  sendLiveStatusPacket();
-  _liveStatusTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+  void _onLiveStatusAckTimeout() {
+    addDebugLog('⛔ Live Status Ack not received within 20s — disconnecting');
+    onBmsDisconnectedFatal?.call();
+    disconnect();
+  }
+
+  void startLiveStatusMonitor() {
+    stopLiveStatusMonitor();
+    addDebugLog('▶️ Live Status monitor started (interval 15s, ack timeout 20s)');
     sendLiveStatusPacket();
-  });
-}
+    _liveStatusTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      sendLiveStatusPacket();
+    });
+  }
 
-void stopLiveStatusMonitor() {
-  _liveStatusTimer?.cancel();
-  _liveStatusTimer = null;
-  _liveStatusAckTimer?.cancel();
-  _liveStatusAckTimer = null;
-}
+  void stopLiveStatusMonitor() {
+    _liveStatusTimer?.cancel();
+    _liveStatusTimer = null;
+    _liveStatusAckTimer?.cancel();
+    _liveStatusAckTimer = null;
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // BLE NAME REQUEST
   // ─────────────────────────────────────────────────────────────────────────
@@ -566,33 +557,34 @@ void stopLiveStatusMonitor() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // ACK HANDLING (handshake path — no validation)
+  // ACK HANDLING (handshake path — validated)
   // ─────────────────────────────────────────────────────────────────────────
   void _onAckReceived(BMSParsedPacket packet) {
-  _ackTimer?.cancel();
+    _ackTimer?.cancel();
 
-  final bool valid = packet.startByte == BMSProtocol.ackStart &&
-      packet.stopByte == BMSProtocol.ackStop &&
-      packet.dataId == BMSProtocol.idAck &&
-      packet.length == BMSProtocol.packetLength;
+    final bool valid = packet.startByte == BMSProtocol.ackStart &&
+        packet.stopByte == BMSProtocol.ackStop &&
+        packet.dataId == BMSProtocol.idAck &&
+        packet.length == BMSProtocol.packetLength;
 
-  if (!valid) {
-    addDebugLog('❌ ACK validation FAILED — rejecting handshake');
-    errorMessage = 'Invalid ACK received from BMS';
-    state = BMSConnectionState.error;
+    if (!valid) {
+      addDebugLog('❌ ACK validation FAILED — rejecting handshake');
+      errorMessage = 'Invalid ACK received from BMS';
+      state = BMSConnectionState.error;
+      isConnecting = false;
+      notifyListeners();
+      return;
+    }
+
+    addDebugLog('✅ ACK validated — handshake confirmed');
+    state = BMSConnectionState.ready;
     isConnecting = false;
     notifyListeners();
-    return;
+
+    _startDataSequence();
+    startLiveStatusMonitor();
   }
 
-  addDebugLog('✅ ACK validated — handshake confirmed');
-  state = BMSConnectionState.ready;
-  isConnecting = false;
-  notifyListeners();
-
-  _startDataSequence();
-  startLiveStatusMonitor();
-}
   // ─────────────────────────────────────────────────────────────────────────
   // SEQUENTIAL DATA FETCH: BLE Name → Dashboard → Cell Voltage
   // ─────────────────────────────────────────────────────────────────────────
@@ -719,8 +711,7 @@ void stopLiveStatusMonitor() {
   }
 
   /// Public one-shot request — call this when opening the Device Details
-  /// sheet. (FIXED: previously this only existed as the private
-  /// `_sendDeviceDetailsRequest`, which nothing in the app ever called.)
+  /// sheet.
   Future<void> requestDeviceDetails() => _sendDeviceDetailsRequest();
 
   Future<void> _sendBatterySettingsRequest() async {
@@ -800,11 +791,7 @@ void stopLiveStatusMonitor() {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // SETTINGS PAGE — "SET NOW" / ACTION SENDERS  (all new — FIXED)
-  // Every one of these previously had a Data ID defined in protocol.dart
-  // but NO sender at all anywhere in the service. They all share the
-  // generic ACK-wait helper below, which (unlike the old handshake-only
-  // path) works regardless of `state`.
+  // SETTINGS PAGE — "SET NOW" / ACTION SENDERS
   // ─────────────────────────────────────────────────────────────────────────
 
   Future<bool> _sendActionAndWaitAck(
@@ -1169,6 +1156,7 @@ void stopLiveStatusMonitor() {
     _stopDashboardPolling();
     _stopCellVoltagePolling();
     stopSettingsPolling();
+    stopLiveStatusMonitor();
 
     if (_writeChar != null) {
       final int crc = BMSCrcService.calculateCRC8([BMSProtocol.packetLength, BMSProtocol.idDisconnect]);
@@ -1274,6 +1262,7 @@ void stopLiveStatusMonitor() {
     _cellVoltageCompleter  = null;
 
     _ackTimer?.cancel();
+    stopLiveStatusMonitor();
     _stopPolling();
   }
 
@@ -1281,6 +1270,7 @@ void stopLiveStatusMonitor() {
     _stopDashboardPolling();
     _stopCellVoltagePolling();
     stopSettingsPolling();
+    stopLiveStatusMonitor();
     _notifyChar = null;
     _writeChar  = null;
     _notifySub?.cancel();
@@ -1299,6 +1289,7 @@ void stopLiveStatusMonitor() {
     _stopDashboardPolling();
     _stopCellVoltagePolling();
     stopSettingsPolling();
+    stopLiveStatusMonitor();
     super.dispose();
   }
 
