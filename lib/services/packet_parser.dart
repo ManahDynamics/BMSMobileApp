@@ -199,7 +199,6 @@ class BMSPacketParser {
     return BMSParseResult.success(packet);
   }
 
-  // FIXED: rewritten from scratch. The previous version treated every field
   // as a 2-byte little-endian value at offsets that didn't match the
   // spec's 11-byte packet at all (it read past where the CRC/Stop actually
   // are). Per the screenshot, every field here is a single BYTE — the high

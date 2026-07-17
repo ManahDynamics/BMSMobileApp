@@ -294,6 +294,12 @@ class BMSParsedPacket {
   bool get isAck =>
       startByte == 0xAA && stopByte == 0xBB && dataId == 0x50;
 
+bool get isLiveStatusAck =>
+    startByte == BMSProtocol.ackStart &&
+    stopByte == BMSProtocol.ackStop &&
+    dataId == BMSProtocol.idLiveStatusAck &&
+    length == BMSProtocol.packetLength;
+
   bool get isDisconnect => dataId == 0x91;
 
   bool get isHandshake => dataId == 0x90 && startByte == 0xCC;

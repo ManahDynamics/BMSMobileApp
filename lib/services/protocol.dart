@@ -13,9 +13,9 @@ class BMSProtocol {
   // ── Data IDs (Mobile → BMS requests) ─────────────────────────────────────
   static const int idHandshake          = 0x90;
   static const int idDisconnect         = 0x91;
-  static const int idBleNameRequest     = 0x92;
-  static const int idDashboardRequest   = 0x93;
-  static const int idCellVoltageRequest = 0x94;
+  static const int idBleNameRequest     = 0x93;
+  static const int idDashboardRequest   = 0x94;
+  static const int idCellVoltageRequest = 0x95;
   // NOTE: idAlertsRequest below is INFERRED from the request/response ID
   // offset pattern used everywhere else in this file (request = response +
   // 0x40 — see idDeviceDetailsRequest/Response, idBatterySettingsRequest/
@@ -30,9 +30,9 @@ class BMSProtocol {
 
   // ── Data IDs (BMS → Mobile responses) ────────────────────────────────────
   static const int idAck                 = 0x50;
-  static const int idBleNameResponse     = 0x51;
-  static const int idDashboardResponse   = 0x52; // 120-byte response
-  static const int idCellVoltageResponse = 0x53; // 88-byte response
+  static const int idBleNameResponse     = 0x53;
+  static const int idDashboardResponse   = 0x54; // 120-byte response
+  static const int idCellVoltageResponse = 0x55; // 88-byte response
   static const int idAlertsResponse      = 0x56; // 37-byte response
 
   // ── Packet Structure (5-byte control packets) ─────────────────────────────
@@ -65,6 +65,26 @@ class BMSProtocol {
   static const int alertsCrcLow         = 34;
   static const int alertsCrcHigh        = 35;
   static const int alertsStopByte       = 36;
+
+  //________________________________________________
+  //live status
+  //________________________________________________
+  // ── Live Status Heartbeat (Mobile → BMS every 15s) ────────────────────────
+static const int idLiveStatusRequest = 0x92;
+static const int idLiveStatusAck     = 0x52; // BMS → Mobile, 5-byte control packet
+
+static const int liveStatusPacketLength = 0x0C; // Length byte value (12)
+static const int liveStatusTotalBytes   = 12;    // Full frame size
+
+static const int liveStatusHrByte    = 3;
+static const int liveStatusMinByte   = 4;
+static const int liveStatusSecByte   = 5;
+static const int liveStatusDayByte   = 6;
+static const int liveStatusMonthByte = 7;
+static const int liveStatusYearLow   = 8;
+static const int liveStatusYearHigh  = 9;
+static const int liveStatusCrcByte   = 10;
+static const int liveStatusStopByte  = 11;
 
   // ═══════════════════════════════════════════════════════════════════════
   // SETTINGS PAGE PROTOCOL
@@ -295,6 +315,8 @@ class BMSProtocol {
       case idHandshake:            return 'Handshake';
       case idAck:                  return 'ACK';
       case idDisconnect:           return 'Disconnect';
+      case idLiveStatusRequest: return 'Live Status Packet';
+      case idLiveStatusAck:     return 'Live Status Ack';
       case idBleNameRequest:       return 'BLE Name Request';
       case idDashboardRequest:     return 'Dashboard Request';
       case idCellVoltageRequest:   return 'Cell Voltage Request';
