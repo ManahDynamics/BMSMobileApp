@@ -16,6 +16,15 @@ class BMSProtocol {
   static const int idBleNameRequest     = 0x92;
   static const int idDashboardRequest   = 0x93;
   static const int idCellVoltageRequest = 0x94;
+  // NOTE: idAlertsRequest below is INFERRED from the request/response ID
+  // offset pattern used everywhere else in this file (request = response +
+  // 0x40 — see idDeviceDetailsRequest/Response, idBatterySettingsRequest/
+  // Response, etc.). 0x96 was previously an unused gap between
+  // idCellVoltageRequest (0x94) and idDeviceDetailsRequest (0x97), which is
+  // consistent with this being the missing Alerts request slot. CONFIRM
+  // against the firmware/BMS protocol spec before relying on this in the
+  // field — a wrong request ID here means the BMS silently never responds.
+  static const int idAlertsRequest      = 0x96;
 
 
 
@@ -24,6 +33,7 @@ class BMSProtocol {
   static const int idBleNameResponse     = 0x51;
   static const int idDashboardResponse   = 0x52; // 120-byte response
   static const int idCellVoltageResponse = 0x53; // 88-byte response
+  static const int idAlertsResponse      = 0x56; // 37-byte response
 
   // ── Packet Structure (5-byte control packets) ─────────────────────────────
   static const int packetLength = 0x05;
@@ -38,6 +48,23 @@ class BMSProtocol {
   static const int bleNameStart          = 3;
   static const int bleNameEnd            = 19; // exclusive (16 ASCII bytes)
   static const int bleNameCrcByte        = 19; // single CRC-8 byte
+
+  // ── Alerts Details Response Packet (37 bytes, dataId 0x56) ────────────────
+  // Layout (see packet_parser.dart _parseAlertsResponse for full field-by-
+  // field breakdown — most fields are read via raw offsets there since they
+  // are single-use; only the frame-level constants needed for dispatch/CRC/
+  // framing are declared here, matching the pattern used for other packets):
+  //   0      Start byte (0xAA)
+  //   1      Length
+  //   2      Data ID (0x56)
+  //   3-33   Alert fields (cycle count, fault time/date, fault id, voltages,
+  //          temps, positions — see packet_parser.dart)
+  //   34-35  CRC-16 (little-endian)
+  //   36     Stop byte (0xBB)
+  static const int alertsResponseLength = 37;
+  static const int alertsCrcLow         = 34;
+  static const int alertsCrcHigh        = 35;
+  static const int alertsStopByte       = 36;
 
   // ═══════════════════════════════════════════════════════════════════════
   // SETTINGS PAGE PROTOCOL
@@ -274,6 +301,8 @@ class BMSProtocol {
       case idBleNameResponse:      return 'BLE Name Response';
       case idDashboardResponse:    return 'Dashboard Response (full)';
       case idCellVoltageResponse:  return 'Cell Voltage Response';
+      case idAlertsRequest:         return 'Alerts Request';
+      case idAlertsResponse:        return 'Alerts Response';
       case idDeviceDetailsRequest:  return 'Device Details Request';
       case idDeviceDetailsResponse: return 'Device Details Response';
       case idBatterySettingsRequest:  return 'Battery Settings Request';

@@ -73,6 +73,16 @@ class BMSPacketParser {
       return _parseDeviceDetailsPacket(bytes, lastSentDataId: lastSentDataId);
     }
 
+    // 37-byte Alerts Details response (dataId 0x56)
+    // NOTE: gated on both exact length AND dataId, following the same
+    // pattern as the settings packets below — this protects against any
+    // other 37-byte family colliding on length alone.
+    if (bytes.length == BMSProtocol.alertsResponseLength &&
+        isBmsFrame &&
+        (bytes[2] & 0xFF) == BMSProtocol.idAlertsResponse) {
+      return _parseAlertsResponse(bytes, lastSentDataId: lastSentDataId);
+    }
+
     // ── Settings packets ─────────────────────────────────────────────────
     // FIXED: this dispatch previously switched on dataId ALONE, with no
     // length check. Since these settings IDs (0x58/0x59/0x5A/0x5B) reuse
@@ -266,6 +276,140 @@ class BMSPacketParser {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // 37-BYTE ALERTS DETAILS RESPONSE (dataId 0x56) — CRC-16, little-endian
+  //
+  // Layout (per protocol screenshot):
+  //   0     Start byte (0xAA)
+  //   1     Length (0x0D at spec position, but full frame is 37 bytes)
+  //   2     Data ID (0x56)
+  //   3-4   Cycle Count            (LE16)
+  //   5-6   Cycle Time @ Fault     (LE16)
+  //   7     Battery Status @ Fault (1=Charging,2=Discharging,3=Storage,
+  //                                  4=Ideal,5=Sleep)
+  //   8     Failure date
+  //   9     Failure month
+  //   10-11 Failure year           (LE16)
+  //   12    Failure hour
+  //   13    Failure minute
+  //   15    Fault ID / Alert ID    (1 to 38 — see BMSAlertCatalogue)
+  //   16    Fault Action           (0x01 = Disappear)
+  //   17-18 Total Voltage          (LE16, ×0.1 V)
+  //   19-20 Current                (LE16 signed, ×0.1 A)
+  //   21    SoC                    (%)
+  //   22-23 Max Cell Voltage       (LE16, ×0.001 V)
+  //   24    Max Cell Voltage Position
+  //   25-26 Min Cell Voltage       (LE16, ×0.001 V)
+  //   27    Min Cell Voltage Position
+  //   28-29 Max Temp               (LE16 signed, ×0.1 °C)
+  //   30    Max Temp Position
+  //   31-32 Lowest Temp            (LE16 signed, ×0.1 °C)
+  //   33    Min Temp Position
+  //   34-35 CRC-16                 (LE16)
+  //   36    Stop byte (0xBB)
+  //
+  // Byte 14 is unused/reserved per the spec table and is skipped.
+  // ─────────────────────────────────────────────────────────────────────────
+  static BMSParseResult _parseAlertsResponse(
+    List<int> bytes, {
+    int? lastSentDataId,
+  }) {
+    final int start  = bytes[0] & 0xFF;
+    final int length = bytes[1] & 0xFF;
+    final int dataId = bytes[2] & 0xFF;
+    final int stop   = bytes[BMSProtocol.alertsStopByte] & 0xFF;
+
+    if (lastSentDataId != null &&
+        !_responseMatchesRequest(lastSentDataId, dataId)) {
+      debugPrint('⚠️ RESPONSE MISMATCH [Alerts]');
+      return BMSParseResult.failure(
+        BMSParseError.unexpectedResponse,
+        errorDetail:
+            'sent=0x${lastSentDataId.toRadixString(16).toUpperCase().padLeft(2, "0")}'
+            ' got=0x${dataId.toRadixString(16).toUpperCase().padLeft(2, "0")}',
+      );
+    }
+
+    final int receivedCrc =
+        (bytes[BMSProtocol.alertsCrcLow] & 0xFF) |
+        ((bytes[BMSProtocol.alertsCrcHigh] & 0xFF) << 8);
+    final int computedCrc =
+        BMSCrcService.calculateCRC16(bytes.sublist(1, BMSProtocol.alertsCrcLow));
+
+    debugPrint('🔍 Alerts CRC:'
+        ' computed=0x${computedCrc.toRadixString(16).toUpperCase().padLeft(4, "0")}'
+        ' received=0x${receivedCrc.toRadixString(16).toUpperCase().padLeft(4, "0")}');
+
+    if (computedCrc != receivedCrc) {
+      return BMSParseResult.failure(
+        BMSParseError.crcMismatch,
+        errorDetail:
+            'computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
+            'received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
+      );
+    }
+    debugPrint('✅ CRC16 OK [Alerts Details Response]');
+
+    final int cycleCount        = _littleEndian16(bytes, 3);
+    final int cycleTimeAtFault  = _littleEndian16(bytes, 5);
+    final int batteryStatusCode = bytes[7] & 0xFF;
+    final int failureDate       = bytes[8] & 0xFF;
+    final int failureMonth      = bytes[9] & 0xFF;
+    final int failureYear       = _littleEndian16(bytes, 10);
+    final int failureHour       = bytes[12] & 0xFF;
+    final int failureMinute     = bytes[13] & 0xFF;
+    final int faultId           = bytes[15] & 0xFF;
+    final int faultActionCode   = bytes[16] & 0xFF;
+
+    final double totalVoltage = _littleEndian16(bytes, 17) / 10.0;
+    final double current      = _decodeSigned16(_littleEndian16(bytes, 19)) / 10.0;
+    final int soc              = bytes[21] & 0xFF;
+
+    final double maxCellVoltage    = _littleEndian16(bytes, 22) / 1000.0;
+    final int maxCellVoltagePos    = bytes[24] & 0xFF;
+    final double minCellVoltage    = _littleEndian16(bytes, 25) / 1000.0;
+    final int minCellVoltagePos    = bytes[27] & 0xFF;
+
+    final double maxTemp    = _decodeSigned16(_littleEndian16(bytes, 28)) / 10.0;
+    final int maxTempPos    = bytes[30] & 0xFF;
+    final double lowestTemp = _decodeSigned16(_littleEndian16(bytes, 31)) / 10.0;
+    final int minTempPos    = bytes[33] & 0xFF;
+
+    return BMSParseResult.success(
+      BMSParsedPacket(
+        startByte: start,
+        length: length,
+        dataId: dataId,
+        crc: receivedCrc,
+        stopByte: stop,
+        rawBytes: Uint8List.fromList(bytes),
+        receivedAt: DateTime.now(),
+
+        alertCycleCount: cycleCount,
+        alertCycleTimeAtFault: cycleTimeAtFault,
+        alertBatteryStatusCode: batteryStatusCode,
+        alertFailureDate: failureDate,
+        alertFailureMonth: failureMonth,
+        alertFailureYear: failureYear,
+        alertFailureHour: failureHour,
+        alertFailureMinute: failureMinute,
+        alertFaultId: faultId,
+        alertFaultActionCode: faultActionCode,
+        alertTotalVoltage: totalVoltage,
+        alertCurrent: current,
+        alertSoc: soc,
+        alertMaxCellVoltage: maxCellVoltage,
+        alertMaxCellVoltagePos: maxCellVoltagePos,
+        alertMinCellVoltage: minCellVoltage,
+        alertMinCellVoltagePos: minCellVoltagePos,
+        alertMaxTemp: maxTemp,
+        alertMaxTempPos: maxTempPos,
+        alertLowestTemp: lowestTemp,
+        alertMinTempPos: minTempPos,
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // REQUEST / RESPONSE ID MATCHING
   // ─────────────────────────────────────────────────────────────────────────
   static const Map<int, int> _expectedResponseId = {
@@ -278,6 +422,7 @@ class BMSPacketParser {
     BMSProtocol.idProtectionSettingsRequest: BMSProtocol.idProtectionSettingsResponse,
     BMSProtocol.idTemperatureSettingsRequest: BMSProtocol.idTemperatureSettingsResponse,
     BMSProtocol.idFactorySettingsRequest: BMSProtocol.idFactorySettingsResponse,
+    BMSProtocol.idAlertsRequest: BMSProtocol.idAlertsResponse,
   };
 
   static bool _responseMatchesRequest(int sentDataId, int responseDataId) {

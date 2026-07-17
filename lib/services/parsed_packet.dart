@@ -5,6 +5,64 @@ import 'protocol.dart';
 
 enum PacketDirection { send, receive, unknown }
 
+/// Alert catalogue for the Alerts Details Response (dataId 0x56).
+/// ID / name / priority pulled from the "Alerts" reference sheet.
+class BMSAlertInfo {
+  final int id;
+  final String name;
+  final String type; // "Warning" or "Fault"
+  final String priority; // "low" | "Medium" | "high"
+
+  const BMSAlertInfo(this.id, this.name, this.type, this.priority);
+}
+
+class BMSAlertCatalogue {
+  BMSAlertCatalogue._();
+
+  static const Map<int, BMSAlertInfo> byId = {
+    0x01: BMSAlertInfo(0x01, 'Cell volt high', 'Warning', 'low'),
+    0x02: BMSAlertInfo(0x02, 'Cell volt high', 'Fault', 'high'),
+    0x03: BMSAlertInfo(0x03, 'Cell volt low', 'Warning', 'low'),
+    0x04: BMSAlertInfo(0x04, 'Cell volt low', 'Fault', 'high'),
+    0x05: BMSAlertInfo(0x05, 'Voltage diff', 'Warning', 'low'),
+    0x06: BMSAlertInfo(0x06, 'Voltage diff', 'Fault', 'high'),
+    0x07: BMSAlertInfo(0x07, 'Single cell disconnect', 'Fault', 'high'),
+    0x08: BMSAlertInfo(0x08, 'The whole group disconnect', 'Fault', 'high'),
+    0x09: BMSAlertInfo(0x09, 'Cell Voltage', 'Fault', 'high'),
+    0x0A: BMSAlertInfo(0x0A, 'Sum volt high', 'Warning', 'low'),
+    0x0B: BMSAlertInfo(0x0B, 'Sum volt high', 'Fault', 'high'),
+    0x0C: BMSAlertInfo(0x0C, 'Sum volt low', 'Warning', 'low'),
+    0x0D: BMSAlertInfo(0x0D, 'Sum volt low', 'Fault', 'high'),
+    0x0E: BMSAlertInfo(0x0E, 'Chg temp high', 'Warning', 'low'),
+    0x0F: BMSAlertInfo(0x0F, 'Chg temp high', 'Fault', 'high'),
+    0x10: BMSAlertInfo(0x10, 'Chg temp low', 'Warning', 'low'),
+    0x11: BMSAlertInfo(0x11, 'Chg temp low', 'Fault', 'high'),
+    0x12: BMSAlertInfo(0x12, 'Dischg temp high', 'Warning', 'low'),
+    0x13: BMSAlertInfo(0x13, 'Dischg temp high', 'Fault', 'high'),
+    0x14: BMSAlertInfo(0x14, 'Dischg temp low', 'Warning', 'low'),
+    0x15: BMSAlertInfo(0x15, 'Dischg temp low', 'Fault', 'high'),
+    0x16: BMSAlertInfo(0x16, 'Temp diff level', 'Warning', 'low'),
+    0x17: BMSAlertInfo(0x17, 'Temp diff level', 'Fault', 'high'),
+    0x18: BMSAlertInfo(0x18, 'Cell temp error', 'Fault', 'high'),
+    0x19: BMSAlertInfo(0x19, 'Chg over current', 'Warning', 'low'),
+    0x1A: BMSAlertInfo(0x1A, 'Chg over current', 'Fault', 'high'),
+    0x1B: BMSAlertInfo(0x1B, 'Dischg over current', 'Warning', 'low'),
+    0x1C: BMSAlertInfo(0x1C, 'Dischg over current', 'Fault', 'high'),
+    0x1D: BMSAlertInfo(0x1D, 'Short circuit', 'Fault', 'high'),
+    0x1E: BMSAlertInfo(0x1E, 'Soc low level', 'Warning', 'low'),
+    0x1F: BMSAlertInfo(0x1F, 'Soc low level', 'Warning', 'Medium'),
+    0x20: BMSAlertInfo(0x20, 'Soc low level', 'Fault', 'high'),
+    0x21: BMSAlertInfo(0x21, 'SOH level 1', 'Warning', 'low'),
+    0x22: BMSAlertInfo(0x22, 'SOH level 2', 'Fault', 'high'),
+    0x23: BMSAlertInfo(0x23, 'AFE data comm', 'Fault', 'high'),
+    0x24: BMSAlertInfo(0x24, 'EEPROM error', 'Warning', 'low'),
+    0x25: BMSAlertInfo(0x25, 'Communication', 'Fault', 'high'),
+    0x26: BMSAlertInfo(0x26, 'Internal comm', 'Fault', 'high'),
+  };
+
+  static BMSAlertInfo? lookup(int id) => byId[id];
+}
+
 class BMSParsedPacket {
   // ── Common fields (all packets) ───────────────────────────────────────────
   final int startByte;
@@ -105,6 +163,32 @@ class BMSParsedPacket {
   final String? bmsSerialNo;
   final String? bleDeviceName;
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Alerts Details Response (dataId == 0x56, 37-byte response)
+  // Request dataId == 0x96 (5-byte control packet with sequence number)
+  // ─────────────────────────────────────────────────────────────────────────
+  final int?    alertCycleCount;          // Bytes 3–4 (LE16)
+  final int?    alertCycleTimeAtFault;    // Bytes 5–6 (LE16)
+  final int?    alertBatteryStatusCode;   // Byte 7 (1=Charging,2=Discharging,3=Storage,4=Ideal,5=Sleep)
+  final int?    alertFailureDate;         // Byte 8
+  final int?    alertFailureMonth;        // Byte 9
+  final int?    alertFailureYear;         // Bytes 10–11 (LE16)
+  final int?    alertFailureHour;         // Byte 12
+  final int?    alertFailureMinute;       // Byte 13
+  final int?    alertFaultId;             // Byte 15 (1 to 38 — maps to BMSAlertCatalogue)
+  final int?    alertFaultActionCode;     // Byte 16 (0x01 = Disappear)
+  final double? alertTotalVoltage;        // Bytes 17–18 (LE16, ×0.1 V)
+  final double? alertCurrent;             // Bytes 19–20 (LE16 signed, ×0.1 A)
+  final int?    alertSoc;                 // Byte 21 (%)
+  final double? alertMaxCellVoltage;      // Bytes 22–23 (LE16, ×0.001 V)
+  final int?    alertMaxCellVoltagePos;   // Byte 24
+  final double? alertMinCellVoltage;      // Bytes 25–26 (LE16, ×0.001 V)
+  final int?    alertMinCellVoltagePos;   // Byte 27
+  final double? alertMaxTemp;             // Bytes 28–29 (LE16 signed, ×0.1 °C)
+  final int?    alertMaxTempPos;          // Byte 30
+  final double? alertLowestTemp;          // Bytes 31–32 (LE16 signed, ×0.1 °C)
+  final int?    alertMinTempPos;          // Byte 33
+
   const BMSParsedPacket({
     required this.startByte,
     required this.length,
@@ -181,6 +265,28 @@ class BMSParsedPacket {
     this.batterySlNo,
     this.bmsSerialNo,
     this.bleDeviceName,
+    // Alerts Details Response
+    this.alertCycleCount,
+    this.alertCycleTimeAtFault,
+    this.alertBatteryStatusCode,
+    this.alertFailureDate,
+    this.alertFailureMonth,
+    this.alertFailureYear,
+    this.alertFailureHour,
+    this.alertFailureMinute,
+    this.alertFaultId,
+    this.alertFaultActionCode,
+    this.alertTotalVoltage,
+    this.alertCurrent,
+    this.alertSoc,
+    this.alertMaxCellVoltage,
+    this.alertMaxCellVoltagePos,
+    this.alertMinCellVoltage,
+    this.alertMinCellVoltagePos,
+    this.alertMaxTemp,
+    this.alertMaxTempPos,
+    this.alertLowestTemp,
+    this.alertMinTempPos,
   });
 
   // ── Convenience flags ─────────────────────────────────────────────────────
@@ -216,6 +322,9 @@ class BMSParsedPacket {
   bool get isFactorySettingsResponse =>
       dataId == BMSProtocol.idFactorySettingsResponse;
 
+  bool get isAlertsResponse =>
+      dataId == BMSProtocol.idAlertsResponse && alertCycleCount != null;
+
   // ── Decoded label fields ──────────────────────────────────────────────────
 
   String get batteryStatusLabel =>
@@ -225,6 +334,55 @@ class BMSParsedPacket {
 
   String get healthLabel =>
       healthCode != null ? BMSProtocol.healthLabel(healthCode!) : '–';
+
+  /// Battery status at the moment of the fault (Alerts Details Response).
+  /// Codes: 1=Charging, 2=Discharging, 3=Storage, 4=Ideal, 5=Sleep
+  String get alertBatteryStatusLabel {
+    switch (alertBatteryStatusCode) {
+      case 1: return 'Charging';
+      case 2: return 'Discharging';
+      case 3: return 'Storage';
+      case 4: return 'Ideal';
+      case 5: return 'Sleep';
+      default: return '–';
+    }
+  }
+
+  /// Fault/alert action. Codes: 1=Disappear
+  String get alertFaultActionLabel {
+    switch (alertFaultActionCode) {
+      case 1: return 'Disappear';
+      default: return '–';
+    }
+  }
+
+  /// Looks up the alert name/type/priority for [alertFaultId] using the
+  /// BMSAlertCatalogue (Sl No 1–38 from the Alerts reference sheet).
+  BMSAlertInfo? get alertInfo =>
+      alertFaultId != null ? BMSAlertCatalogue.lookup(alertFaultId!) : null;
+
+  String get alertNameLabel => alertInfo?.name ?? '–';
+
+  String get alertTypeLabel => alertInfo?.type ?? '–';
+
+  String get alertPriorityLabel => alertInfo?.priority ?? '–';
+
+  /// Combined failure timestamp, e.g. "14/07/2026 09:35".
+  String get alertFailureTimestampDisplay {
+    if (alertFailureDate == null ||
+        alertFailureMonth == null ||
+        alertFailureYear == null ||
+        alertFailureHour == null ||
+        alertFailureMinute == null) {
+      return '–';
+    }
+    final dd = alertFailureDate!.toString().padLeft(2, '0');
+    final mm = alertFailureMonth!.toString().padLeft(2, '0');
+    final yyyy = alertFailureYear!.toString();
+    final hh = alertFailureHour!.toString().padLeft(2, '0');
+    final min = alertFailureMinute!.toString().padLeft(2, '0');
+    return '$dd/$mm/$yyyy $hh:$min';
+  }
 
   // ── Formatted display strings ─────────────────────────────────────────────
 
@@ -274,6 +432,37 @@ class BMSParsedPacket {
   String get totalCellsDisplay =>
       totalCells != null ? '$totalCells' : '–';
 
+  // ── Alerts Details display strings ────────────────────────────────────────
+
+  String get alertTotalVoltageDisplay =>
+      alertTotalVoltage != null
+          ? '${alertTotalVoltage!.toStringAsFixed(1)} V'
+          : '– V';
+
+  String get alertCurrentDisplay =>
+      alertCurrent != null ? '${alertCurrent!.toStringAsFixed(1)} A' : '– A';
+
+  String get alertSocDisplay =>
+      alertSoc != null ? '$alertSoc %' : '– %';
+
+  String get alertMaxCellVoltageDisplay =>
+      alertMaxCellVoltage != null
+          ? '${alertMaxCellVoltage!.toStringAsFixed(3)} V'
+          : '– V';
+
+  String get alertMinCellVoltageDisplay =>
+      alertMinCellVoltage != null
+          ? '${alertMinCellVoltage!.toStringAsFixed(3)} V'
+          : '– V';
+
+  String get alertMaxTempDisplay =>
+      alertMaxTemp != null ? '${alertMaxTemp!.toStringAsFixed(1)} °C' : '– °C';
+
+  String get alertLowestTempDisplay =>
+      alertLowestTemp != null
+          ? '${alertLowestTemp!.toStringAsFixed(1)} °C'
+          : '– °C';
+
   // ── Human-readable type name for logs ─────────────────────────────────────
   String get typeName {
     switch (dataId) {
@@ -283,11 +472,13 @@ class BMSParsedPacket {
       case 0x51: return 'BLE Name Response (21-byte)';
       case 0x52: return 'Dashboard Response (115-byte)';
       case 0x53: return 'Cell Voltage Response (88-byte)';
+      case 0x56: return 'Alerts Details Response (37-byte)';
       case 0x57: return 'Device Details Response (70-byte)';
       case 0x58: return 'Battery Settings Response (18-byte)';
       case 0x59: return 'Protection Settings Response (17-byte)';
       case 0x5A: return 'Temperature Settings Response (11-byte)';
       case 0x5B: return 'Factory Settings Response (53-byte)';
+      case 0x96: return 'Alerts Details Request';
       case 0xB0: return 'Battery Settings Set Now';
       case 0xB1: return 'Calibrate Now';
       case 0xB2: return 'Protection Settings Set Now';
@@ -377,6 +568,27 @@ class BMSParsedPacket {
     String?          batterySlNo,
     String?          bmsSerialNo,
     String?          bleDeviceName,
+    int?             alertCycleCount,
+    int?             alertCycleTimeAtFault,
+    int?             alertBatteryStatusCode,
+    int?             alertFailureDate,
+    int?             alertFailureMonth,
+    int?             alertFailureYear,
+    int?             alertFailureHour,
+    int?             alertFailureMinute,
+    int?             alertFaultId,
+    int?             alertFaultActionCode,
+    double?          alertTotalVoltage,
+    double?          alertCurrent,
+    int?             alertSoc,
+    double?          alertMaxCellVoltage,
+    int?             alertMaxCellVoltagePos,
+    double?          alertMinCellVoltage,
+    int?             alertMinCellVoltagePos,
+    double?          alertMaxTemp,
+    int?             alertMaxTempPos,
+    double?          alertLowestTemp,
+    int?             alertMinTempPos,
   }) {
     return BMSParsedPacket(
       startByte:           startByte           ?? this.startByte,
@@ -453,6 +665,27 @@ class BMSParsedPacket {
       batterySlNo:         batterySlNo         ?? this.batterySlNo,
       bmsSerialNo:         bmsSerialNo         ?? this.bmsSerialNo,
       bleDeviceName:       bleDeviceName       ?? this.bleDeviceName,
+      alertCycleCount:        alertCycleCount        ?? this.alertCycleCount,
+      alertCycleTimeAtFault:  alertCycleTimeAtFault  ?? this.alertCycleTimeAtFault,
+      alertBatteryStatusCode: alertBatteryStatusCode ?? this.alertBatteryStatusCode,
+      alertFailureDate:       alertFailureDate       ?? this.alertFailureDate,
+      alertFailureMonth:      alertFailureMonth      ?? this.alertFailureMonth,
+      alertFailureYear:       alertFailureYear       ?? this.alertFailureYear,
+      alertFailureHour:       alertFailureHour       ?? this.alertFailureHour,
+      alertFailureMinute:     alertFailureMinute     ?? this.alertFailureMinute,
+      alertFaultId:           alertFaultId           ?? this.alertFaultId,
+      alertFaultActionCode:   alertFaultActionCode   ?? this.alertFaultActionCode,
+      alertTotalVoltage:      alertTotalVoltage      ?? this.alertTotalVoltage,
+      alertCurrent:           alertCurrent           ?? this.alertCurrent,
+      alertSoc:               alertSoc               ?? this.alertSoc,
+      alertMaxCellVoltage:    alertMaxCellVoltage    ?? this.alertMaxCellVoltage,
+      alertMaxCellVoltagePos: alertMaxCellVoltagePos ?? this.alertMaxCellVoltagePos,
+      alertMinCellVoltage:    alertMinCellVoltage    ?? this.alertMinCellVoltage,
+      alertMinCellVoltagePos: alertMinCellVoltagePos ?? this.alertMinCellVoltagePos,
+      alertMaxTemp:           alertMaxTemp           ?? this.alertMaxTemp,
+      alertMaxTempPos:        alertMaxTempPos        ?? this.alertMaxTempPos,
+      alertLowestTemp:        alertLowestTemp        ?? this.alertLowestTemp,
+      alertMinTempPos:        alertMinTempPos        ?? this.alertMinTempPos,
     );
   }
 
@@ -497,6 +730,18 @@ class BMSParsedPacket {
     }
     if (isFactorySettingsResponse) {
       sb.write(', batterySl=$batterySlNo, bmsSerial=$bmsSerialNo, bleName=$bleDeviceName');
+    }
+    if (isAlertsResponse) {
+      sb.write(', cycles=$alertCycleCount, cycleTimeAtFault=$alertCycleTimeAtFault'
+          ', statusAtFault=$alertBatteryStatusLabel'
+          ', failedAt=$alertFailureTimestampDisplay'
+          ', alert=$alertNameLabel($alertTypeLabel, id=0x${(alertFaultId ?? 0).toRadixString(16).toUpperCase().padLeft(2, "0")}, prio=$alertPriorityLabel)'
+          ', action=$alertFaultActionLabel'
+          ', $alertTotalVoltageDisplay, $alertCurrentDisplay, soc=$alertSocDisplay'
+          ', maxCell=$alertMaxCellVoltageDisplay(#$alertMaxCellVoltagePos)'
+          ', minCell=$alertMinCellVoltageDisplay(#$alertMinCellVoltagePos)'
+          ', maxTemp=$alertMaxTempDisplay(#$alertMaxTempPos)'
+          ', minTemp=$alertLowestTempDisplay(#$alertMinTempPos)');
     }
     sb.write(')');
     return sb.toString();

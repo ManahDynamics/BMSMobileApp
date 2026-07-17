@@ -118,7 +118,7 @@ Color _severityColor(String raw) {
 Color _statusColor(String raw) {
   if (raw == 'Active') return const Color(0xFFD4621A);
   if (raw == 'Warning') return const Color(0xFFB8860B);
-  return const Color(0xFF3A6EAC);
+  return const Color(0xFF1B6B3A);
 }
 
 IconData _statusIcon(String raw) {
@@ -154,7 +154,7 @@ AlertItem _cachedMapToAlertItem(Map<String, dynamic> m) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Shared alert card
+// Shared alert card (kept for AlertHistoryScreen)
 // ─────────────────────────────────────────────────────────────────────────────
 Widget buildAlertCard(AlertItem alert, {bool showStatus = false, required String Function(String) tr}) {
   final severityColor = _severityColor(alert.severityRaw);
@@ -244,7 +244,9 @@ Widget buildAlertCard(AlertItem alert, {bool showStatus = false, required String
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ALERTS SCREEN (Now Stateful + offline-cache aware)
+// ALERTS SCREEN — redesigned to match mockup
+// (device id header · bell badge · overflow menu · "Last Fetched On" row ·
+//  4-card filter bar · flat icon/dot/chevron rows)
 // ─────────────────────────────────────────────────────────────────────────────
 class AlertsScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -254,6 +256,8 @@ class AlertsScreen extends StatefulWidget {
   @override
   State<AlertsScreen> createState() => _AlertsScreenState();
 }
+
+enum _AlertFilter { total, warnings, faults, cleared }
 
 class _AlertsScreenState extends State<AlertsScreen> {
   final LocalAuthDB _localAuthDB = LocalAuthDB();
@@ -265,6 +269,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
   DateTime? _lastSync;
   bool _isOffline = false;
   bool _isLoadingCache = true;
+  _AlertFilter _selectedFilter = _AlertFilter.total;
 
   // Listen to translation + BLE service changes
   @override
@@ -318,15 +323,35 @@ class _AlertsScreenState extends State<AlertsScreen> {
     return '${diff.inDays}d ago';
   }
 
+  String _formatSyncDate(DateTime? dt) {
+    final d = dt ?? DateTime.now();
+    final dd = d.day.toString().padLeft(2, '0');
+    final mm = d.month.toString().padLeft(2, '0');
+    final yyyy = d.year.toString();
+    return '$dd-$mm-$yyyy';
+  }
+
   // Real (live/cached) alerts take priority; static demo data fills in the rest.
-  List<AlertItem> get _active => [
-        ..._liveAlerts,
-        ..._allAlerts.where((a) => a.statusRaw == 'Active'),
-      ];
+  List<AlertItem> get _combined => [..._liveAlerts, ..._allAlerts];
+  List<AlertItem> get _faults =>
+      _combined.where((a) => a.statusRaw == 'Active').toList();
   List<AlertItem> get _warnings =>
-      _allAlerts.where((a) => a.statusRaw == 'Warning').toList();
+      _combined.where((a) => a.statusRaw == 'Warning').toList();
   List<AlertItem> get _cleared =>
-      _allAlerts.where((a) => a.statusRaw == 'Cleared').toList();
+      _combined.where((a) => a.statusRaw == 'Cleared').toList();
+
+  List<AlertItem> get _filteredAlerts {
+    switch (_selectedFilter) {
+      case _AlertFilter.faults:
+        return _faults;
+      case _AlertFilter.warnings:
+        return _warnings;
+      case _AlertFilter.cleared:
+        return _cleared;
+      case _AlertFilter.total:
+        return _combined;
+    }
+  }
 
   // ── Disconnect ─────────────────────────────────────────────────────────────
   Future<void> _handleDisconnect(BuildContext context) async {
@@ -377,74 +402,99 @@ class _AlertsScreenState extends State<AlertsScreen> {
     );
   }
 
-  Widget _buildDeviceHeader(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.grey[200],
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Icon(Icons.battery_4_bar_rounded, color: Colors.black54, size: 32),
+  // ── AppBar: title + device id, bell badge, overflow menu ────────────────
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    final badgeCount = _faults.length + _warnings.length;
+
+    return AppBar(
+      backgroundColor: const Color(0xFF1B6B3A),
+      elevation: 0,
+      centerTitle: true,
+      leading: Builder(
+        builder: (ctx) => IconButton(
+          icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
+          onPressed: () => Scaffold.of(ctx).openDrawer(),
         ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      ),
+      title: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            tr('alerts').toUpperCase(),
+            style: const TextStyle(
+                color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            'BMS_001',
+            style: TextStyle(color: Colors.white70, fontSize: 11),
+          ),
+        ],
+      ),
+      actions: [
+        Stack(
+          clipBehavior: Clip.none,
           children: [
-            const Text('BMS_001',
-                style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87)),
-            const SizedBox(height: 3),
-            Row(children: [
-              Text(
-                _isOffline ? tr('disconnected') : tr('connected'),
-                style: TextStyle(
-                    fontSize: 13,
-                    color: _isOffline
-                        ? const Color(0xFFD4621A)
-                        : const Color(0xFF1B6B3A),
-                    fontWeight: FontWeight.w500),
-              ),
-              const SizedBox(width: 6),
-              Container(
-                  width: 8,
-                  height: 8,
+            IconButton(
+              icon: const Icon(Icons.notifications_none_rounded, color: Colors.white),
+              onPressed: () {},
+            ),
+            if (badgeCount > 0)
+              Positioned(
+                right: 6,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                   decoration: BoxDecoration(
-                      color: _isOffline
-                          ? const Color(0xFFD4621A)
-                          : const Color(0xFF1B6B3A),
-                      shape: BoxShape.circle)),
-            ]),
+                    color: const Color(0xFFD4621A),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF1B6B3A), width: 1.5),
+                  ),
+                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  child: Text(
+                    badgeCount.toString().padLeft(2, '0'),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                        color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
           ],
         ),
-        const Spacer(),
-        ElevatedButton(
-          onPressed: () => _showDisconnectDialog(context),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFD4621A),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            elevation: 0,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          ),
-          child: Text(
-            tr('disconnect').toUpperCase(),
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-          ),
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+          color: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          onSelected: (value) {
+            if (value == 'disconnect') _showDisconnectDialog(context);
+          },
+          itemBuilder: (ctx) => [
+            PopupMenuItem(value: 'disconnect', child: Text(tr('disconnect'))),
+          ],
         ),
       ],
     );
   }
 
-  // ── Offline / cache banner ───────────────────────────────────────────────
+  // ── "Last Fetched On …" row ──────────────────────────────────────────────
+  Widget _buildLastFetchedRow() {
+    return Row(
+      children: [
+        Icon(Icons.access_time_rounded, size: 14, color: Colors.grey[500]),
+        const SizedBox(width: 6),
+        Text(
+          '${tr('last_fetched_on')} ${_formatSyncDate(_lastSync)}',
+          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        ),
+      ],
+    );
+  }
+
   Widget _buildOfflineBanner() {
     if (_isLoadingCache || !_isOffline) return const SizedBox.shrink();
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.orange.shade50,
@@ -466,195 +516,211 @@ class _AlertsScreenState extends State<AlertsScreen> {
     );
   }
 
+  // ── 4-card filter bar (Total / Warnings / Faults / Cleared) ─────────────
+  Widget _buildFilterBar() {
+    final items = <_FilterCardData>[
+      _FilterCardData(
+        filter: _AlertFilter.total,
+        icon: Icons.notifications_none_rounded,
+        label: tr('total_alerts'),
+        count: _combined.length,
+      ),
+      _FilterCardData(
+        filter: _AlertFilter.warnings,
+        icon: Icons.info_outline_rounded,
+        label: tr('warnings'),
+        count: _warnings.length,
+      ),
+      _FilterCardData(
+        filter: _AlertFilter.faults,
+        icon: Icons.warning_amber_rounded,
+        label: tr('faults'),
+        count: _faults.length,
+      ),
+      _FilterCardData(
+        filter: _AlertFilter.cleared,
+        icon: Icons.check_circle_outline_rounded,
+        label: tr('cleared_alerts'),
+        count: _cleared.length,
+      ),
+    ];
+
+    return Row(
+      children: items
+          .map((item) => Expanded(child: _buildFilterCard(item)))
+          .toList(),
+    );
+  }
+
+  Widget _buildFilterCard(_FilterCardData item) {
+    final bool selected = _selectedFilter == item.filter;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedFilter = item.filter),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 4),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF3A6EAC) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: selected ? null : Border.all(color: const Color(0xFFE0E0E0)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(item.icon,
+                size: 20, color: selected ? Colors.white : const Color(0xFF3A6EAC)),
+            const SizedBox(height: 6),
+            Text(
+              item.count.toString().padLeft(2, '0'),
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: selected ? Colors.white : Colors.black87),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              item.label,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                  fontSize: 10.5,
+                  color: selected ? Colors.white70 : Colors.grey[600]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Flat alert row: icon · title/time · status dot · chevron ────────────
+  Widget _buildAlertRow(AlertItem alert) {
+    final statusColor = _statusColor(alert.statusRaw);
+    final statusIcon = _statusIcon(alert.statusRaw);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F7F7),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFE0E0E0)),
+            ),
+            child: Icon(statusIcon, size: 17, color: statusColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tr(alert.titleKey),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.black87),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  alert.time,
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey[600]),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 8,
+            height: 8,
+            margin: const EdgeInsets.only(right: 4),
+            decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+          ),
+          Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey[400]),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final filtered = _filteredAlerts;
+
     return Scaffold(
       backgroundColor: Colors.white,
       drawer: AppDrawer(activeRoute: '/alerts', service: widget.service),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFF1B6B3A),
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          tr('alerts').toUpperCase(),
-          style: const TextStyle(
-              color: Colors.white,
-              fontSize: 16,
-              fontWeight: FontWeight.bold),
-        ),
-        leading: Builder(
-          builder: (ctx) => IconButton(
-            icon: const Icon(Icons.menu_rounded, color: Colors.white, size: 26),
-            onPressed: () => Scaffold.of(ctx).openDrawer(),
-          ),
-        ),
-      ),
+      appBar: _buildAppBar(context),
       body: RefreshIndicator(
         onRefresh: _loadCachedAlerts,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildDeviceHeader(context),
-              const SizedBox(height: 16),
-              _buildOfflineBanner(),
-              _buildSummaryBar(),
-              const SizedBox(height: 20),
-              _buildSectionHeader(
-                '${tr('active_alerts')} (${_active.length})',
-                showViewAll: true,
-                context: context,
-              ),
-              const SizedBox(height: 10),
-              if (_isLoadingCache)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else
-                ..._active.map((a) => buildAlertCard(a, tr: tr)),
-              const SizedBox(height: 10),
-              _buildSectionHeader('${tr('warnings')} (${_warnings.length})'),
-              const SizedBox(height: 10),
-              ..._warnings.map((a) => buildAlertCard(a, tr: tr)),
-              const SizedBox(height: 10),
-              _buildSectionHeader('${tr('cleared_alerts')} (${_cleared.length})'),
-              const SizedBox(height: 10),
-              ..._cleared.map((a) => buildAlertCard(a, tr: tr)),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                height: 45,
-                child: OutlinedButton.icon(
-                  onPressed: () => Navigator.push(
-                    context,
-                    SlideRoute(page: AlertHistoryScreen(service: widget.service)),
-                  ),
-                  icon: const Icon(Icons.calendar_month_outlined, size: 20),
-                  label: Text(
-                    tr('alert_history'),
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.black87,
-                    side: const BorderSide(color: Color(0xFFCCCCCC)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF5F5F5),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFFE0E0E0)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline_rounded, color: Colors.grey[500], size: 18),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        tr('alerts_support_note'),
-                        style: const TextStyle(fontSize: 12, color: Colors.black54),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ... (_buildSummaryBar, _summaryItem, _divider, _buildSectionHeader remain same)
-  Widget _buildSummaryBar() {
-    final totalCount = _allAlerts.length + _liveAlerts.length;
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: const Color(0xFF3A6EAC),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          children: [
-            _summaryItem(Icons.notifications_outlined, tr('alerts_label'), totalCount.toString()),
-            _divider(),
-            _summaryItem(Icons.warning_amber_rounded, tr('status_active'), _active.length.toString()),
-            _divider(),
-            _summaryItem(Icons.info_outline_rounded, tr('warnings'), _warnings.length.toString()),
-            _divider(),
-            _summaryItem(Icons.check_circle_outline_rounded, tr('status_cleared'), _cleared.length.toString()),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _summaryItem(IconData icon, String label, String count) {
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 16),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: Colors.white, size: 22),
-            const SizedBox(height: 4),
-            Text(label, style: const TextStyle(color: Colors.white70, fontSize: 12)),
-            const SizedBox(height: 2),
-            Text(count, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w500)),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildLastFetchedRow(),
+                  _buildOfflineBanner(),
+                  const SizedBox(height: 14),
+                  _buildFilterBar(),
+                ],
+              ),
+            ),
+            Expanded(
+              child: _isLoadingCache
+                  ? const Center(child: CircularProgressIndicator())
+                  : filtered.isEmpty
+                      ? ListView(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          children: [
+                            const SizedBox(height: 40),
+                            Center(
+                              child: Text(
+                                tr('no_alerts_found'),
+                                style: TextStyle(color: Colors.grey[500]),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          itemCount: filtered.length,
+                          itemBuilder: (context, i) => _buildAlertRow(filtered[i]),
+                        ),
+            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _divider() {
-    return Container(
-      width: 1,
-      margin: const EdgeInsets.symmetric(vertical: 16),
-      color: Colors.white.withOpacity(0.25),
-    );
-  }
-
-  Widget _buildSectionHeader(String title, {bool showViewAll = false, BuildContext? context}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(title,
-            style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87)),
-        if (showViewAll && context != null)
-          GestureDetector(
-            onTap: () => Navigator.push(
-              context,
-              SlideRoute(page: AlertHistoryScreen(service: widget.service)),
-            ),
-            child: Row(children: [
-              Text(tr('view_all'),
-                  style: const TextStyle(
-                      fontSize: 14,
-                      color: Color(0xFF4F4F4F),
-                      fontWeight: FontWeight.w500)),
-              const SizedBox(width: 2),
-              const Icon(Icons.chevron_right_rounded, size: 18, color: Color(0xFF4F4F4F)),
-            ]),
-          ),
-      ],
     );
   }
 }
 
+class _FilterCardData {
+  final _AlertFilter filter;
+  final IconData icon;
+  final String label;
+  final int count;
+
+  _FilterCardData({
+    required this.filter,
+    required this.icon,
+    required this.label,
+    required this.count,
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// ALERT HISTORY SCREEN (Also Updated — now includes cached/live alerts)
+// ALERT HISTORY SCREEN (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 class AlertHistoryScreen extends StatefulWidget {
   final BMSBluetoothService service;
