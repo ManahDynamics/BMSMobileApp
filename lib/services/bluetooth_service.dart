@@ -375,6 +375,9 @@ if (!result.isSuccess) {
         } else if (packet.isLiveStatusAck) {
           addDebugLog('✅ Live Status Ack received');
           _liveStatusAckTimer?.cancel();
+          _liveStatusAckTimer = null;
+
+      
 
         } else if (packet.isAck) {
           if (state == BMSConnectionState.waitingAck) {
@@ -494,12 +497,18 @@ if (!result.isSuccess) {
 
     await _sendPacket(packet, logName: 'LIVE_STATUS', sentDataId: BMSProtocol.idLiveStatusRequest);
 
-    _liveStatusAckTimer?.cancel();
-    _liveStatusAckTimer = Timer(const Duration(seconds: 20), _onLiveStatusAckTimeout);
+    // Only start a new timeout if one isn't already pending — a routine
+    // periodic send should never reset the clock on an ack we're still
+    // waiting for.
+    if (_liveStatusAckTimer == null || !_liveStatusAckTimer!.isActive) {
+      _liveStatusAckTimer = Timer(const Duration(seconds: 20), _onLiveStatusAckTimeout);
+    }
   }
 
   void _onLiveStatusAckTimeout() {
     addDebugLog('⛔ Live Status Ack not received within 20s — disconnecting');
+    debugPrint("🔥 Calling disconnect callback");
+debugPrint("Callback = $onBmsDisconnectedFatal");
     onBmsDisconnectedFatal?.call();
     disconnect();
   }

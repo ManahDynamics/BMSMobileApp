@@ -17,7 +17,6 @@ import 'services/device_token_service.dart';
 import 'services/offline_sync_service.dart'; // ← NEW
 
 /// Global bluetooth service - single instance used across the entire app
-final BMSBluetoothService bmsService = BMSBluetoothService();
 
 /// Global offline sync service - single instance used across the entire app
 final OfflineSyncService offlineSyncService = OfflineSyncService(); // ← NEW
@@ -71,8 +70,10 @@ void main() async {
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
-bmsService.onBmsDisconnectedFatal = () {
+AppRouter.bmsService.onBmsDisconnectedFatal = () {
+    debugPrint("✅ Callback reached in main.dart");
   final context = appNavigatorKey.currentContext;
+  debugPrint("Context = $context");
 
   if (context == null) return;
 
