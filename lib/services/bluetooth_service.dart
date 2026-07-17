@@ -505,18 +505,18 @@ Future<void> sendLiveStatusPacket() async {
   await _sendPacket(packet, logName: 'LIVE_STATUS', sentDataId: BMSProtocol.idLiveStatusRequest);
 
   _liveStatusAckTimer?.cancel();
-  _liveStatusAckTimer = Timer(const Duration(seconds: 5), _onLiveStatusAckTimeout);
+  _liveStatusAckTimer = Timer(const Duration(seconds: 20), _onLiveStatusAckTimeout);
 }
 
 void _onLiveStatusAckTimeout() {
-  addDebugLog('⛔ Live Status Ack not received within 5s — disconnecting');
+  addDebugLog('⛔ Live Status Ack not received within 10s — disconnecting');
   onLiveStatusAckTimeout?.call();
   disconnect();
 }
 
 void startLiveStatusMonitor() {
   stopLiveStatusMonitor();
-  addDebugLog('▶️ Live Status monitor started (interval 15s, ack timeout 5s)');
+  addDebugLog('▶️ Live Status monitor started (interval 15s, ack timeout 10s)');
   sendLiveStatusPacket();
   _liveStatusTimer = Timer.periodic(const Duration(seconds: 15), (_) {
     sendLiveStatusPacket();

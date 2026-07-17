@@ -300,15 +300,17 @@ bool get isLiveStatusAck =>
     dataId == BMSProtocol.idLiveStatusAck &&
     length == BMSProtocol.packetLength;
 
-  bool get isDisconnect => dataId == 0x91;
+  bool get isDisconnect => dataId == BMSProtocol.idDisconnect;
 
-  bool get isHandshake => dataId == 0x90 && startByte == 0xCC;
+  bool get isHandshake => dataId == BMSProtocol.idHandshake && startByte == BMSProtocol.startByte;
 
-  bool get isBleNameResponse => dataId == 0x51 && bleName != null;
+  bool get isBleNameResponse => dataId == BMSProtocol.idBleNameResponse && bleName != null;
 
-  bool get isDashboardResponse => dataId == 0x52 && totalVoltage != null;
+  bool get isDashboardResponse =>
+    dataId == BMSProtocol.idDashboardResponse && totalVoltage != null;
 
-  bool get isCellVoltageResponse => dataId == 0x53 && cellVoltages != null;
+bool get isCellVoltageResponse =>
+    dataId == BMSProtocol.idCellVoltageResponse && cellVoltages != null;
 
   /// FIXED: this getter was missing entirely — without it,
   /// bluetooth_service.dart had no way to recognize a parsed Device Details
@@ -473,28 +475,30 @@ bool get isLiveStatusAck =>
   String get typeName {
     switch (dataId) {
       case 0x90: return 'HANDSHAKE';
-      case 0x50: return 'ACK';
-      case 0x91: return 'DISCONNECT';
-      case 0x51: return 'BLE Name Response (21-byte)';
-      case 0x52: return 'Dashboard Response (115-byte)';
-      case 0x53: return 'Cell Voltage Response (88-byte)';
-      case 0x56: return 'Alerts Details Response (37-byte)';
-      case 0x57: return 'Device Details Response (70-byte)';
-      case 0x58: return 'Battery Settings Response (18-byte)';
-      case 0x59: return 'Protection Settings Response (17-byte)';
-      case 0x5A: return 'Temperature Settings Response (11-byte)';
-      case 0x5B: return 'Factory Settings Response (53-byte)';
-      case 0x96: return 'Alerts Details Request';
-      case 0xB0: return 'Battery Settings Set Now';
-      case 0xB1: return 'Calibrate Now';
-      case 0xB2: return 'Protection Settings Set Now';
-      case 0xB3: return 'Temperature Settings Set Now';
-      case 0xB4: return 'Factory Settings Set Now';
-      case 0xB5: return 'Firmware Upgrade';
-      case 0xB6: return 'Restart';
-      case 0xB7: return 'Factory Data Reset';
-      default:
-        return 'Unknown (0x${dataId.toRadixString(16).toUpperCase().padLeft(2, "0")})';
+case 0x50: return 'ACK';
+case 0x91: return 'DISCONNECT';
+case 0x92: return 'Live Status Packet';
+case 0x52: return 'Live Status Ack';
+case 0x53: return 'BLE Name Response (21-byte)';
+case 0x54: return 'Dashboard Response (115-byte)';
+case 0x55: return 'Cell Voltage Response (88-byte)';
+case 0x56: return 'Alerts Details Response (37-byte)';
+case 0x57: return 'Device Details Response (70-byte)';
+case 0x58: return 'Battery Settings Response (18-byte)';
+case 0x59: return 'Protection Settings Response (17-byte)';
+case 0x5A: return 'Temperature Settings Response (11-byte)';
+case 0x5B: return 'Factory Settings Response (53-byte)';
+case 0x96: return 'Alerts Details Request';
+case 0xB0: return 'Battery Settings Set Now';
+case 0xB1: return 'Calibrate Now';
+case 0xB2: return 'Protection Settings Set Now';
+case 0xB3: return 'Temperature Settings Set Now';
+case 0xB4: return 'Factory Settings Set Now';
+case 0xB5: return 'Firmware Upgrade';
+case 0xB6: return 'Restart';
+case 0xB7: return 'Factory Data Reset';
+default:
+  return 'Unknown (0x${dataId.toRadixString(16).toUpperCase().padLeft(2, "0")})';
     }
   }
 
