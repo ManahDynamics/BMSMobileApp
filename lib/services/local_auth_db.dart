@@ -26,6 +26,7 @@ class LocalAuthDB {
   static const _keyLastSync      = 'bms_last_sync';
   static const _keyDeviceName    = 'bms_cached_device_name';
   static const _keyCurrentUserId = 'bms_current_user_id'; // NEW
+  static const _keyDeviceIdMap   = 'bms_device_id_map'; // NEW: deviceName -> generated unique id
   static const _cacheTableName = 'cache_entries';
   static const _syncTableName = 'pending_sync_entries';
 
@@ -108,24 +109,64 @@ class LocalAuthDB {
   // ────────────────────────────────────────────────────────────────────────────
 
   /// Cache the device name locally AND queue it for sync to Firestore.
+  ///
   /// [userId]: if omitted, falls back to the current logged-in user set by
   /// [loginOffline] / [setCurrentUserId].
-  Future<void> saveDeviceName(String name, {String? userId}) async {
+  ///
+  /// [deviceId]: a stable identifier for the physical Bluetooth device
+  /// (e.g. its MAC address / UUID). If omitted, [name] is used instead.
+  /// This is what makes the sync "latest connect only, per device": the
+  /// Firestore doc ID is derived from (userId, deviceId), so reconnecting
+  /// to the SAME device overwrites its existing summary doc instead of
+  /// creating a new one, while connecting to a DIFFERENT device gets its
+  /// own doc.
+  Future<void> saveDeviceName(
+    String name, {
+    String? userId,
+    String? deviceId,
+  }) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyDeviceName, name);
     await _updateSyncTime(prefs);
 
     final resolvedUserId = userId ?? await getCurrentUserId();
-    final now = DateTime.now().toUtc().toIso8601String();
+    final now = _nowIstIso();
+
+    // Stable per-device doc id -> upsert instead of new doc per connect.
+    // If the caller doesn't pass an explicit deviceId (e.g. a Bluetooth
+    // MAC/UUID), we generate a purely numeric unique id the FIRST time this
+    // device name is seen, then remember it (via _getOrCreateDeviceId) so
+    // every future connect to the same device reuses that exact id instead
+    // of re-deriving something from the raw name. The docId is that numeric
+    // id itself, keeping doc IDs clean and consistent with the numeric IDs
+    // already used elsewhere in Firestore (e.g. cell_voltage_summary).
+    final resolvedDeviceId = deviceId ?? await _getOrCreateDeviceId(name);
+    final docId = _sanitizeForDocId(resolvedDeviceId);
+    final rowKey = 'paired_device_summary::$docId';
+
+    // Remove any other still-pending paired_device_summary rows (e.g. old
+    // timestamp-based rows queued before docId scoping existed, or rows
+    // left over from a different device/user) so only the newest connect
+    // record is ever waiting to sync. Without this, stale rows from before
+    // this fix - or from previous devices - would still get pushed up as
+    // extra documents.
+    final db = await _getDatabase();
+    await db.delete(
+      _syncTableName,
+      where: 'collection = ? AND row_key != ?',
+      whereArgs: ['paired_device_summary', rowKey],
+    );
 
     await enqueueForSync(
       'paired_device_summary',
       {
         'device_name': name,
+        'device_id': resolvedDeviceId,
         'user_id': resolvedUserId,
         'created_at': now,
         'updated_at': now,
       },
+      docId: docId,
     );
   }
 
@@ -139,7 +180,7 @@ class LocalAuthDB {
     await _updateSyncTime(prefs);
 
     final resolvedUserId = userId ?? await getCurrentUserId();
-    final now = DateTime.now().toUtc().toIso8601String();
+    final now = _nowIstIso();
 
     await enqueueForSync(
       'dashboard_summary',
@@ -162,7 +203,7 @@ class LocalAuthDB {
     await _updateSyncTime(prefs);
 
     final resolvedUserId = userId ?? await getCurrentUserId();
-    final now = DateTime.now().toUtc().toIso8601String();
+    final now = _nowIstIso();
 
     await enqueueForSync(
       'cell_voltage_summary',
@@ -185,7 +226,7 @@ class LocalAuthDB {
     await prefs.setString(_keyAlerts, jsonEncode(alerts));
 
     final resolvedUserId = userId ?? await getCurrentUserId();
-    final now = DateTime.now().toUtc().toIso8601String();
+    final now = _nowIstIso();
 
     await enqueueForSync(
       'alerts_summary',
@@ -206,7 +247,7 @@ class LocalAuthDB {
     await prefs.setString(_keySettings, jsonEncode(settings));
 
     final resolvedUserId = userId ?? await getCurrentUserId();
-    final now = DateTime.now().toUtc().toIso8601String();
+    final now = _nowIstIso();
 
     await enqueueForSync(
       'settings_summary',
@@ -223,11 +264,11 @@ class LocalAuthDB {
   ///
   /// [docId]: if provided, this exact document ID is used - repeated calls
   /// with the same [collection] + [docId] will overwrite the same Firestore
-  /// document (good for "current state" data like a dashboard snapshot).
-  /// If omitted (the current default for all BMS cache saves above), a
-  /// unique timestamp-based ID is generated instead - each save creates a
-  /// NEW Firestore document, giving you a full history/log of every synced
-  /// snapshot rather than a single overwritten "latest" doc.
+  /// document (good for "current state" data like a dashboard snapshot, or
+  /// a per-device "latest connect" summary).
+  /// If omitted, a unique timestamp-based ID is generated instead - each
+  /// save creates a NEW Firestore document, giving you a full history/log
+  /// of every synced snapshot rather than a single overwritten "latest" doc.
   ///
   /// Uses an atomic upsert (INSERT ... ON CONFLICT REPLACE) rather than a
   /// separate delete-then-insert, so rapid concurrent calls with the same
@@ -259,7 +300,7 @@ class LocalAuthDB {
         'collection': collection,
         'doc_id': id,
         'payload': encodedPayload,
-        'created_at': DateTime.now().toUtc().toIso8601String(),
+        'created_at': _nowIstIso(),
         'status': 'pending',
       },
       conflictAlgorithm: ConflictAlgorithm.replace,
@@ -382,7 +423,24 @@ class LocalAuthDB {
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<void> _updateSyncTime(SharedPreferences prefs) async {
-    await prefs.setString(_keyLastSync, DateTime.now().toUtc().toIso8601String());
+    await prefs.setString(_keyLastSync, _nowIstIso());
+  }
+
+  /// Returns the current time as an ISO-8601 string expressed in Indian
+  /// Standard Time (UTC+5:30), e.g. "2026-07-17T17:39:00.123+05:30".
+  ///
+  /// IST has a fixed offset with no daylight-saving changes, so rather than
+  /// pulling in the `timezone` package we just take the real UTC time and
+  /// shift it by +5:30. We then strip the trailing "Z" that
+  /// [DateTime.toIso8601String] would otherwise add (since the shifted
+  /// value is no longer actually UTC) and append the correct "+05:30"
+  /// offset instead, so the string is unambiguous to anyone reading it
+  /// (including Firestore / other services parsing it later).
+  String _nowIstIso() {
+    final istNow = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
+    final iso = istNow.toIso8601String();
+    final withoutTrailingZ = iso.endsWith('Z') ? iso.substring(0, iso.length - 1) : iso;
+    return '$withoutTrailingZ+05:30';
   }
 
   Future<Map<String, dynamic>?> _getMap(String key) async {
@@ -390,6 +448,48 @@ class LocalAuthDB {
     final raw   = prefs.getString(key);
     if (raw == null) return null;
     return Map<String, dynamic>.from(jsonDecode(raw) as Map);
+  }
+
+  /// Makes an arbitrary string safe to use as (part of) a Firestore /
+  /// SQLite doc id: keeps letters, digits, dash and underscore, replaces
+  /// everything else (spaces, colons in a MAC address, etc.) with '_'.
+  String _sanitizeForDocId(String input) {
+    return input.trim().replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+  }
+
+  /// Returns a stable unique id for [deviceKey] (typically the device
+  /// name), generating and persisting a new one the first time this device
+  /// is seen. Every subsequent call with the same [deviceKey] returns the
+  /// exact same id, so a device's "latest connect" doc always lands on the
+  /// same Firestore document instead of drifting whenever the raw name is
+  /// re-sanitized/re-derived.
+  ///
+  /// Prefer passing an explicit `deviceId` (Bluetooth MAC/UUID) into
+  /// [saveDeviceName] when you have one - this generated id is only a
+  /// fallback for when no hardware identifier is available.
+  Future<String> _getOrCreateDeviceId(String deviceKey) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw   = prefs.getString(_keyDeviceIdMap);
+    final map   = raw != null
+        ? Map<String, dynamic>.from(jsonDecode(raw) as Map)
+        : <String, dynamic>{};
+
+    final normalizedKey = deviceKey.trim().toLowerCase();
+    final existing = map[normalizedKey] as String?;
+    if (existing != null) return existing;
+
+    final newId = _generateUniqueId();
+    map[normalizedKey] = newId;
+    await prefs.setString(_keyDeviceIdMap, jsonEncode(map));
+    return newId;
+  }
+
+  /// Generates a purely numeric unique id (digits only) - same style as the
+  /// numeric doc IDs already used elsewhere in this file / Firestore (e.g.
+  /// cell_voltage_summary's "1783500692535778"). Just the current UTC
+  /// microsecond timestamp, same as enqueueForSync's own fallback doc id.
+  String _generateUniqueId() {
+    return DateTime.now().toUtc().microsecondsSinceEpoch.toString();
   }
 
   Future<Database> _getDatabase() async {
