@@ -1379,11 +1379,11 @@ Color _voltageColor(double v) {
               children: [
                 Text(
                   '${tr('dashboard.min_volt')} $minVoltage',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF5E5E5E), fontWeight: FontWeight.w500, letterSpacing: 0),
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF5E5E5E), fontWeight: FontWeight.w700, letterSpacing: 0),
                 ),
                 Text(
                   '${tr('dashboard.max_volt')} $maxVoltage',
-                  style: const TextStyle(fontSize: 11, color: Color(0xFF5E5E5E), fontWeight: FontWeight.w500, letterSpacing: 0),
+                  style: const TextStyle(fontSize: 11, color: Color(0xFF5E5E5E), fontWeight: FontWeight.w700, letterSpacing: 0),
                 ),
               ],
             ),
