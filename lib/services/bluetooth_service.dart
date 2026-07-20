@@ -97,6 +97,13 @@ BMSParsedPacket? latestTemperatureSettings;
   Timer? _liveStatusTimer;
   Timer? _liveStatusAckTimer;
 
+  /// Number of consecutive Live Status Acks missed in a row. Reset to 0
+  /// whenever an Ack is received. The fatal "BMS Disconnected" popup only
+  /// fires once this reaches [_maxLiveStatusMisses] — a single missed Ack
+  /// no longer disconnects immediately.
+  int _liveStatusMissCount = 0;
+  static const int _maxLiveStatusMisses = 3;
+
   /// Called when the Live Status Ack isn't received within the timeout
   /// window — BMS is considered disconnected. UI (wired in main.dart) shows
   /// a blocking "BMS Disconnected" dialog and closes the app on OK, using
@@ -158,14 +165,30 @@ BMSParsedPacket? latestTemperatureSettings;
         if (cs == BluetoothConnectionState.disconnected &&
             state != BMSConnectionState.disconnecting &&
             state != BMSConnectionState.disconnected) {
-          debugPrint('⚠️  Device disconnected unexpectedly');
-          addDebugLog('⚠️ Device disconnected unexpectedly');
+          debugPrint('⚠️  Device disconnected unexpectedly (BMS powered off / out of range)');
+          addDebugLog('⚠️ Device disconnected unexpectedly (BLE link lost)');
           errorMessage = 'Device disconnected unexpectedly';
           state = BMSConnectionState.error;
           isConnecting = false;
+
+          // Tear down timers/polling and BLE resources. Don't call
+          // disconnect() here — the BLE link is already gone (that's why
+          // this fired), so writing a disconnect packet to _writeChar
+          // would fail. Mirror disconnect()'s cleanup steps instead.
           _stopPolling();
+          _stopDashboardPolling();
+          _stopCellVoltagePolling();
+          stopSettingsPolling();
+          stopLiveStatusMonitor();
           _cleanup();
           notifyListeners();
+
+          // Fire the same fatal callback used by the Live Status Ack
+          // timeout, so "BMS powered off / went out of range" shows the
+          // identical blocking "BMS Disconnected" dialog.
+          debugPrint("🔥 Calling disconnect callback (BLE link lost)");
+          debugPrint("Callback = $onBmsDisconnectedFatal");
+          onBmsDisconnectedFatal?.call();
         }
       });
 
@@ -376,6 +399,11 @@ if (!result.isSuccess) {
           addDebugLog('✅ Live Status Ack received');
           _liveStatusAckTimer?.cancel();
           _liveStatusAckTimer = null;
+          if (_liveStatusMissCount > 0) {
+            addDebugLog('🔁 Live Status Ack recovered — resetting miss count '
+                '(was $_liveStatusMissCount)');
+          }
+          _liveStatusMissCount = 0;
 
       
 
@@ -506,16 +534,35 @@ if (!result.isSuccess) {
   }
 
   void _onLiveStatusAckTimeout() {
-    addDebugLog('⛔ Live Status Ack not received within 20s — disconnecting');
+    _liveStatusMissCount++;
+    _liveStatusAckTimer = null;
+
+    if (_liveStatusMissCount < _maxLiveStatusMisses) {
+      addDebugLog(
+        '⚠️ Live Status Ack not received within 20s '
+        '(miss $_liveStatusMissCount/$_maxLiveStatusMisses) — will retry',
+      );
+      // Don't disconnect yet. The periodic 15s sender is still running and
+      // will send the next Live Status packet, which starts a fresh 20s
+      // timeout above (since _liveStatusAckTimer is now null).
+      return;
+    }
+
+    addDebugLog(
+      '⛔ Live Status Ack missed $_liveStatusMissCount times in a row — disconnecting',
+    );
     debugPrint("🔥 Calling disconnect callback");
-debugPrint("Callback = $onBmsDisconnectedFatal");
+    debugPrint("Callback = $onBmsDisconnectedFatal");
     onBmsDisconnectedFatal?.call();
     disconnect();
   }
 
   void startLiveStatusMonitor() {
     stopLiveStatusMonitor();
-    addDebugLog('▶️ Live Status monitor started (interval 15s, ack timeout 20s)');
+    addDebugLog(
+      '▶️ Live Status monitor started (interval 15s, ack timeout 20s, '
+      'disconnect after $_maxLiveStatusMisses misses)',
+    );
     sendLiveStatusPacket();
     _liveStatusTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       sendLiveStatusPacket();
@@ -527,6 +574,7 @@ debugPrint("Callback = $onBmsDisconnectedFatal");
     _liveStatusTimer = null;
     _liveStatusAckTimer?.cancel();
     _liveStatusAckTimer = null;
+    _liveStatusMissCount = 0;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
