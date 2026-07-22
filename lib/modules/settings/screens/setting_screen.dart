@@ -46,12 +46,36 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     'Factory Settings',
   ];
 
+  // ── One-shot read tracking ──────────────────────────────────────────────
+  // Each tab should send its read request exactly once when the user opens
+  // it, then stop — not keep polling every N seconds. These flags track
+  // whether we've already received the first response for the tab that's
+  // currently being read, so `_onServiceChanged` knows when to stop polling.
+  bool _batteryLoadedOnce = false;
+  bool _protectionLoadedOnce = false;
+  bool _tempLoadedOnce = false;
+  bool _factoryLoadedOnce = false;
+
   void _pollForTab(int i) {
+    // Reset the "loaded" flag for the tab being (re)entered so the very
+    // next response we get for it is treated as the initial one-shot read.
     switch (i) {
-      case 0: widget.service.startBatterySettingsPolling(); break;
-      case 1: widget.service.startProtectionSettingsPolling(); break;
-      case 2: widget.service.startTempSettingsPolling(); break;
-      case 3: widget.service.startFactorySettingsPolling(); break;
+      case 0:
+        _batteryLoadedOnce = false;
+        widget.service.startBatterySettingsPolling();
+        break;
+      case 1:
+        _protectionLoadedOnce = false;
+        widget.service.startProtectionSettingsPolling();
+        break;
+      case 2:
+        _tempLoadedOnce = false;
+        widget.service.startTempSettingsPolling();
+        break;
+      case 3:
+        _factoryLoadedOnce = false;
+        widget.service.startFactorySettingsPolling();
+        break;
     }
   }
 
@@ -494,6 +518,13 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         if (bs.cellChemistry != null) cellChemistry = BMSProtocol.chemistryName(bs.cellChemistry!);
         _snapshotBaseline(0);
         _persistSettings();
+        // One-shot read: stop polling as soon as the first response for
+        // this tab has arrived instead of continuing to request it on an
+        // interval.
+        if (!_batteryLoadedOnce) {
+          _batteryLoadedOnce = true;
+          widget.service.stopSettingsPolling();
+        }
       }
 
       if (psChanged) {
@@ -506,6 +537,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         dischargeOverCurrentProtection = ps.dischargeOverCurrentProtection ?? dischargeOverCurrentProtection;
         _snapshotBaseline(1);
         _persistSettings();
+        if (!_protectionLoadedOnce) {
+          _protectionLoadedOnce = true;
+          widget.service.stopSettingsPolling();
+        }
       }
 
       if (tsChanged) {
@@ -518,6 +553,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         diffTempProtection = ts.diffTempProtection ?? diffTempProtection;
         _snapshotBaseline(2);
         _persistSettings();
+        if (!_tempLoadedOnce) {
+          _tempLoadedOnce = true;
+          widget.service.stopSettingsPolling();
+        }
       }
 
       if (fsChanged) {
@@ -527,6 +566,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         bleDeviceName = fs.bleDeviceName ?? bleDeviceName;
         _snapshotBaseline(3);
         _persistSettings();
+        if (!_factoryLoadedOnce) {
+          _factoryLoadedOnce = true;
+          widget.service.stopSettingsPolling();
+        }
       }
     });
   }
@@ -727,26 +770,15 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   }
 
   void _showDeviceDetails() {
+    // Sends a fresh device-details read to the BMS the moment the sheet is
+    // opened, and closes the request once the first response arrives (see
+    // _DeviceDetailsSheet below) instead of leaving anything polling.
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Device Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            const SizedBox(height: 12),
-            _detailRow('Device Name', bleDeviceName),
-            _detailRow('Serial No', batterySerialNo),
-            _detailRow('Status', isConnected ? 'Connected' : 'Disconnected'),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
+      builder: (context) => _DeviceDetailsSheet(service: widget.service),
     );
   }
 
@@ -767,8 +799,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(title),
         content: Text(message),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -778,12 +812,76 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2B5FA5),
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: () {
               Navigator.pop(context);
               onConfirm();
             },
             child: Text(tr('confirm')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── "Do you want to continue?" confirmation before sending a Set Now ────
+  Future<bool> _showContinueConfirmation() async {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Do You Want To Continue?',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2B5FA5),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Yes'),
+          ),
+          const SizedBox(width: 12),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey)),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
+
+  // ── "Parameters changed successfully" popup shown after a successful send ─
+  Future<void> _showSuccessDialog(String message) {
+    return showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1B6B3A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 10),
+            ),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
           ),
         ],
       ),
@@ -806,7 +904,8 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: Text(title),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(title, textAlign: TextAlign.center),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -831,10 +930,14 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   ),
               ],
             ),
+            actionsAlignment: MainAxisAlignment.center,
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B6B3A), foregroundColor: Colors.white),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1B6B3A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
                 onPressed: () {
                   final val = double.tryParse(controller.text);
                   if (val == null) {
@@ -853,6 +956,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 },
                 child: Text(tr('save')),
               ),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey))),
             ],
           );
         },
@@ -875,7 +979,8 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
-            title: Text(title),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text(title, textAlign: TextAlign.center),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -900,10 +1005,14 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                   ),
               ],
             ),
+            actionsAlignment: MainAxisAlignment.center,
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
               ElevatedButton(
-                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B6B3A), foregroundColor: Colors.white),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF1B6B3A),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
                 onPressed: () {
                   final val = int.tryParse(controller.text);
                   if (val == null) {
@@ -920,6 +1029,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
                 },
                 child: Text(tr('save')),
               ),
+              TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey))),
             ],
           );
         },
@@ -932,15 +1042,20 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(title),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title, textAlign: TextAlign.center),
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(border: OutlineInputBorder()),
         ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1B6B3A), foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF1B6B3A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             onPressed: () {
               if (controller.text.trim().isNotEmpty) {
                 onSave(controller.text.trim());
@@ -950,6 +1065,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
             },
             child: Text(tr('save')),
           ),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey))),
         ],
       ),
     );
@@ -979,6 +1095,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   }
 
   Future<void> _handleSetNow(String context_, Future<bool> Function() onSetNow, {int? tabIndex}) async {
+    // Step 1 — confirm with the user before sending anything to the device.
+    final confirmed = await _showContinueConfirmation();
+    if (!confirmed) return;
+
     setState(() => _isSending = true);
     bool ok = false;
     try {
@@ -990,18 +1110,65 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     setState(() {
       _isSending = false;
       // On a successful send, the values just sent become the new "saved"
-      // baseline, so they stop showing up as unsaved/changed.
+      // baseline, so they stop showing up as unsaved/changed (and the Set
+      // Now button disables itself again since nothing is dirty anymore).
       if (ok && tabIndex != null) _snapshotBaseline(tabIndex);
     });
+
+    if (ok) {
+      // Step 2 — confirm success with a dedicated popup rather than only a
+      // snackbar, per the requested flow.
+      await _showSuccessDialog('$context_ parameters changed successfully.');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$context_ settings failed — no ACK received'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  /// Calibrate Now is intentionally kept simple: no "Do You Want To
+  /// Continue?" gate and no success popup — just send it and show a plain
+  /// snackbar, same as before.
+  Future<void> _handleCalibration() async {
+    setState(() => _isSending = true);
+    bool ok = false;
+    try {
+      ok = await widget.service.sendCalibration();
+    } catch (e) {
+      ok = false;
+    }
+    if (!mounted) return;
+    setState(() => _isSending = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok ? '$context_ settings sent to device' : '$context_ settings failed — no ACK received'),
+        content: Text(ok
+            ? 'Zero drift current calibration sent successfully'
+            : 'Zero drift current calibration failed — no ACK received'),
         backgroundColor: ok ? const Color(0xFF1B6B3A) : Colors.red,
       ),
     );
   }
 
-  Future<void> _handleAction(String actionName, Future<bool> Function() action) async {
+  /// Generic action runner used by Firmware Upgrade, Restart, etc.
+  /// By default it shows the same "Do You Want To Continue?" gate used
+  /// by Set Now before sending anything, and — on success — the same
+  /// "…successful" popup instead of just a snackbar. Pass
+  /// [confirmFirst]: false when the caller already showed its own
+  /// confirmation dialog (e.g. Restart's "Are you sure…" prompt) so the
+  /// user isn't asked to confirm twice.
+  Future<void> _handleAction(
+    String actionName,
+    Future<bool> Function() action, {
+    bool confirmFirst = true,
+  }) async {
+    if (confirmFirst) {
+      final confirmed = await _showContinueConfirmation();
+      if (!confirmed) return;
+    }
+
     setState(() => _isSending = true);
     bool ok = false;
     try {
@@ -1011,12 +1178,17 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     }
     if (!mounted) return;
     setState(() => _isSending = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(ok ? '$actionName sent successfully' : '$actionName failed — no ACK received'),
-        backgroundColor: ok ? const Color(0xFF1B6B3A) : Colors.red,
-      ),
-    );
+
+    if (ok) {
+      await _showSuccessDialog('$actionName sent successfully.');
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$actionName failed — no ACK received'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   /// Applies a master-data map (from [MasterDataService]) onto the current
@@ -1087,38 +1259,49 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     }
     if (!mounted) return;
 
-    String snackMessage;
-    Color snackColor;
-
     if (!ok) {
-      snackMessage = 'Factory data reset failed — no ACK received';
-      snackColor = Colors.red;
-    } else {
-      snackMessage = 'Factory data reset sent to device';
-      snackColor = const Color(0xFF1B6B3A);
-      try {
-        final master = await _masterDataService.fetchMasterSettings(
-          deviceId: bmsSerialNo.trim().isNotEmpty ? bmsSerialNo.trim() : null,
-        );
-        if (master != null && master.isNotEmpty) {
-          _applyMasterData(master);
-          snackMessage = 'Factory data reset — values restored from master data';
-        } else {
-          // Device reset succeeded, but master data isn't available yet
-          // (e.g. MasterDataService not wired up). Not treated as an error.
-          snackMessage = 'Factory data reset sent — master data not available yet';
-        }
-      } catch (e) {
-        snackMessage = 'Factory data reset sent, but restoring master data failed';
-        snackColor = Colors.orange.shade800;
+      setState(() => _isSending = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Factory data reset failed — no ACK received'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Device reset itself succeeded — now try to repopulate from master
+    // data. This part can partially fail without the reset as a whole
+    // being treated as a failure, so it gets its own (snackbar) messaging
+    // rather than blocking the main success popup.
+    String successMessage = 'Factory data reset sent to device.';
+    String? warningMessage;
+    try {
+      final master = await _masterDataService.fetchMasterSettings(
+        deviceId: bmsSerialNo.trim().isNotEmpty ? bmsSerialNo.trim() : null,
+      );
+      if (master != null && master.isNotEmpty) {
+        _applyMasterData(master);
+        successMessage = 'Factory data reset — values restored from master data.';
+      } else {
+        // Device reset succeeded, but master data isn't available yet
+        // (e.g. MasterDataService not wired up). Not treated as an error.
+        warningMessage = 'Factory data reset sent — master data not available yet';
       }
+    } catch (e) {
+      warningMessage = 'Factory data reset sent, but restoring master data failed';
     }
 
     if (!mounted) return;
     setState(() => _isSending = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(snackMessage), backgroundColor: snackColor),
-    );
+
+    if (warningMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(warningMessage), backgroundColor: Colors.orange.shade800),
+      );
+    } else {
+      await _showSuccessDialog(successMessage);
+    }
   }
 
   @override
@@ -1432,6 +1615,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
 bool _isSending = false;
 
   Widget _buildSetNowFooter(String sectionName, Future<bool> Function() onSetNow, {int? tabIndex}) {
+    // The Set Now button is only enabled when this tab actually has unsaved
+    // changes — otherwise there's nothing to send, so it stays disabled.
+    final bool isDirty = tabIndex == null || _changedFieldKeys(tabIndex).isNotEmpty;
+    final bool enabled = !isLocked && !_isSending && isDirty;
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Row(
@@ -1439,10 +1626,12 @@ bool _isSending = false;
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF6FA88A),
+              disabledBackgroundColor: Colors.grey.shade300,
               foregroundColor: Colors.white,
+              disabledForegroundColor: Colors.grey.shade500,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
             ),
-            onPressed: (isLocked || _isSending) ? null : () => _handleSetNow(sectionName, onSetNow, tabIndex: tabIndex),
+            onPressed: enabled ? () => _handleSetNow(sectionName, onSetNow, tabIndex: tabIndex) : null,
             child: _isSending
                 ? const SizedBox(
                     width: 16,
@@ -1613,7 +1802,7 @@ bool _isSending = false;
             ),
             onPressed: (isLocked || _isSending)
               ? null
-              : () => _handleAction('Zero drift current calibration', () => widget.service.sendCalibration()),
+              : () => _handleCalibration(),
             child: const Text('Calibrate Now', style: TextStyle(fontSize: 12)),
           ),
         ),
@@ -2123,7 +2312,11 @@ bool _isSending = false;
                     : () => _showResetConfirmation(
                           'Restart',
                           'Are you sure you want to restart the BMS device?',
-                          () => _handleAction('Restart', () => widget.service.sendRestart()),
+                          () => _handleAction(
+                            'Restart',
+                            () => widget.service.sendRestart(),
+                            confirmFirst: false,
+                          ),
                         ),
                 icon: const Icon(Icons.restart_alt_rounded, size: 18),
                 label: const Text('Restart', style: TextStyle(fontWeight: FontWeight.w600)),
@@ -2166,6 +2359,97 @@ bool _isSending = false;
 
         const SizedBox(height: 24),
       ],
+    );
+  }
+}
+
+/// Bottom sheet shown from the "Device Details" button in the app bar row.
+/// Unlike the old version (which just echoed whatever was already cached in
+/// the parent screen's fields), this actively requests a fresh read from
+/// the BMS the moment it opens, shows a loading spinner while waiting, and
+/// stops the request as soon as the first response arrives — it does not
+/// keep polling in the background.
+class _DeviceDetailsSheet extends StatefulWidget {
+  final BMSBluetoothService service;
+  const _DeviceDetailsSheet({required this.service});
+
+  @override
+  State<_DeviceDetailsSheet> createState() => _DeviceDetailsSheetState();
+}
+
+class _DeviceDetailsSheetState extends State<_DeviceDetailsSheet> {
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.service.addListener(_onServiceChanged);
+    // Send the one-shot device-details/factory-settings read as soon as
+    // the sheet opens.
+    widget.service.startFactorySettingsPolling();
+  }
+
+  void _onServiceChanged() {
+    if (!mounted) return;
+    if (widget.service.latestFactorySettings != null && !_loaded) {
+      widget.service.stopSettingsPolling();
+      setState(() => _loaded = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.service.removeListener(_onServiceChanged);
+    widget.service.stopSettingsPolling();
+    super.dispose();
+  }
+
+  Widget _row(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.black54, fontSize: 13)),
+          Flexible(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              textAlign: TextAlign.end,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final fs = widget.service.latestFactorySettings;
+    final connected = widget.service.latestDashboard != null;
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Device Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+          const SizedBox(height: 12),
+          if (!_loaded)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            _row('Device Name', fs?.bleDeviceName ?? '-'),
+            _row('Serial No', fs?.batterySlNo ?? '-'),
+            _row('BMS Serial No', fs?.bmsSerialNo ?? '-'),
+            _row('Status', connected ? 'Connected' : 'Disconnected'),
+          ],
+          const SizedBox(height: 8),
+        ],
+      ),
     );
   }
 }
