@@ -378,19 +378,19 @@ if (!result.isSuccess) {
           notifyListeners();
 
         } else if (packet.isProtectionSettingsResponse) {
-          addDebugLog('🛡️ Protection Settings Response received');
+          addDebugLog(' Protection Settings Response received');
           latestProtectionSettings = packet;
           protectionSettingsPulse++;
           notifyListeners();
 
         } else if (packet.isTemperatureSettingsResponse) {
-          addDebugLog('🌡️ Temperature Settings Response received');
+          addDebugLog(' Temperature Settings Response received');
           latestTemperatureSettings = packet;
           temperatureSettingsPulse++;
           notifyListeners();
 
         } else if (packet.isFactorySettingsResponse) {
-          addDebugLog('🏭 Factory Settings Response received');
+          addDebugLog(' Factory Settings Response received');
           latestFactorySettings = packet;
           factorySettingsPulse++;
           notifyListeners();
@@ -407,6 +407,12 @@ if (!result.isSuccess) {
 
       
 
+        } else if (packet.isCalibrationAck) {
+          addDebugLog('✅ Calibrate Now Ack (0xC1) received');
+          if (_actionAckCompleter != null && !_actionAckCompleter!.isCompleted) {
+            _actionAckCompleter!.complete(true);
+          }
+
         } else if (packet.isAck) {
           if (state == BMSConnectionState.waitingAck) {
             addDebugLog('🤝 ACK packet received — validating handshake');
@@ -417,8 +423,6 @@ if (!result.isSuccess) {
             _actionAckCompleter!.complete(true);
           }
         }
-
-      }
         else {
   debugPrint("======================================");
   debugPrint("❌ Packet Parse Failed");
@@ -427,7 +431,7 @@ if (!result.isSuccess) {
   debugPrint("Detail     : ${result.errorDetail}");
   debugPrint("======================================");
 }
-    });
+    }});
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -877,12 +881,34 @@ if (!result.isSuccess) {
       onTimeout: () => false,
     );
 
-    isActionInFlight = false;
+     isActionInFlight = false;
     addDebugLog(success ? '✅ $logName — ACK received' : '❌ $logName — no ACK received');
     notifyListeners();
     return success;
   }
+Future<bool> _sendSettingsWrite(
+    List<int> packet, {
+    required String logName,
+    required int dataId,
+  }) async {
+    if (_writeChar == null) return false;
 
+    isActionInFlight = true;
+    notifyListeners();
+
+    bool sent = true;
+    try {
+      await _sendPacket(packet, logName: logName, sentDataId: dataId);
+    } catch (e) {
+      sent = false;
+      addDebugLog('❌ $logName send failed: $e');
+    }
+
+    isActionInFlight = false;
+    if (sent) addDebugLog('✅ $logName — sent (not waiting for response)');
+    notifyListeners();
+    return sent;
+  }
   static List<int> _u16le(int value) {
     final v = value.clamp(0, 0xFFFF);
     return [v & 0xFF, (v >> 8) & 0xFF];
@@ -928,7 +954,7 @@ if (!result.isSuccess) {
     final crc = BMSCrcService.calculateCRC8(buffer.sublist(1));
     buffer.add(crc);
     buffer.add(BMSProtocol.stopByte);
-    return _sendActionAndWaitAck(
+    return _sendSettingsWrite(
       buffer,
       logName: 'BATTERY_SETTINGS_SET_NOW',
       dataId: BMSProtocol.idBatterySettingsWrite,
@@ -978,7 +1004,7 @@ if (!result.isSuccess) {
     final crc = BMSCrcService.calculateCRC8(buffer.sublist(1));
     buffer.add(crc);
     buffer.add(BMSProtocol.stopByte);
-    return _sendActionAndWaitAck(
+    return _sendSettingsWrite(
       buffer,
       logName: 'PROTECTION_SETTINGS_SET_NOW',
       dataId: BMSProtocol.idProtectionSettingsWrite,
@@ -1008,7 +1034,7 @@ if (!result.isSuccess) {
     final crc = BMSCrcService.calculateCRC8(buffer.sublist(1));
     buffer.add(crc);
     buffer.add(BMSProtocol.stopByte);
-    return _sendActionAndWaitAck(
+     return _sendSettingsWrite(
       buffer,
       logName: 'TEMPERATURE_SETTINGS_SET_NOW',
       dataId: BMSProtocol.idTemperatureSettingsWrite,
@@ -1032,7 +1058,7 @@ if (!result.isSuccess) {
     final crc = BMSCrcService.calculateCRC8(buffer.sublist(1));
     buffer.add(crc);
     buffer.add(BMSProtocol.stopByte);
-    return _sendActionAndWaitAck(
+    return _sendSettingsWrite(
       buffer,
       logName: 'FACTORY_SETTINGS_SET_NOW',
       dataId: BMSProtocol.idFactorySettingsWrite,
@@ -1172,35 +1198,22 @@ if (!result.isSuccess) {
   void startBatterySettingsPolling() {
     stopSettingsPolling();
     _sendBatterySettingsRequest();
-    _settingsPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      _sendBatterySettingsRequest();
-    });
   }
 
   void startProtectionSettingsPolling() {
     stopSettingsPolling();
     _sendProtectionSettingsRequest();
-    _settingsPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      _sendProtectionSettingsRequest();
-    });
   }
 
   void startTempSettingsPolling() {
     stopSettingsPolling();
     _sendTemperatureSettingsRequest();
-    _settingsPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      _sendTemperatureSettingsRequest();
-    });
   }
 
   void startFactorySettingsPolling() {
     stopSettingsPolling();
     _sendFactorySettingsRequest();
-    _settingsPollingTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      _sendFactorySettingsRequest();
-    });
   }
-
   // ─────────────────────────────────────────────────────────────────────────
   // DISCONNECT
   // ─────────────────────────────────────────────────────────────────────────

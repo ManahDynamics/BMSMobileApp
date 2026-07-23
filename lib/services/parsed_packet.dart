@@ -300,6 +300,12 @@ bool get isLiveStatusAck =>
     dataId == BMSProtocol.idLiveStatusAck &&
     length == BMSProtocol.packetLength;
 
+     bool get isCalibrationAck =>
+      startByte == BMSProtocol.ackStart &&
+      stopByte == BMSProtocol.ackStop &&
+      dataId == BMSProtocol.idCalibrationAck &&
+      length == BMSProtocol.packetLength;
+
   bool get isDisconnect => dataId == BMSProtocol.idDisconnect;
 
   bool get isHandshake => dataId == BMSProtocol.idHandshake && startByte == BMSProtocol.startByte;
@@ -491,6 +497,7 @@ case 0x5B: return 'Factory Settings Response (53-byte)';
 case 0x96: return 'Alerts Details Request';
 case 0xB0: return 'Battery Settings Set Now';
 case 0xB1: return 'Calibrate Now';
+case 0xC1: return 'Calibrate Now — Ack';
 case 0xB2: return 'Protection Settings Set Now';
 case 0xB3: return 'Temperature Settings Set Now';
 case 0xB4: return 'Factory Settings Set Now';

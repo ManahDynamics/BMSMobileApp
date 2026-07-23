@@ -177,6 +177,7 @@ static const int liveStatusStopByte  = 11;
 
   // Actions (5-byte control packets, Mobile → BMS, ACK'd with 0x50)
   static const int idCalibration     = 0xB1; // Calibrate Now
+  static const int idCalibrationAck  = 0xC1;
   static const int idFirmwareUpgrade = 0xB5;
   static const int idRestart         = 0xB6;
   static const int idFactoryReset    = 0xB7;
@@ -340,6 +341,7 @@ static const int liveStatusStopByte  = 11;
       case idFactorySettingsResponse: return 'Factory Settings Response';
       case idFactorySettingsWrite:    return 'Factory Settings Set Now';
       case idCalibration:     return 'Calibration';
+      case idCalibrationAck:  return 'Calibration Ack';
       case idFirmwareUpgrade: return 'Firmware Upgrade';
       case idRestart:         return 'Restart';
       case idFactoryReset:    return 'Factory Reset';

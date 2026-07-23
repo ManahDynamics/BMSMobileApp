@@ -1115,7 +1115,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       if (ok && tabIndex != null) _snapshotBaseline(tabIndex);
     });
 
-    if (ok) {
+   if (ok) {
+      if (tabIndex != null) {
+        _pollForTab(tabIndex);
+      }
       // Step 2 — confirm success with a dedicated popup rather than only a
       // snackbar, per the requested flow.
       await _showSuccessDialog('$context_ parameters changed successfully.');
