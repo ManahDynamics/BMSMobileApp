@@ -27,7 +27,7 @@ class BMSPacketFormatter {
       '[${BMSProtocol.dataIdName(p.dataId)}]  '
       '${toHexDump(p.rawBytes)}  '
       '(${p.directionLabel})  '
-      '${_timeString(p.receivedAt)}';
+      '${timeString(p.receivedAt)}';
 
   static Map<String, String> toFieldMap(BMSParsedPacket p) {
     final map = <String, String>{
@@ -38,7 +38,7 @@ class BMSPacketFormatter {
       'Data ID':   byteToHex(p.dataId),
       'CRC-8':     byteToHex(p.crc),
       'Stop':      byteToHex(p.stopByte),
-      'Time':      _timeString(p.receivedAt),
+      'Time':      timeString(p.receivedAt),
     };
     if (p.isDashboardResponse) {
       if (p.batteryType != null) map['Battery Type'] = p.batteryType!;
@@ -90,7 +90,7 @@ class BMSPacketFormatter {
 
     lines.addAll([
       '─────────────────────────',
-      'Received at : ${_timeString(p.receivedAt)}',
+      'Received at : ${timeString(p.receivedAt)}',
     ]);
 
     return lines.join('\n');
@@ -113,8 +113,10 @@ class BMSPacketFormatter {
   }
 
   // ── Internal ───────────────────────────────────────────────────────────────
-  static String _timeString(DateTime dt) =>
+  static String timeString(DateTime dt) =>
       '${dt.hour.toString().padLeft(2, '0')}:'
       '${dt.minute.toString().padLeft(2, '0')}:'
       '${dt.second.toString().padLeft(2, '0')}';
+
+  static String _timeString(DateTime dt) => timeString(dt);
 }

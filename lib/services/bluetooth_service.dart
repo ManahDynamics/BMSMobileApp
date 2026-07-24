@@ -73,6 +73,7 @@ BMSParsedPacket? latestTemperatureSettings;
   // ── Settings-page "Set Now" / action state ────────────────────────────────
   bool isActionInFlight = false;
   Completer<bool>? _actionAckCompleter;
+  int? _expectedActionAckDataId;
 
   // ── Device info ───────────────────────────────────────────────────────────
   String? bleName;
@@ -409,7 +410,9 @@ if (!result.isSuccess) {
 
         } else if (packet.isCalibrationAck) {
           addDebugLog('✅ Calibrate Now Ack (0xC1) received');
-          if (_actionAckCompleter != null && !_actionAckCompleter!.isCompleted) {
+          if (_actionAckCompleter != null &&
+              !_actionAckCompleter!.isCompleted &&
+              _expectedActionAckDataId == BMSProtocol.idCalibrationAck) {
             _actionAckCompleter!.complete(true);
           }
 
@@ -418,7 +421,9 @@ if (!result.isSuccess) {
             addDebugLog('🤝 ACK packet received — validating handshake');
             _onAckReceived(packet);
           }
-          if (_actionAckCompleter != null && !_actionAckCompleter!.isCompleted) {
+          if (_actionAckCompleter != null &&
+              !_actionAckCompleter!.isCompleted &&
+              _expectedActionAckDataId == BMSProtocol.idAck) {
             addDebugLog('🤝 ACK packet received — completing pending action');
             _actionAckCompleter!.complete(true);
           }
@@ -854,16 +859,17 @@ if (!result.isSuccess) {
   // ─────────────────────────────────────────────────────────────────────────
   // SETTINGS PAGE — "SET NOW" / ACTION SENDERS
   // ─────────────────────────────────────────────────────────────────────────
-
-  Future<bool> _sendActionAndWaitAck(
+Future<bool> _sendActionAndWaitAck(
     List<int> packet, {
     required String logName,
     required int dataId,
+    int? expectedAckDataId,
   }) async {
     if (_writeChar == null) return false;
 
     final completer = Completer<bool>();
     _actionAckCompleter = completer;
+    _expectedActionAckDataId = expectedAckDataId ?? BMSProtocol.idAck;
     isActionInFlight = true;
     notifyListeners();
 
@@ -871,6 +877,7 @@ if (!result.isSuccess) {
       await _sendPacket(packet, logName: logName, sentDataId: dataId);
     } catch (e) {
       isActionInFlight = false;
+      _expectedActionAckDataId = null;
       addDebugLog('❌ $logName send failed: $e');
       notifyListeners();
       return false;
@@ -881,7 +888,8 @@ if (!result.isSuccess) {
       onTimeout: () => false,
     );
 
-     isActionInFlight = false;
+    isActionInFlight = false;
+    _expectedActionAckDataId = null;
     addDebugLog(success ? '✅ $logName — ACK received' : '❌ $logName — no ACK received');
     notifyListeners();
     return success;
@@ -978,6 +986,7 @@ Future<bool> _sendSettingsWrite(
       packet,
       logName: 'CALIBRATE_NOW',
       dataId: BMSProtocol.idCalibration,
+      expectedAckDataId: BMSProtocol.idCalibrationAck,
     );
   }
 
@@ -1066,6 +1075,8 @@ Future<bool> _sendSettingsWrite(
   }
 
   /// Firmware Upgrade (0xB5, 5-byte control packet).
+  /// Firmware Upgrade (0xB5, 5-byte control packet).
+  /// No ACK wait — fire and forget, same as the Settings "Set Now" writes.
   Future<bool> sendFirmwareUpgrade() {
     final crc = BMSCrcService.calculateCRC8([
       BMSProtocol.packetLength,
@@ -1078,7 +1089,7 @@ Future<bool> _sendSettingsWrite(
       crc,
       BMSProtocol.stopByte,
     ];
-    return _sendActionAndWaitAck(
+    return _sendSettingsWrite(
       packet,
       logName: 'FIRMWARE_UPGRADE',
       dataId: BMSProtocol.idFirmwareUpgrade,
@@ -1086,6 +1097,8 @@ Future<bool> _sendSettingsWrite(
   }
 
   /// Restart (0xB6, 5-byte control packet).
+ /// Restart (0xB6, 5-byte control packet).
+  /// No ACK wait — fire and forget, same as the Settings "Set Now" writes.
   Future<bool> sendRestart() {
     final crc = BMSCrcService.calculateCRC8([
       BMSProtocol.packetLength,
@@ -1098,7 +1111,7 @@ Future<bool> _sendSettingsWrite(
       crc,
       BMSProtocol.stopByte,
     ];
-    return _sendActionAndWaitAck(
+    return _sendSettingsWrite(
       packet,
       logName: 'RESTART',
       dataId: BMSProtocol.idRestart,
@@ -1106,6 +1119,8 @@ Future<bool> _sendSettingsWrite(
   }
 
   /// Factory Data Reset (0xB7, 5-byte control packet).
+/// Factory Data Reset (0xB7, 5-byte control packet).
+  /// No ACK wait — fire and forget, same as the Settings "Set Now" writes.
   Future<bool> sendFactoryReset() {
     final crc = BMSCrcService.calculateCRC8([
       BMSProtocol.packetLength,
@@ -1118,7 +1133,7 @@ Future<bool> _sendSettingsWrite(
       crc,
       BMSProtocol.stopByte,
     ];
-    return _sendActionAndWaitAck(
+    return _sendSettingsWrite(
       packet,
       logName: 'FACTORY_DATA_RESET',
       dataId: BMSProtocol.idFactoryReset,
@@ -1278,6 +1293,11 @@ Future<bool> _sendSettingsWrite(
 
   void clearDebugLogs() {
     _debugLogs.clear();
+    notifyListeners();
+  }
+
+  void clearPacketLog() {
+    packetLog.clear();
     notifyListeners();
   }
 

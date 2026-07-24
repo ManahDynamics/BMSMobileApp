@@ -8,10 +8,12 @@ import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import '../../../modules/scanner/screens/BMS_scanner_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
+import 'package:bmsmobileapp/services/packet_formatter.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
 import 'package:bmsmobileapp/services/protocol.dart';
 import 'package:bmsmobileapp/services/master_data_service.dart';
+import 'package:bmsmobileapp/modules/settings/screens/packet_log_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -724,6 +726,12 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     );
   }
 
+  void _openPacketLog() {
+    Navigator.of(context).push(
+      SlideRoute(page: PacketLogScreen(service: widget.service)),
+    );
+  }
+
   void _showUnlockDialog() {
     final controller = TextEditingController();
     showDialog(
@@ -1361,9 +1369,14 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
             onSelected: (value) {
-              if (value == 'disconnect') _showDisconnectDialog();
+              if (value == 'disconnect') {
+                _showDisconnectDialog();
+              } else if (value == 'packet_log') {
+                _openPacketLog();
+              }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(value: 'packet_log', child: Text('Packet Log')),
               PopupMenuItem(value: 'disconnect', child: Text(tr('disconnect'))),
             ],
           ),
