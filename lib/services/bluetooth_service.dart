@@ -76,13 +76,12 @@ BMSParsedPacket? latestTemperatureSettings;
   int? _expectedActionAckDataId;
 
   // ── Device info ───────────────────────────────────────────────────────────
-  String? bleName;
+String? bleName;
   String? batterySerial;
   String? batteryType;
   String? softwareVersion;
   String? hardwareVersion;
   String? firmwareVersion;
-  String? snCode;
 
   // ── Tracks the Data ID of the most recently sent request ──────────────────
   final Set<int> _pendingRequests = {};
@@ -320,7 +319,6 @@ if (!result.isSuccess) {
             _cellVoltageCompleter!.complete(true);
           }
 
-          if (packet.batteryType     != null) batteryType     = packet.batteryType;
           if (packet.batterySerial   != null) batterySerial   = packet.batterySerial;
           if (packet.softwareVersion != null) softwareVersion = packet.softwareVersion;
           if (packet.hardwareVersion != null) hardwareVersion = packet.hardwareVersion;
@@ -1313,13 +1311,11 @@ Future<bool> _sendSettingsWrite(
     packetLog.clear();
     latestDashboard   = null;
     latestCellVoltage = null;
-    bleName           = null;
+bleName           = null;
     batterySerial     = null;
-    batteryType       = null;
     softwareVersion   = null;
     hardwareVersion   = null;
     firmwareVersion   = null;
-    snCode            = null;
 
     latestBatterySettings = null;
     latestProtectionSettings = null;

@@ -96,7 +96,6 @@ class BMSParsedPacket {
   final double? voltageDiff;       // Bytes 38–39 (×0.001 V)
   final double? maxCellVoltage;    // Bytes 40–41 (×0.001 V)
   final double? minCellVoltage;    // Bytes 42–43 (×0.001 V)
-  final String? firmwareVersion;   // Bytes 98–116 (19 ASCII bytes) — ALSO
                                     // reused for the Device Details Response
                                     // (0x57) firmware-version ASCII field.
   final int? warningAlerts;        // Byte 108 (v2 dashboard only)
@@ -122,8 +121,7 @@ class BMSParsedPacket {
   final String? batterySerial;
   final String? softwareVersion;
   final String? hardwareVersion;
-  final String? snCode;
-
+  final String? firmwareVersion;
   // ─────────────────────────────────────────────────────────────────────────
   // Battery Settings (0x58 read-back / 0xB0 Set Now)
   // ─────────────────────────────────────────────────────────────────────────
@@ -218,7 +216,6 @@ class BMSParsedPacket {
     this.voltageDiff,
     this.maxCellVoltage,
     this.minCellVoltage,
-    this.firmwareVersion,
     this.warningAlerts,
     this.faultAlerts,
     this.clearedAlerts,
@@ -237,7 +234,7 @@ class BMSParsedPacket {
     this.batterySerial,
     this.softwareVersion,
     this.hardwareVersion,
-    this.snCode,
+    this.firmwareVersion,
     // Battery Settings
     this.batteryString,
     this.ratedCapacity,
@@ -544,7 +541,6 @@ default:
     double?          voltageDiff,
     double?          maxCellVoltage,
     double?          minCellVoltage,
-    String?          firmwareVersion,
     int?             warningAlerts,
     int?             faultAlerts,
     int?             clearedAlerts,
@@ -561,7 +557,7 @@ default:
     String?          batterySerial,
     String?          softwareVersion,
     String?          hardwareVersion,
-    String?          snCode,
+    String?          firmwareVersion,
     int?             batteryString,
     double?          ratedCapacity,
     int?             socSet,
@@ -650,7 +646,6 @@ default:
       batterySerial:       batterySerial       ?? this.batterySerial,
       softwareVersion:     softwareVersion     ?? this.softwareVersion,
       hardwareVersion:     hardwareVersion     ?? this.hardwareVersion,
-      snCode:              snCode              ?? this.snCode,
       batteryString:       batteryString       ?? this.batteryString,
       ratedCapacity:       ratedCapacity       ?? this.ratedCapacity,
       socSet:              socSet              ?? this.socSet,

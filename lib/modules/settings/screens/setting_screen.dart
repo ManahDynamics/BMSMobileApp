@@ -1,6 +1,6 @@
 // lib/screens/settings_screen.dart
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
-
+import 'dart:async';
 import 'package:bmsmobileapp/widgets/bar_code_scanner_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -8,7 +8,6 @@ import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import '../../../modules/scanner/screens/BMS_scanner_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
-import 'package:bmsmobileapp/services/packet_formatter.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
 import 'package:bmsmobileapp/services/protocol.dart';
@@ -53,34 +52,49 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   // it, then stop — not keep polling every N seconds. These flags track
   // whether we've already received the first response for the tab that's
   // currently being read, so `_onServiceChanged` knows when to stop polling.
-  bool _batteryLoadedOnce = false;
+ bool _batteryLoadedOnce = false;
   bool _protectionLoadedOnce = false;
   bool _tempLoadedOnce = false;
   bool _factoryLoadedOnce = false;
 
+  // ── Guards to guarantee the read request is sent only ONCE per tab visit.
+  bool _batteryRequestSent = false;
+  bool _protectionRequestSent = false;
+  bool _tempRequestSent = false;
+  bool _factoryRequestSent = false;
+
   void _pollForTab(int i) {
     // Reset the "loaded" flag for the tab being (re)entered so the very
     // next response we get for it is treated as the initial one-shot read.
+    // The "_xRequestSent" guard ensures the BLE request itself is only
+    // ever transmitted once per visit.
     switch (i) {
       case 0:
         _batteryLoadedOnce = false;
+        if (_batteryRequestSent) return;
+        _batteryRequestSent = true;
         widget.service.startBatterySettingsPolling();
         break;
       case 1:
         _protectionLoadedOnce = false;
+        if (_protectionRequestSent) return;
+        _protectionRequestSent = true;
         widget.service.startProtectionSettingsPolling();
         break;
       case 2:
         _tempLoadedOnce = false;
+        if (_tempRequestSent) return;
+        _tempRequestSent = true;
         widget.service.startTempSettingsPolling();
         break;
       case 3:
         _factoryLoadedOnce = false;
+        if (_factoryRequestSent) return;
+        _factoryRequestSent = true;
         widget.service.startFactorySettingsPolling();
         break;
     }
   }
-
   // ── Battery Settings ────────────────────────────────────────────────────────
   int batteryStringCount = 0; // "S"
   double ratedCapacity = 0; // AH
@@ -114,8 +128,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   String bleDeviceName = ' ';
 
   // ── Device Details (read-only, shown on the Factory Settings tab) ──────────
+  String bmssNo = ' ';
   String swVersionNo = ' ';
   String hwVersionNo = ' ';
+  String fwVersionNo = ' ';
+ 
 
   // ── Offline-cache state ───────────────────────────────────────────────────
   bool _isOffline = false;
@@ -466,6 +483,8 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
   int _lastProtectionPulse = -1;
   int _lastTempPulse = -1;
   int _lastFactoryPulse = -1;
+  int _lastDeviceDetailsPulse = -1;
+  bool _deviceDetailsRequested = false;
 
   void _onServiceChanged() {
     if (!mounted) return;
@@ -499,7 +518,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     final fs = widget.service.latestFactorySettings;
     final fsChanged = fs != null && widget.service.factorySettingsPulse != _lastFactoryPulse;
 
-    if (newOffline == _isOffline && !bsChanged && !psChanged && !tsChanged && !fsChanged) {
+    final dd = widget.service.latestDeviceDetails;
+    final ddChanged = dd != null && widget.service.deviceDetailsPulse != _lastDeviceDetailsPulse;
+
+    if (newOffline == _isOffline && !bsChanged && !psChanged && !tsChanged && !fsChanged && !ddChanged) {
       // Nothing relevant to this screen changed — skip the rebuild entirely.
       return;
     }
@@ -523,9 +545,15 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         // One-shot read: stop polling as soon as the first response for
         // this tab has arrived instead of continuing to request it on an
         // interval.
-        if (!_batteryLoadedOnce) {
+       if (!_batteryLoadedOnce) {
           _batteryLoadedOnce = true;
           widget.service.stopSettingsPolling();
+        }
+        _batteryRequestSent = false;
+
+        if (!_deviceDetailsRequested) {
+          _deviceDetailsRequested = true;
+          widget.service.requestDeviceDetails();
         }
       }
 
@@ -543,6 +571,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
           _protectionLoadedOnce = true;
           widget.service.stopSettingsPolling();
         }
+        _protectionRequestSent = false;
       }
 
       if (tsChanged) {
@@ -555,10 +584,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         diffTempProtection = ts.diffTempProtection ?? diffTempProtection;
         _snapshotBaseline(2);
         _persistSettings();
-        if (!_tempLoadedOnce) {
+       if (!_tempLoadedOnce) {
           _tempLoadedOnce = true;
           widget.service.stopSettingsPolling();
         }
+        _tempRequestSent = false;
       }
 
       if (fsChanged) {
@@ -568,14 +598,23 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         bleDeviceName = fs.bleDeviceName ?? bleDeviceName;
         _snapshotBaseline(3);
         _persistSettings();
-        if (!_factoryLoadedOnce) {
+       if (!_factoryLoadedOnce) {
           _factoryLoadedOnce = true;
           widget.service.stopSettingsPolling();
         }
+       _factoryRequestSent = false;
+      }
+
+      if (ddChanged) {
+        _lastDeviceDetailsPulse = widget.service.deviceDetailsPulse;
+        bmssNo = dd.batterySerial ?? bmssNo;
+        swVersionNo = dd.softwareVersion ?? swVersionNo;
+        hwVersionNo = dd.hardwareVersion ?? hwVersionNo;
+        fwVersionNo = dd.firmwareVersion ?? fwVersionNo;
+        _persistSettings();
       }
     });
   }
-
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -2400,15 +2439,12 @@ class _DeviceDetailsSheetState extends State<_DeviceDetailsSheet> {
   void initState() {
     super.initState();
     widget.service.addListener(_onServiceChanged);
-    // Send the one-shot device-details/factory-settings read as soon as
-    // the sheet opens.
-    widget.service.startFactorySettingsPolling();
+    widget.service.requestDeviceDetails();
   }
 
   void _onServiceChanged() {
     if (!mounted) return;
-    if (widget.service.latestFactorySettings != null && !_loaded) {
-      widget.service.stopSettingsPolling();
+    if (widget.service.latestDeviceDetails != null && !_loaded) {
       setState(() => _loaded = true);
     }
   }
@@ -2442,7 +2478,7 @@ class _DeviceDetailsSheetState extends State<_DeviceDetailsSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final fs = widget.service.latestFactorySettings;
+    final dd = widget.service.latestDeviceDetails;
     final connected = widget.service.latestDashboard != null;
     return Padding(
       padding: const EdgeInsets.all(20),
@@ -2458,9 +2494,10 @@ class _DeviceDetailsSheetState extends State<_DeviceDetailsSheet> {
               child: Center(child: CircularProgressIndicator()),
             )
           else ...[
-            _row('Device Name', fs?.bleDeviceName ?? '-'),
-            _row('Serial No', fs?.batterySlNo ?? '-'),
-            _row('BMS Serial No', fs?.bmsSerialNo ?? '-'),
+           _row('BMS Serial No', dd?.batterySerial ?? '-'),
+            _row('SW Version', dd?.softwareVersion ?? '-'),
+            _row('HW Version', dd?.hardwareVersion ?? '-'),
+            _row('FW Version', dd?.firmwareVersion ?? '-'),
             _row('Status', connected ? 'Connected' : 'Disconnected'),
           ],
           const SizedBox(height: 8),
