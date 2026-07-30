@@ -1049,6 +1049,7 @@ Future<bool> _sendSettingsWrite(
   }
 
   /// Factory Settings "Set Now" (0xB4, 53 bytes).
+ /// Factory Settings "Set Now" (0xB4, 54 bytes — CRC-16).
   Future<bool> sendFactorySettingsWrite({
     required String batterySlNo,
     required String bmsSerialNo,
@@ -1056,14 +1057,15 @@ Future<bool> _sendSettingsWrite(
   }) {
     final buffer = <int>[
       BMSProtocol.startByte,
-      BMSProtocol.factorySettingsResponseLength, // 53
+      BMSProtocol.factorySettingsResponseLength, // 54
       BMSProtocol.idFactorySettingsWrite,
       ..._asciiField(batterySlNo, 16),
       ..._asciiField(bmsSerialNo, 16),
       ..._asciiField(bleDeviceName, 16),
     ];
-    final crc = BMSCrcService.calculateCRC8(buffer.sublist(1));
-    buffer.add(crc);
+    final crc = BMSCrcService.calculateCRC16(buffer.sublist(1));
+    buffer.add(crc & 0xFF);         // CRC low byte
+    buffer.add((crc >> 8) & 0xFF);  // CRC high byte
     buffer.add(BMSProtocol.stopByte);
     return _sendSettingsWrite(
       buffer,
@@ -1071,7 +1073,6 @@ Future<bool> _sendSettingsWrite(
       dataId: BMSProtocol.idFactorySettingsWrite,
     );
   }
-
   /// Firmware Upgrade (0xB5, 5-byte control packet).
   /// Firmware Upgrade (0xB5, 5-byte control packet).
   /// No ACK wait — fire and forget, same as the Settings "Set Now" writes.
