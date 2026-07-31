@@ -725,7 +725,7 @@ class BMSPacketParser {
         ((bytes[BMSProtocol.deviceDetailsCrcHigh] & 0xFF) << 8);
 
     final computedCrc =
-        BMSCrcService.calculateCRC16(bytes.sublist(1, BMSProtocol.deviceDetailsCrcLow));
+        BMSCrcService.calculateCRC16(bytes.sublist(1, BMSProtocol.deviceDetailsCrcLow-1));
 
     if (receivedCrc != computedCrc) {
       return BMSParseResult.failure(

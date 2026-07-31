@@ -2262,9 +2262,10 @@ bool _isSending = false;
         children: [
           const Text('Device Details', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5)),
           const SizedBox(height: 8),
-          _buildDeviceDetailDotRow(const Color(0xFF2B5FA5), 'BMS Serial No', bmsSerialNo),
+          _buildDeviceDetailDotRow(const Color(0xFF2B5FA5), 'BMS Serial No', bmssNo),
           _buildDeviceDetailDotRow(const Color(0xFF1B6B3A), 'SW Version No', swVersionNo),
           _buildDeviceDetailDotRow(const Color(0xFFD4A017), 'HW Version No', hwVersionNo),
+          _buildDeviceDetailDotRow(const Color(0xFF8B5CF6), 'FW Version No', fwVersionNo),
         ],
       ),
     );
