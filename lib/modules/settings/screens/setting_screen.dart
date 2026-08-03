@@ -1613,7 +1613,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: changed ? const Color(0xFFFFF3E6) : null,
+        color: changed ? const Color(0xFFFFF3E6) : Colors.grey.shade50,
         border: Border.all(color: changed ? const Color(0xFFD4621A) : Colors.grey.shade300, width: changed ? 1.4 : 1),
         borderRadius: BorderRadius.circular(8),
       ),
@@ -1649,7 +1649,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: changed ? const Color(0xFFD4621A) : Colors.black,
+                color: changed ? const Color(0xFFD4621A) :  Colors.black87,
               ),
             ),
             SizedBox(
@@ -2126,66 +2126,89 @@ bool _isSending = false;
   }
 
   // ── Factory Settings tab ─────────────────────────────────────────────────
-  Widget _buildFactoryTextField({
-    required String label,
-    required String value,
-    required VoidCallback onEdit,
-    required VoidCallback onScan,
-    bool changed = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(label, style: const TextStyle(fontSize: 12.5, color: Colors.black87, fontWeight: FontWeight.w500)),
-              if (changed) ...[
-                const SizedBox(width: 6),
-                const Icon(Icons.circle, size: 7, color: Color(0xFFD4621A)),
-              ],
+ Widget _buildFactoryTextField({
+  required String label,
+  required String value,
+  required VoidCallback onEdit,
+  required VoidCallback onScan,
+  bool changed = false,
+}) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(label, style: const TextStyle(fontSize: 12.5, color: Colors.black87, fontWeight: FontWeight.w500)),
+            if (changed) ...[
+              const SizedBox(width: 6),
+              const Icon(Icons.circle, size: 7, color: Color(0xFFD4621A)),
             ],
-          ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: changed ? const Color(0xFFFFF3E6) : null,
-              border: Border.all(color: changed ? const Color(0xFFD4621A) : Colors.grey.shade300, width: changed ? 1.4 : 1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    value,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: changed ? const Color(0xFFD4621A) : Colors.black,
-                    ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // ── Value box (text + edit only) ──────────────────────
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: changed ? const Color(0xFFFFF3E6) : Colors.grey.shade50,
+                  border: Border.all(
+                    color: changed ? const Color(0xFFD4621A) : Colors.grey.shade300,
+                    width: changed ? 1.4 : 1,
                   ),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.edit_rounded, size: 16, color: Colors.black54),
-                  onPressed: isLocked ? null : onEdit,
-                  splashRadius: 16,
-                  tooltip: 'Edit',
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        value,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: changed ? const Color(0xFFD4621A) : Colors.black87,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_rounded, size: 16, color: Colors.black54),
+                      onPressed: isLocked ? null : onEdit,
+                      splashRadius: 16,
+                      tooltip: 'Edit',
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: Icon(Icons.qr_code_scanner_rounded, size: 19, color: Colors.grey.shade600),
-                  onPressed: isLocked ? null : onScan,
-                  splashRadius: 16,
-                  tooltip: 'Scan',
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
+            const SizedBox(width: 8),
+            // ── Scan button — separate box outside the field ──────
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: IconButton(
+                icon: Icon(Icons.qr_code_scanner_rounded, size: 19, color: Colors.grey.shade600),
+                onPressed: isLocked ? null : onScan,
+                splashRadius: 20,
+                tooltip: 'Scan',
+                padding: EdgeInsets.zero,
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
 
   /// Opens the barcode/QR scanner and feeds the scanned code into [onResult].
   /// Wire this up to your actual scanner screen / package
@@ -2352,7 +2375,6 @@ bool _isSending = false;
         ),
 
         const SizedBox(height: 20),
-
         Row(
           children: [
             Expanded(
@@ -2368,23 +2390,13 @@ bool _isSending = false;
                     : () => _showResetConfirmation(
                           'Restart',
                           'Are you sure you want to restart the BMS device?',
-                          () => _handleAction(
-                            'Restart',
-                            () => widget.service.sendRestart(),
-                            confirmFirst: false,
-                          ),
+                          () => _handleAction('Restart', () => widget.service.sendRestart(), confirmFirst: false),
                         ),
-                icon: const Icon(Icons.restart_alt_rounded, size: 18),
-                label: const Text('Restart', style: TextStyle(fontWeight: FontWeight.w600)),
+                icon: const Icon(Icons.restart_alt_rounded, size: 16),
+                label: const Text('Restart', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
               ),
             ),
-            const SizedBox(width: 6),
-            Icon(Icons.info_outline_rounded, size: 18, color: Colors.grey.shade500),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
+            const SizedBox(width: 8),
             Expanded(
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
@@ -2400,12 +2412,11 @@ bool _isSending = false;
                           'This will erase all settings and restore factory defaults from master data. Continue?',
                           _handleFactoryReset,
                         ),
-                icon: const Icon(Icons.settings_backup_restore_rounded, size: 18),
-                label: const Text('Factory Data Reset', style: TextStyle(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                icon: const Icon(Icons.settings_backup_restore_rounded, size: 16),
+                label: const Text('Factory Data Reset',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11.5), overflow: TextOverflow.ellipsis),
               ),
             ),
-            const SizedBox(width: 6),
-            Icon(Icons.info_outline_rounded, size: 18, color: Colors.grey.shade500),
           ],
         ),
         const SizedBox(height: 20),
