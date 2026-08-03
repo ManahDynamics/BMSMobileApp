@@ -107,7 +107,7 @@ static const int liveStatusStopByte  = 11;
   // Start,Length,DataID,5×1-byte fields,CRC,Stop = 3 + 5 + 1 + 1 = 11.
   static const int temperatureSettingsResponseLength = 11;
 
-  static const int factorySettingsResponseLength = 53;
+  static const int factorySettingsResponseLength = 54;
 
   // ================= BATTERY SETTINGS (0x58 read-back / 0xB0 write) ========
   static const int battStringByte         = 3;
@@ -148,12 +148,14 @@ static const int liveStatusStopByte  = 11;
   static const int temperatureSettingsStopByte = 10;
 
   // ================= FACTORY SETTINGS (0x5B read-back / 0xB4 write) ========
+// ================= FACTORY SETTINGS (0x5B read-back / 0xB4 write) ========
 static const int facBatterySlStart = 3,  facBatterySlEnd = 19;
 static const int facBmsSerialStart = 19, facBmsSerialEnd = 35;
 static const int facBleNameStart   = 35, facBleNameEnd   = 51;
-// Single-byte CRC-8, per protocol spec (53-byte total packet).
-static const int factorySettingsCrcByte  = 51;
-static const int factorySettingsStopByte = 52;
+// CRC-16 (2 bytes, little-endian), per protocol spec.
+static const int factorySettingsCrcLow   = 51;
+static const int factorySettingsCrcHigh  = 52;
+static const int factorySettingsStopByte = 53;
 
   // ================= SETTINGS DATA IDs =================
   // Battery Settings

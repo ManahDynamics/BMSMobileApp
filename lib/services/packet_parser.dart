@@ -240,12 +240,13 @@ class BMSPacketParser {
 
     return BMSParseResult.success(packet);
   }
+static BMSParseResult _parseFactorySettingsPacket(List<int> bytes) {
+  final receivedCrc =
+      (bytes[BMSProtocol.factorySettingsCrcLow] & 0xFF) |
+      ((bytes[BMSProtocol.factorySettingsCrcHigh] & 0xFF) << 8);
 
- static BMSParseResult _parseFactorySettingsPacket(List<int> bytes) {
-  final receivedCrc = bytes[BMSProtocol.factorySettingsCrcByte] & 0xFF;
-
-  final computedCrc = BMSCrcService.calculateCRC8(
-    bytes.sublist(1, BMSProtocol.factorySettingsCrcByte),
+  final computedCrc = BMSCrcService.calculateCRC16(
+    bytes.sublist(1, BMSProtocol.factorySettingsCrcLow),
   );
 
   if (receivedCrc != computedCrc) {
