@@ -92,7 +92,11 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         if (_factoryRequestSent) return;
         _factoryRequestSent = true;
         widget.service.startFactorySettingsPolling();
-        break;
+         Future.delayed(const Duration(milliseconds: 400), () {
+        if (!mounted) return;
+        widget.service.requestDeviceDetails();
+      });
+      break;
     }
   }
   // ── Battery Settings ────────────────────────────────────────────────────────
@@ -551,10 +555,6 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
         }
         _batteryRequestSent = false;
 
-        if (!_deviceDetailsRequested) {
-          _deviceDetailsRequested = true;
-          widget.service.requestDeviceDetails();
-        }
       }
 
       if (psChanged) {
