@@ -241,41 +241,38 @@ class BMSPacketParser {
     return BMSParseResult.success(packet);
   }
 
-  static BMSParseResult _parseFactorySettingsPacket(List<int> bytes) {
-    final receivedCrc =
-        (bytes[BMSProtocol.factorySettingsCrcLow] & 0xFF) |
-        ((bytes[BMSProtocol.factorySettingsCrcHigh] & 0xFF) << 8);
+ static BMSParseResult _parseFactorySettingsPacket(List<int> bytes) {
+  final receivedCrc = bytes[BMSProtocol.factorySettingsCrcByte] & 0xFF;
 
-    final computedCrc = BMSCrcService.calculateCRC16(
-      bytes.sublist(1, BMSProtocol.factorySettingsCrcLow),
+  final computedCrc = BMSCrcService.calculateCRC8(
+    bytes.sublist(1, BMSProtocol.factorySettingsCrcByte),
+  );
+
+  if (receivedCrc != computedCrc) {
+    return BMSParseResult.failure(
+      BMSParseError.crcMismatch,
+      errorDetail:
+          'computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
+          'received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
     );
-
-    if (receivedCrc != computedCrc) {
-      return BMSParseResult.failure(
-        BMSParseError.crcMismatch,
-        errorDetail:
-            'computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
-            'received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
-      );
-    }
-
-    final packet = BMSParsedPacket(
-      startByte: bytes[0],
-      length: bytes[1],
-      dataId: bytes[2],
-      crc: receivedCrc,
-      stopByte: bytes[BMSProtocol.factorySettingsStopByte],
-      rawBytes: Uint8List.fromList(bytes),
-      receivedAt: DateTime.now(),
-
-      batterySlNo: _decodeAscii(bytes, BMSProtocol.facBatterySlStart, BMSProtocol.facBatterySlEnd),
-      bmsSerialNo: _decodeAscii(bytes, BMSProtocol.facBmsSerialStart, BMSProtocol.facBmsSerialEnd),
-      bleDeviceName: _decodeAscii(bytes, BMSProtocol.facBleNameStart, BMSProtocol.facBleNameEnd),
-    );
-
-    return BMSParseResult.success(packet);
   }
 
+  final packet = BMSParsedPacket(
+    startByte: bytes[0],
+    length: bytes[1],
+    dataId: bytes[2],
+    crc: receivedCrc,
+    stopByte: bytes[BMSProtocol.factorySettingsStopByte],
+    rawBytes: Uint8List.fromList(bytes),
+    receivedAt: DateTime.now(),
+
+    batterySlNo: _decodeAscii(bytes, BMSProtocol.facBatterySlStart, BMSProtocol.facBatterySlEnd),
+    bmsSerialNo: _decodeAscii(bytes, BMSProtocol.facBmsSerialStart, BMSProtocol.facBmsSerialEnd),
+    bleDeviceName: _decodeAscii(bytes, BMSProtocol.facBleNameStart, BMSProtocol.facBleNameEnd),
+  );
+
+  return BMSParseResult.success(packet);
+}
   // ─────────────────────────────────────────────────────────────────────────
   // 37-BYTE ALERTS DETAILS RESPONSE (dataId 0x56) — CRC-16, little-endian
   //

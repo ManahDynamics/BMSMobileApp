@@ -1050,6 +1050,7 @@ Future<bool> _sendSettingsWrite(
 
   /// Factory Settings "Set Now" (0xB4, 53 bytes).
  /// Factory Settings "Set Now" (0xB4, 54 bytes — CRC-16).
+  /// Factory Settings "Set Now" (0xB4, 53 bytes — CRC-8).
   Future<bool> sendFactorySettingsWrite({
     required String batterySlNo,
     required String bmsSerialNo,
@@ -1057,15 +1058,14 @@ Future<bool> _sendSettingsWrite(
   }) {
     final buffer = <int>[
       BMSProtocol.startByte,
-      BMSProtocol.factorySettingsResponseLength, // 54
+      BMSProtocol.factorySettingsResponseLength, // now 53 (0x35)
       BMSProtocol.idFactorySettingsWrite,
       ..._asciiField(batterySlNo, 16),
       ..._asciiField(bmsSerialNo, 16),
       ..._asciiField(bleDeviceName, 16),
     ];
-    final crc = BMSCrcService.calculateCRC16(buffer.sublist(1));
-    buffer.add(crc & 0xFF);         // CRC low byte
-    buffer.add((crc >> 8) & 0xFF);  // CRC high byte
+    final crc = BMSCrcService.calculateCRC8(buffer.sublist(1));
+    buffer.add(crc);
     buffer.add(BMSProtocol.stopByte);
     return _sendSettingsWrite(
       buffer,
