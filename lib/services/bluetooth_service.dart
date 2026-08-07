@@ -15,6 +15,15 @@ enum BMSConnectionState {
   disconnected, connecting, connected, discovering,
   handshakeSent, waitingAck, ready, disconnecting, error,
 }
+enum FirmwareUpgradeStage {
+  idle,
+  requestSent,      // 0xB5 sent, waiting for 0xC2
+  waitingForFile,   // 0xC2 received, file picker should open
+  uploading,        // sending file bytes
+  waitingForFlash,  // upload done, waiting for 0xC3
+  upgrading,        // 0xC3 received — 5 min countdown, then navigate to scan
+  failed,
+}
 
 class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   BluetoothDevice? device;
@@ -60,7 +69,7 @@ BMSParsedPacket? latestTemperatureSettings;
   // FIXED: this was parsed correctly by packet_parser.dart but had nowhere
   // to land in the service — no field, no branch in the notify listener.
   BMSParsedPacket? latestDeviceDetails;
-
+  FirmwareUpgradeStage firmwareUpgradeStage = FirmwareUpgradeStage.idle;
   int batterySettingsPulse = 0;
   int protectionSettingsPulse = 0;
   int temperatureSettingsPulse = 0;
@@ -404,7 +413,6 @@ if (!result.isSuccess) {
           }
           _liveStatusMissCount = 0;
 
-      
 
         } else if (packet.isCalibrationAck) {
           addDebugLog('✅ Calibrate Now Ack (0xC1) received');
@@ -413,7 +421,17 @@ if (!result.isSuccess) {
               _expectedActionAckDataId == BMSProtocol.idCalibrationAck) {
             _actionAckCompleter!.complete(true);
           }
+        } 
+        else if (packet.dataId == BMSProtocol.idFirmwareUpgradeAck) {
+          addDebugLog('🔧 0xC2 received — BMS ready for firmware, stopping 0x92 heartbeat');
+          stopLiveStatusMonitor(); // this is what stops the 0x92 packets, per the spec
+          firmwareUpgradeStage = FirmwareUpgradeStage.waitingForFile;
+          notifyListeners();
 
+        } else if (packet.dataId == BMSProtocol.idFirmwareUpgradeComplete) {
+          addDebugLog('🔧 0xC3 received — BMS flashing firmware');
+          firmwareUpgradeStage = FirmwareUpgradeStage.upgrading;
+          notifyListeners();
         } else if (packet.isAck) {
           if (state == BMSConnectionState.waitingAck) {
             addDebugLog('🤝 ACK packet received — validating handshake');
@@ -1096,7 +1114,116 @@ Future<bool> sendFactorySettingsWrite({
       dataId: BMSProtocol.idFirmwareUpgrade,
     );
   }
+/// Starts the upgrade: sends 0xB5 and moves to requestSent.
+  /// UI should call this, then wait on firmwareUpgradeStage.
+  Future<bool> beginFirmwareUpgrade() async {
+    firmwareUpgradeStage = FirmwareUpgradeStage.requestSent;
+    notifyListeners();
+    final ok = await sendFirmwareUpgrade(); // existing 0xB5 sender
+    if (!ok) firmwareUpgradeStage = FirmwareUpgradeStage.failed;
+    notifyListeners();
+    return ok;
+  }
 
+  /// Uploads the firmware file using the same framing as the reference OTA
+  /// sample: 0xAABBCCDD start marker, 4-byte little-endian size packet,
+  /// MTU-sized chunks, 0x5A5A5A5A end marker. No CRC yet (per spec note —
+  /// "once it will work we will implement with CRC validation").
+  Future<bool> uploadFirmwareFile(List<int> bytes) async {
+    if (_writeChar == null) return false;
+    firmwareUpgradeStage = FirmwareUpgradeStage.uploading;
+    notifyListeners();
+
+    try {
+      final bool withoutResp = _writeChar!.properties.writeWithoutResponse;
+
+      // 1. START PACKET
+      addDebugLog('📤 OTA: sending START packet 0xAABBCCDD');
+      await _writeChar!.write([0xAA, 0xBB, 0xCC, 0xDD], withoutResponse: withoutResp);
+
+      // 2. FILE SIZE PACKET (4 bytes, little-endian)
+      final int totalSize = bytes.length;
+      final List<int> sizePacket = [
+        totalSize & 0xFF,
+        (totalSize >> 8) & 0xFF,
+        (totalSize >> 16) & 0xFF,
+        (totalSize >> 24) & 0xFF,
+      ];
+      addDebugLog('📤 OTA: sending file size ($totalSize bytes)');
+      await _writeChar!.write(sizePacket, withoutResponse: withoutResp);
+
+      await Future.delayed(const Duration(milliseconds: 50));
+
+      // 3. CHUNKED FILE BODY (sized to negotiated MTU)
+      final int mtu = device?.mtuNow ?? 23;
+      final int chunkSize = (mtu - 3).clamp(20, 512);
+      addDebugLog('📤 OTA: chunk size $chunkSize bytes (MTU $mtu)');
+
+      int sent = 0;
+      while (sent < bytes.length) {
+        final int end = (sent + chunkSize > bytes.length) ? bytes.length : sent + chunkSize;
+        final List<int> chunk = bytes.sublist(sent, end);
+        await _writeChar!.write(chunk, withoutResponse: withoutResp);
+        sent = end;
+
+        if (sent % (chunkSize * 5) == 0 || sent == bytes.length) {
+          addDebugLog('📤 OTA progress: ${((sent / bytes.length) * 100).toStringAsFixed(1)}%');
+        }
+        await Future.delayed(const Duration(milliseconds: 10));
+      }
+
+      // 4. END MARKER
+      addDebugLog('📤 OTA: sending END marker 0x5A5A5A5A');
+      await _writeChar!.write([0x5A, 0x5A, 0x5A, 0x5A], withoutResponse: withoutResp);
+
+      addDebugLog('✅ Firmware upload complete — waiting for 0xC3');
+      firmwareUpgradeStage = FirmwareUpgradeStage.waitingForFlash;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      addDebugLog('❌ Firmware upload failed: $e');
+      firmwareUpgradeStage = FirmwareUpgradeStage.failed;
+      notifyListeners();
+      return false;
+    }
+  }
+  void resetFirmwareUpgradeState() {
+    firmwareUpgradeStage = FirmwareUpgradeStage.idle;
+    notifyListeners();
+  }
+
+/// Called once a firmware upgrade's 5-min buffering window finishes and the
+/// BMS has rebooted. The BLE link is already gone by this point (that's why
+/// we don't try to send a DISCONNECT packet like disconnect() does), so we
+/// just tear down our local connection state so the UI — most importantly
+/// the "Authenticated" badge on the scan screen — stops treating this
+/// device as still connected/ready.
+Future<void> resetConnectionAfterFirmwareUpgrade() async {
+  _ackTimer?.cancel();
+  _stopPolling();
+  _stopDashboardPolling();
+  _stopCellVoltagePolling();
+  stopSettingsPolling();
+  stopLiveStatusMonitor();
+
+  await _notifySub?.cancel();
+  await _connectionStateSub?.cancel();
+  try {
+    await device?.disconnect();
+  } catch (_) {
+    // Link is already gone (device rebooted) — ignore.
+  }
+
+  _cleanup();
+
+  firmwareUpgradeStage = FirmwareUpgradeStage.idle;
+  state = BMSConnectionState.disconnected;
+  readyForDashboard = false;
+  dashboardReady = false;
+  dashboardNavigationTriggered = false;
+
+  notifyListeners();
+}
   /// Restart (0xB6, 5-byte control packet).
  /// Restart (0xB6, 5-byte control packet).
   /// No ACK wait — fire and forget, same as the Settings "Set Now" writes.

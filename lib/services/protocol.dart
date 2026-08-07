@@ -181,6 +181,9 @@ static const int factorySettingsStopByte = 53;
   // Actions (5-byte control packets, Mobile → BMS, ACK'd with 0x50)
   static const int idCalibration     = 0xB1; // Calibrate Now
   static const int idCalibrationAck  = 0xC1;
+  // Firmware Upgrade responses (BMS → Mobile)
+  static const int idFirmwareUpgradeAck      = 0xC2; // BMS ready for file — stop 0x92 heartbeat
+  static const int idFirmwareUpgradeComplete = 0xC3; // File received & validated — BMS is flashing
   static const int idFirmwareUpgrade = 0xB5;
   static const int idRestart         = 0xB6;
   static const int idFactoryReset    = 0xB7;
@@ -345,6 +348,8 @@ static const int factorySettingsStopByte = 53;
       case idFactorySettingsWrite:    return 'Factory Settings Set Now';
       case idCalibration:     return 'Calibration';
       case idCalibrationAck:  return 'Calibration Ack';
+      case idFirmwareUpgradeAck:      return 'Firmware Upgrade Ack';
+      case idFirmwareUpgradeComplete: return 'Firmware Upgrade Complete';
       case idFirmwareUpgrade: return 'Firmware Upgrade';
       case idRestart:         return 'Restart';
       case idFactoryReset:    return 'Factory Reset';

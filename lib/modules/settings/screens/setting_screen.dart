@@ -1,5 +1,6 @@
-// lib/screens/settings_screen.dart
-// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+// lib/screens/settings_screen.dart// ignore_for_file: use_build_context_synchronously, deprecated_member_use
+import 'package:file_selector/file_selector.dart';
+import 'dart:io';
 import 'dart:async';
 import 'package:bmsmobileapp/widgets/bar_code_scanner_dialog.dart';
 import 'package:flutter/material.dart';
@@ -345,7 +346,204 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     });
     _persistSettings();
   }
+FirmwareUpgradeStage _lastFwStage = FirmwareUpgradeStage.idle;
+Timer? _fwUpgradeCountdownTimer;
 
+Future<void> _startFirmwareUpgradeFlow() async {
+  final confirmed = await _showContinueConfirmation();
+  if (!confirmed) return;
+
+  setState(() => _isSending = true);
+  final ok = await widget.service.beginFirmwareUpgrade(); // sends 0xB5
+  if (!ok) {
+    if (!mounted) return;
+    setState(() => _isSending = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Firmware upgrade request failed — no response'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+  // Everything from here on is driven by _onFirmwareUpgradeStageChanged
+  // reacting to 0xC2 / 0xC3 arriving.
+}
+
+void _onFirmwareUpgradeStageChanged() {
+  if (!mounted) return;
+  final stage = widget.service.firmwareUpgradeStage;
+  if (stage == _lastFwStage) return;
+  _lastFwStage = stage;
+
+  switch (stage) {
+    case FirmwareUpgradeStage.waitingForFile:
+  // 0xC2 received — show a dialog prompting the user to select the file,
+  // instead of opening the native picker directly.
+  _showSelectFirmwareFileDialog();
+  break;
+
+    case FirmwareUpgradeStage.upgrading:
+      // 0xC3 received — show blocking "buffering" dialog + start 5 min timer.
+      _showFirmwareUpgradingDialog();
+      break;
+
+    case FirmwareUpgradeStage.failed:
+      setState(() => _isSending = false);
+      if (Navigator.canPop(context)) Navigator.of(context, rootNavigator: true).maybePop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Firmware upgrade failed'), backgroundColor: Colors.red),
+      );
+      widget.service.resetFirmwareUpgradeState();
+      break;
+
+    default:
+      break;
+  }
+}
+
+void _showSelectFirmwareFileDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text(
+        'Firmware Upgrade',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: Color(0xFF1B6B3A)),
+      ),
+      content: const Text(
+        'Select the firmware upgrade file (.bin / .hex) to continue.',
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 13, color: Colors.black54),
+      ),
+      actionsAlignment: MainAxisAlignment.center,
+      actions: [
+        ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF2B5FA5), 
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+          ),
+          onPressed: () {
+            Navigator.of(ctx).pop();
+            _pickAndUploadFirmware(); // NOW opens the native picker
+          },
+          child: const Text('Select'),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(ctx).pop();
+            setState(() => _isSending = false);
+            widget.service.resetFirmwareUpgradeState();
+          },
+          child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey)),
+        ),
+      ],
+    ),
+  );
+}
+Future<void> _pickAndUploadFirmware() async {
+  const XTypeGroup firmwareTypeGroup = XTypeGroup(
+    label: 'Firmware',
+    extensions: ['bin', 'hex'],
+  );
+
+  final XFile? selectedFile = await openFile(
+    acceptedTypeGroups: [firmwareTypeGroup],
+  );
+
+  if (selectedFile == null) {
+    // User cancelled — reset so they can retry.
+    if (mounted) {
+      setState(() => _isSending = false);
+    }
+    widget.service.resetFirmwareUpgradeState();
+    return;
+  }
+
+  try {
+    final file = File(selectedFile.path);
+    final bytes = await file.readAsBytes();
+
+    final ok = await widget.service.uploadFirmwareFile(bytes);
+
+    if (!mounted) return;
+
+    if (!ok) {
+      setState(() => _isSending = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Firmware upload failed'),
+          backgroundColor: Colors.red,
+        ),
+      );
+
+      widget.service.resetFirmwareUpgradeState();
+    }
+
+    // Success: wait for 0xC3 acknowledgement.
+    // _onFirmwareUpgradeStageChanged() will continue the process.
+  } catch (e) {
+    if (!mounted) return;
+
+    setState(() => _isSending = false);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Failed to read firmware file: $e'),
+        backgroundColor: Colors.red,
+      ),
+    );
+
+    widget.service.resetFirmwareUpgradeState();
+  }
+}
+
+void _showFirmwareUpgradingDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text(
+              'Upgrading…',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'Buffering (5 min)',
+              style: TextStyle(fontSize: 12.5, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  _fwUpgradeCountdownTimer = Timer(const Duration(minutes: 5), () async {
+  if (!mounted) return;
+  Navigator.of(context, rootNavigator: true).maybePop(); // close the dialog
+  await widget.service.resetConnectionAfterFirmwareUpgrade();
+  if (!mounted) return;
+  setState(() => _isSending = false);
+  Navigator.pushAndRemoveUntil(
+    context,
+    SlideRoute(page: BluetoothDeviceScanPage(service: widget.service)),
+    (route) => false,
+  );
+});
+}
   /// Called when the user taps a different tab. Blocks the switch with a
   /// confirmation dialog if the current tab has unsaved edits.
   void _onTabTapped(int i) {
@@ -469,6 +667,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     widget.service.addListener(_onServiceChanged);
     _loadCachedSettings();
     WidgetsBinding.instance.addPostFrameCallback((_) => _pollForTab(_selectedTab));
+    widget.service.addListener(_onFirmwareUpgradeStageChanged);
   }
 
   void _onTranslationsChanged() {
@@ -621,6 +820,7 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     TranslationService.instance.removeListener(_onTranslationsChanged);
    widget.service.removeListener(_onServiceChanged);
     widget.service.stopSettingsPolling();
+    _fwUpgradeCountdownTimer?.cancel();
     super.dispose();
   }
 
@@ -2367,7 +2567,7 @@ bool _isSending = false;
                 ),
                 onPressed: (isLocked || _isSending)
                     ? null
-                    : () => _handleAction('Firmware upgrade', () => widget.service.sendFirmwareUpgrade()),
+                    : _startFirmwareUpgradeFlow,
                 child: const Text('Upgrade', style: TextStyle(fontSize: 12)),
               ),
             ],
@@ -2406,12 +2606,12 @@ bool _isSending = false;
                   padding: const EdgeInsets.symmetric(vertical: 10),
                 ),
                 onPressed: (isLocked || _isSending)
-                    ? null
-                    : () => _showResetConfirmation(
-                          'Factory Data Reset',
-                          'This will erase all settings and restore factory defaults from master data. Continue?',
-                          _handleFactoryReset,
-                        ),
+    ? null
+    : () => _showResetConfirmation(
+          'Factory Data Reset',
+          'Are you sure you want to reset the BMS to factory defaults? This cannot be undone.',
+          _handleFactoryReset,
+        ),
                 icon: const Icon(Icons.settings_backup_restore_rounded, size: 16),
                 label: const Text('Factory Data Reset',
                     style: TextStyle(fontWeight: FontWeight.w600, fontSize: 11.5), overflow: TextOverflow.ellipsis),
@@ -2465,6 +2665,7 @@ class _DeviceDetailsSheetState extends State<_DeviceDetailsSheet> {
   void dispose() {
     widget.service.removeListener(_onServiceChanged);
     widget.service.stopSettingsPolling();
+    
     super.dispose();
   }
 
