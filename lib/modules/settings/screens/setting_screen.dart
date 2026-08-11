@@ -347,6 +347,10 @@ class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObse
     _persistSettings();
   }
 FirmwareUpgradeStage _lastFwStage = FirmwareUpgradeStage.idle;
+RestartStage _lastRestartStage = RestartStage.idle;
+FactoryResetStage _lastFactoryResetStage = FactoryResetStage.idle;
+Timer? _restartCountdownTimer;
+Timer? _factoryResetCountdownTimer;
 Timer? _fwUpgradeCountdownTimer;
 
 Future<void> _startFirmwareUpgradeFlow() async {
@@ -401,6 +405,87 @@ void _onFirmwareUpgradeStageChanged() {
   }
 }
 
+Future<void> _startRestartFlow() async {
+  setState(() => _isSending = true);
+  final ok = await widget.service.beginRestart(); // sends 0xB6
+  if (!ok) {
+    if (!mounted) return;
+    setState(() => _isSending = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Restart request failed — no response'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+  // Everything from here is driven by _onRestartStageChanged reacting to 0xC4.
+}
+
+void _onRestartStageChanged() {
+  if (!mounted) return;
+  final stage = widget.service.restartStage;
+  if (stage == _lastRestartStage) return;
+  _lastRestartStage = stage;
+
+  switch (stage) {
+    case RestartStage.restarting:
+      // 0xC4 received — show blocking "restarting" dialog + 3 min timer.
+      _showRestartingDialog();
+      break;
+
+    case RestartStage.failed:
+      setState(() => _isSending = false);
+      if (Navigator.canPop(context)) Navigator.of(context, rootNavigator: true).maybePop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Restart failed'), backgroundColor: Colors.red),
+      );
+      widget.service.resetRestartState();
+      break;
+
+    default:
+      break;
+  }
+}
+
+void _showRestartingDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Restarting…', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            SizedBox(height: 6),
+            Text(
+              'Please wait (3 min)',
+              style: TextStyle(fontSize: 12.5, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  _restartCountdownTimer = Timer(const Duration(minutes: 3), () async {
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).maybePop(); // close the dialog
+    await widget.service.resetConnectionAfterRestart();
+    if (!mounted) return;
+    setState(() => _isSending = false);
+    Navigator.pushAndRemoveUntil(
+      context,
+      SlideRoute(page: BluetoothDeviceScanPage(service: widget.service)),
+      (route) => false,
+    );
+  });
+}
 void _showSelectFirmwareFileDialog() {
   showDialog(
     context: context,
@@ -463,6 +548,16 @@ Future<void> _pickAndUploadFirmware() async {
     return;
   }
 
+  // ── NEW: confirm the file was picked ──────────────────────────────
+  if (mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('File selected successfully'),
+        backgroundColor: Color(0xFF1B6B3A),
+      ),
+    );
+  }
+
   try {
     final file = File(selectedFile.path);
     final bytes = await file.readAsBytes();
@@ -479,9 +574,17 @@ Future<void> _pickAndUploadFirmware() async {
           content: Text('Firmware upload failed'),
           backgroundColor: Colors.red,
         ),
-      );
+      );  
 
       widget.service.resetFirmwareUpgradeState();
+    } else {
+      // ── NEW: confirm the upload itself finished ─────────────────────
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('File uploaded successfully'),
+          backgroundColor: Color(0xFF1B6B3A),
+        ),
+      );
     }
 
     // Success: wait for 0xC3 acknowledgement.
@@ -628,23 +731,6 @@ void _showFirmwareUpgradingDialog() {
     return TranslationService.t(key);
   }
 
-  /// setState() that is safe to call from asynchronous, non-gesture-driven
-  /// sources (BLE platform-channel callbacks, ChangeNotifier listeners,
-  /// timers). Those callbacks can fire at any point in the event loop,
-  /// including while the current frame is still mid build/layout/paint. If
-  /// we call the raw setState() at that moment, the pending frame's own
-  /// layout pass can be interleaved with the new one we just triggered,
-  /// which is what caused the intermittent:
-  ///   "RenderBox was not laid out: _RenderSingleChildViewport ... NEEDS-PAINT"
-  /// and the associated blank-screen flash — most visible here because the
-  /// screen's RefreshIndicator + SingleChildScrollView combo is sensitive
-  /// to being rebuilt mid-animation/mid-layout.
-  ///
-  /// If the engine is idle, we just call setState() right away (no need to
-  /// wait an extra frame for ordinary cases). If a frame is currently being
-  /// produced, we defer the state change to run immediately after that
-  /// frame finishes, via addPostFrameCallback, which guarantees it never
-  /// overlaps an in-flight layout/paint pass.
   void _safeSetState(VoidCallback fn) {
     if (!mounted) return;
     final phase = SchedulerBinding.instance.schedulerPhase;
@@ -668,6 +754,8 @@ void _showFirmwareUpgradingDialog() {
     _loadCachedSettings();
     WidgetsBinding.instance.addPostFrameCallback((_) => _pollForTab(_selectedTab));
     widget.service.addListener(_onFirmwareUpgradeStageChanged);
+    widget.service.addListener(_onRestartStageChanged);      
+    widget.service.addListener(_onFactoryResetStageChanged);
   }
 
   void _onTranslationsChanged() {
@@ -818,9 +906,14 @@ void _showFirmwareUpgradingDialog() {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     TranslationService.instance.removeListener(_onTranslationsChanged);
-   widget.service.removeListener(_onServiceChanged);
+    widget.service.removeListener(_onServiceChanged);
+    widget.service.removeListener(_onFirmwareUpgradeStageChanged); 
+    widget.service.removeListener(_onRestartStageChanged);         
+    widget.service.removeListener(_onFactoryResetStageChanged);    
     widget.service.stopSettingsPolling();
     _fwUpgradeCountdownTimer?.cancel();
+    _restartCountdownTimer?.cancel();        
+    _factoryResetCountdownTimer?.cancel();   
     super.dispose();
   }
 
@@ -1493,66 +1586,126 @@ void _showFirmwareUpgradingDialog() {
     _persistSettings();
   }
 
-  /// Factory Data Reset flow:
-  ///  1. Tell the device to reset (existing BLE write).
-  ///  2. On ACK, pull the master/default parameter set from Firebase.
-  ///  3. Repopulate every tab's fields from that master data and clear all
-  ///     unsaved-change highlighting, so the screen reflects the true
-  ///     factory-default state rather than stale on-screen values.
-  Future<void> _handleFactoryReset() async {
-    setState(() => _isSending = true);
-    bool ok = false;
-    try {
-      ok = await widget.service.sendFactoryReset();
-    } catch (e) {
-      ok = false;
-    }
-    if (!mounted) return;
-
-    if (!ok) {
-      setState(() => _isSending = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Factory data reset failed — no ACK received'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // Device reset itself succeeded — now try to repopulate from master
-    // data. This part can partially fail without the reset as a whole
-    // being treated as a failure, so it gets its own (snackbar) messaging
-    // rather than blocking the main success popup.
-    String successMessage = 'Factory data reset sent to device.';
-    String? warningMessage;
-    try {
-      final master = await _masterDataService.fetchMasterSettings(
-        deviceId: bmsSerialNo.trim().isNotEmpty ? bmsSerialNo.trim() : null,
-      );
-      if (master != null && master.isNotEmpty) {
-        _applyMasterData(master);
-        successMessage = 'Factory data reset — values restored from master data.';
-      } else {
-        // Device reset succeeded, but master data isn't available yet
-        // (e.g. MasterDataService not wired up). Not treated as an error.
-        warningMessage = 'Factory data reset sent — master data not available yet';
-      }
-    } catch (e) {
-      warningMessage = 'Factory data reset sent, but restoring master data failed';
-    }
-
+  Future<void> _startFactoryResetFlow() async {
+  setState(() => _isSending = true);
+  final ok = await widget.service.beginFactoryReset(); // sends 0xB7
+  if (!ok) {
     if (!mounted) return;
     setState(() => _isSending = false);
-
-    if (warningMessage != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(warningMessage), backgroundColor: Colors.orange.shade800),
-      );
-    } else {
-      await _showSuccessDialog(successMessage);
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Factory data reset request failed — no response'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
+  // Everything from here is driven by _onFactoryResetStageChanged reacting to 0xC5.
+}
+
+void _onFactoryResetStageChanged() {
+  if (!mounted) return;
+  final stage = widget.service.factoryResetStage;
+  if (stage == _lastFactoryResetStage) return;
+  _lastFactoryResetStage = stage;
+
+  switch (stage) {
+    case FactoryResetStage.resetting:
+      // 0xC5 received — show blocking "resetting" dialog + 2 min timer.
+      _showFactoryResettingDialog();
+      break;
+
+    case FactoryResetStage.failed:
+      setState(() => _isSending = false);
+      if (Navigator.canPop(context)) Navigator.of(context, rootNavigator: true).maybePop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Factory data reset failed'), backgroundColor: Colors.red),
+      );
+      widget.service.resetFactoryResetState();
+      break;
+
+    default:
+      break;
+  }
+}
+
+void _showFactoryResettingDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Resetting…', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            SizedBox(height: 6),
+            Text(
+              'Resetting to default values (2 min)',
+              style: TextStyle(fontSize: 12.5, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  _factoryResetCountdownTimer = Timer(const Duration(minutes: 2), () async {
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).maybePop(); // close buffering dialog
+    widget.service.resetFactoryResetState();
+
+    // The BMS is still connected (unlike Restart) — force every tab to
+    // re-request fresh data instead of navigating away. Resetting all
+    // four guards means whichever tab the user is on right now re-reads
+    // immediately, and any tab they switch to afterward re-reads too.
+    _batteryRequestSent = false;
+    _protectionRequestSent = false;
+    _tempRequestSent = false;
+    _factoryRequestSent = false;
+    _pollForTab(_selectedTab);
+
+    setState(() => _isSending = false);
+
+    await _applyMasterDataAfterReset();
+  });
+}
+
+/// Pulls the master/default parameter set from Firebase after a factory
+/// reset completes and repopulates every tab, clearing unsaved-change
+/// highlighting. Kept as its own step so it can fail independently of the
+/// reset itself (reset already succeeded — we got the 0xC5 ACK).
+Future<void> _applyMasterDataAfterReset() async {
+  String? successMessage;
+  String? warningMessage;
+  try {
+    final master = await _masterDataService.fetchMasterSettings(
+      deviceId: bmsSerialNo.trim().isNotEmpty ? bmsSerialNo.trim() : null,
+    );
+    if (master != null && master.isNotEmpty) {
+      _applyMasterData(master);
+      successMessage = 'Factory data reset — values restored from master data.';
+    } else {
+      warningMessage = 'Factory data reset complete — master data not available yet';
+    }
+  } catch (e) {
+    warningMessage = 'Factory data reset complete, but restoring master data failed';
+  }
+
+  if (!mounted) return;
+
+  if (warningMessage != null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(warningMessage), backgroundColor: Colors.orange.shade800),
+    );
+  } else {
+    await _showSuccessDialog(successMessage ?? 'Factory data reset completed.');
+  }
+}
 
   @override
   Widget build(BuildContext context) {
@@ -2590,7 +2743,7 @@ bool _isSending = false;
                     : () => _showResetConfirmation(
                           'Restart',
                           'Are you sure you want to restart the BMS device?',
-                          () => _handleAction('Restart', () => widget.service.sendRestart(), confirmFirst: false),
+                          _startRestartFlow,        // was: () => _handleAction('Restart', ...)
                         ),
                 icon: const Icon(Icons.restart_alt_rounded, size: 16),
                 label: const Text('Restart', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12.5)),
@@ -2610,7 +2763,7 @@ bool _isSending = false;
     : () => _showResetConfirmation(
           'Factory Data Reset',
           'Are you sure you want to reset the BMS to factory defaults? This cannot be undone.',
-          _handleFactoryReset,
+          _startFactoryResetFlow,   // was: _handleFactoryReset
         ),
                 icon: const Icon(Icons.settings_backup_restore_rounded, size: 16),
                 label: const Text('Factory Data Reset',

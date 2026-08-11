@@ -24,7 +24,19 @@ enum FirmwareUpgradeStage {
   upgrading,        // 0xC3 received — 5 min countdown, then navigate to scan
   failed,
 }
+enum RestartStage {
+  idle,
+  requestSent,   // 0xB6 sent, waiting for 0xC4
+  restarting,    // 0xC4 received — 3 min countdown, then navigate to scan
+  failed,
+}
 
+enum FactoryResetStage {
+  idle,
+  requestSent,   // 0xB7 sent, waiting for 0xC5
+  resetting,     // 0xC5 received — 2 min countdown, then re-poll current page
+  failed,
+}
 class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   BluetoothDevice? device;
   BMSConnectionState state = BMSConnectionState.disconnected;
@@ -70,6 +82,8 @@ BMSParsedPacket? latestTemperatureSettings;
   // to land in the service — no field, no branch in the notify listener.
   BMSParsedPacket? latestDeviceDetails;
   FirmwareUpgradeStage firmwareUpgradeStage = FirmwareUpgradeStage.idle;
+  RestartStage restartStage = RestartStage.idle;               // NEW
+  FactoryResetStage factoryResetStage = FactoryResetStage.idle; // NEW
   int batterySettingsPulse = 0;
   int protectionSettingsPulse = 0;
   int temperatureSettingsPulse = 0;
@@ -431,6 +445,15 @@ if (!result.isSuccess) {
         } else if (packet.dataId == BMSProtocol.idFirmwareUpgradeComplete) {
           addDebugLog('🔧 0xC3 received — BMS flashing firmware');
           firmwareUpgradeStage = FirmwareUpgradeStage.upgrading;
+          notifyListeners();
+          } else if (packet.dataId == BMSProtocol.idRestartAck) {         
+          addDebugLog('🔁 0xC4 received — BMS restarting');
+          restartStage = RestartStage.restarting;
+          notifyListeners();
+
+        } else if (packet.dataId == BMSProtocol.idFactoryResetAck) {    
+          addDebugLog('♻️ 0xC5 received — BMS resetting to defaults');
+          factoryResetStage = FactoryResetStage.resetting;
           notifyListeners();
         } else if (packet.isAck) {
           if (state == BMSConnectionState.waitingAck) {
@@ -1268,6 +1291,72 @@ Future<void> resetConnectionAfterFirmwareUpgrade() async {
     );
   }
 
+  /// Starts the restart flow: sends 0xB6 and moves to requestSent.
+  /// UI should call this, then react to `restartStage`.
+  Future<bool> beginRestart() async {
+    restartStage = RestartStage.requestSent;
+    notifyListeners();
+    final ok = await sendRestart(); // existing 0xB6 sender
+    if (!ok) {
+      restartStage = RestartStage.failed;
+      notifyListeners();
+    }
+    return ok;
+  }
+
+  void resetRestartState() {
+    restartStage = RestartStage.idle;
+    notifyListeners();
+  }
+
+  /// Torn down the same way resetConnectionAfterFirmwareUpgrade() does —
+  /// the BMS reboots after restart, so the BLE link is already gone by the
+  /// time the 3-min window finishes.
+  Future<void> resetConnectionAfterRestart() async {
+    _ackTimer?.cancel();
+    _stopPolling();
+    _stopDashboardPolling();
+    _stopCellVoltagePolling();
+    stopSettingsPolling();
+    stopLiveStatusMonitor();
+
+    await _notifySub?.cancel();
+    await _connectionStateSub?.cancel();
+    try {
+      await device?.disconnect();
+    } catch (_) {
+      // Link is already gone (device rebooted) — ignore.
+    }
+
+    _cleanup();
+
+    restartStage = RestartStage.idle;
+    state = BMSConnectionState.disconnected;
+    readyForDashboard = false;
+    dashboardReady = false;
+    dashboardNavigationTriggered = false;
+
+    notifyListeners();
+  }
+
+  /// Starts the factory-reset flow: sends 0xB7 and moves to requestSent.
+  /// UI should call this, then react to `factoryResetStage`.
+  Future<bool> beginFactoryReset() async {
+    factoryResetStage = FactoryResetStage.requestSent;
+    notifyListeners();
+    final ok = await sendFactoryReset(); // existing 0xB7 sender
+    if (!ok) {
+      factoryResetStage = FactoryResetStage.failed;
+      notifyListeners();
+    }
+    return ok;
+  }
+
+  void resetFactoryResetState() {
+    factoryResetStage = FactoryResetStage.idle;
+    notifyListeners();
+  }
+
   // ─────────────────────────────────────────────────────────────────────────
   // POLLING
   // ─────────────────────────────────────────────────────────────────────────
@@ -1480,6 +1569,9 @@ bleName           = null;
     _ackTimer?.cancel();
     stopLiveStatusMonitor();
     _stopPolling();
+     firmwareUpgradeStage = FirmwareUpgradeStage.idle; 
+    restartStage = RestartStage.idle;         
+    factoryResetStage = FactoryResetStage.idle; 
   }
 
   void _cleanup() {

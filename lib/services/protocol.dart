@@ -186,7 +186,9 @@ static const int factorySettingsStopByte = 53;
   static const int idFirmwareUpgradeComplete = 0xC3; // File received & validated — BMS is flashing
   static const int idFirmwareUpgrade = 0xB5;
   static const int idRestart         = 0xB6;
+  static const int idRestartAck      = 0xC4; 
   static const int idFactoryReset    = 0xB7;
+  static const int idFactoryResetAck = 0xC5;  
 
   // Device Details
   static const int idDeviceDetailsRequest  = 0x97;
@@ -286,7 +288,6 @@ static const int factorySettingsStopByte = 53;
 
   // ── Cell Voltage Response Packet (88 bytes) ───────────────────────────────
   static const int cellVoltageResponseLength = 88;
-
   static const int cellMaxVoltageHigh   = 3;
   static const int cellMaxVoltageLow    = 4;
   static const int cellMaxVoltageCellNo = 5;
@@ -353,6 +354,8 @@ static const int factorySettingsStopByte = 53;
       case idFirmwareUpgrade: return 'Firmware Upgrade';
       case idRestart:         return 'Restart';
       case idFactoryReset:    return 'Factory Reset';
+      case idRestartAck:      return 'Restart Ack';
+      case idFactoryResetAck: return 'Factory Reset Ack';
       default:
         return 'Unknown (0x${id.toRadixString(16).toUpperCase().padLeft(2, '0')})';
     }
