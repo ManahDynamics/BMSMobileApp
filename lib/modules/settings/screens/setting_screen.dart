@@ -446,6 +446,67 @@ void _onRestartStageChanged() {
       break;
   }
 }
+Future<void> _showAutoDismissMessageDialog({
+  required IconData icon,
+  required Color iconColor,
+  required String title,
+  String? subtitle,
+  Duration duration = const Duration(seconds: 2),
+}) async {
+  if (!mounted) return;
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 42, color: iconColor),
+            const SizedBox(height: 12),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(subtitle, style: const TextStyle(fontSize: 12.5, color: Colors.black54), textAlign: TextAlign.center),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+
+  await Future.delayed(duration);
+  if (!mounted) return;
+  Navigator.of(context, rootNavigator: true).maybePop();
+}
+
+void _showLoadingDialog(String title, {String? subtitle}) {
+  if (!mounted) return;
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const CircularProgressIndicator(),
+            const SizedBox(height: 16),
+            Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(subtitle, style: const TextStyle(fontSize: 12.5, color: Colors.black54), textAlign: TextAlign.center),
+            ],
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 void _showRestartingDialog() {
   showDialog(
@@ -624,7 +685,7 @@ void _showFirmwareUpgradingDialog() {
             ),
             SizedBox(height: 6),
             Text(
-              'Buffering (5 min)',
+              'Buffering (3 min)',
               style: TextStyle(fontSize: 12.5, color: Colors.black54),
               textAlign: TextAlign.center,
             ),
@@ -634,18 +695,35 @@ void _showFirmwareUpgradingDialog() {
     ),
   );
 
-  _fwUpgradeCountdownTimer = Timer(const Duration(minutes: 5), () async {
-  if (!mounted) return;
-  Navigator.of(context, rootNavigator: true).maybePop(); // close the dialog
-  await widget.service.resetConnectionAfterFirmwareUpgrade();
-  if (!mounted) return;
-  setState(() => _isSending = false);
-  Navigator.pushAndRemoveUntil(
-    context,
-    SlideRoute(page: BluetoothDeviceScanPage(service: widget.service)),
-    (route) => false,
-  );
-});
+  _fwUpgradeCountdownTimer = Timer(const Duration(minutes: 3), () async {
+    if (!mounted) return;
+
+    // Close the "Upgrading… / Buffering" dialog.
+    Navigator.of(context, rootNavigator: true).maybePop();
+
+    // Step 1 — "Upgrade Successful" (auto-dismisses after ~2s).
+    await _showAutoDismissMessageDialog(
+      icon: Icons.check_circle_rounded,
+      iconColor: const Color(0xFF1B6B3A),
+      title: 'Upgrade Successful',
+    );
+    if (!mounted) return;
+
+    // Step 2 — "Restarting…" while the BLE connection resets.
+    _showLoadingDialog('Restarting…', subtitle: 'Please wait');
+    await widget.service.resetConnectionAfterFirmwareUpgrade();
+    if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).maybePop(); // close "Restarting…"
+
+    setState(() => _isSending = false);
+
+    // Step 3 — show the scan page.
+    Navigator.pushAndRemoveUntil(
+      context,
+      SlideRoute(page: BluetoothDeviceScanPage(service: widget.service)),
+      (route) => false,
+    );
+  });
 }
   /// Called when the user taps a different tab. Blocks the switch with a
   /// confirmation dialog if the current tab has unsaved edits.
