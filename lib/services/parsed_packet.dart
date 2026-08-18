@@ -186,6 +186,16 @@ class BMSParsedPacket {
   final int?    alertMaxTempPos;          // Byte 30
   final double? alertLowestTemp;          // Bytes 31–32 (LE16 signed, ×0.1 °C)
   final int?    alertMinTempPos;          // Byte 33
+  
+  // ── Alert Push Packet (dataId == 0x51, 13-byte unsolicited push) ────────
+  final int? alertPushAlertId;
+  final int? alertPushSequenceNo;
+  final int? alertPushTypeCode;
+  final int? alertPushPriorityCode;
+  final int? alertPushTotalAlerts;
+  final int? alertPushWarnings;
+  final int? alertPushFaults;
+  final int? alertPushCleared;
 
   const BMSParsedPacket({
     required this.startByte,
@@ -283,7 +293,15 @@ class BMSParsedPacket {
     this.alertMaxTemp,
     this.alertMaxTempPos,
     this.alertLowestTemp,
-    this.alertMinTempPos,
+    this.alertMinTempPos, 
+    this.alertPushAlertId,
+    this.alertPushSequenceNo,
+    this.alertPushTypeCode,
+    this.alertPushPriorityCode,
+    this.alertPushTotalAlerts,
+    this.alertPushWarnings,
+    this.alertPushFaults,
+    this.alertPushCleared,
   });
 
   // ── Convenience flags ─────────────────────────────────────────────────────
@@ -335,6 +353,18 @@ bool get isCellVoltageResponse =>
 
   bool get isAlertsResponse =>
       dataId == BMSProtocol.idAlertsResponse && alertCycleCount != null;
+
+  bool get isAlertPush =>
+      dataId == BMSProtocol.idAlertPush && alertPushAlertId != null;
+
+  BMSAlertInfo? get alertPushInfo =>
+      alertPushAlertId != null ? BMSAlertCatalogue.lookup(alertPushAlertId!) : null;
+
+  String get alertPushNameLabel     => alertPushInfo?.name ?? '–';
+  String get alertPushTypeLabel     =>
+      alertPushTypeCode != null ? BMSProtocol.alertTypeName(alertPushTypeCode!) : '–';
+  String get alertPushPriorityLabel =>
+      alertPushPriorityCode != null ? BMSProtocol.alertPriorityName(alertPushPriorityCode!) : '–';
 
   // ── Decoded label fields ──────────────────────────────────────────────────
 
@@ -602,6 +632,14 @@ default:
     int?             alertMaxTempPos,
     double?          alertLowestTemp,
     int?             alertMinTempPos,
+    int?             alertPushAlertId,
+    int?             alertPushSequenceNo,
+    int?             alertPushTypeCode,
+    int?             alertPushPriorityCode,
+    int?             alertPushTotalAlerts,
+    int?             alertPushWarnings,
+    int?             alertPushFaults,
+    int?             alertPushCleared,
   }) {
     return BMSParsedPacket(
       startByte:           startByte           ?? this.startByte,
@@ -698,6 +736,14 @@ default:
       alertMaxTempPos:        alertMaxTempPos        ?? this.alertMaxTempPos,
       alertLowestTemp:        alertLowestTemp        ?? this.alertLowestTemp,
       alertMinTempPos:        alertMinTempPos        ?? this.alertMinTempPos,
+      alertPushAlertId:       alertPushAlertId       ?? this.alertPushAlertId,
+      alertPushSequenceNo:    alertPushSequenceNo    ?? this.alertPushSequenceNo,
+      alertPushTypeCode:      alertPushTypeCode      ?? this.alertPushTypeCode,
+      alertPushPriorityCode:  alertPushPriorityCode  ?? this.alertPushPriorityCode,
+      alertPushTotalAlerts:   alertPushTotalAlerts   ?? this.alertPushTotalAlerts,
+      alertPushWarnings:      alertPushWarnings      ?? this.alertPushWarnings,
+      alertPushFaults:        alertPushFaults        ?? this.alertPushFaults,
+      alertPushCleared:       alertPushCleared       ?? this.alertPushCleared,
     );
   }
 

@@ -95,9 +95,45 @@ AppRouter.bmsService.onBmsDisconnectedFatal = () {
     ),
   );
 };
+
+AppRouter.bmsService.onAlertPush = (packet) {
+  final context = appNavigatorKey.currentContext;
+  debugPrint("🔔 Alert push received: ${packet.alertPushNameLabel}");
+  if (context == null) return;
+
+  Color iconColor;
+  Color iconBg;
+  switch (packet.alertPushTypeLabel) {
+    case 'Fault':
+      iconColor = const Color(0xFFA63A3A);
+      iconBg = const Color(0xFFFDEEEE);
+      break;
+    case 'Warning':
+      iconColor = const Color(0xFFB8860B);
+      iconBg = const Color(0xFFFFF8E1);
+      break;
+    default:
+      iconColor = const Color(0xFF1D6A43);
+      iconBg = const Color(0xFFEAF7EF);
+  }
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => CommonDialog(
+      icon: Icons.warning_amber_rounded,
+      iconColor: iconColor,
+      iconBackgroundColor: iconBg,
+      title: packet.alertPushNameLabel,
+      message: "${packet.alertPushTypeLabel} • ${packet.alertPushPriorityLabel} priority",
+      buttonText: "OK",
+      buttonColor: const Color(0xFF1D6A43),
+      onPressed: () => Navigator.of(context).pop(),
+    ),
+  );
+};
   runApp(const MyApp());
 }
-
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 

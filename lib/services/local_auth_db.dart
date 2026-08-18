@@ -27,6 +27,7 @@ class LocalAuthDB {
   static const _keyDeviceName    = 'bms_cached_device_name';
   static const _keyCurrentUserId = 'bms_current_user_id'; // NEW
   static const _keyDeviceIdMap   = 'bms_device_id_map'; // NEW: deviceName -> generated unique id
+  static const _keyAlertPushes   = 'bms_cached_alert_pushes';
   static const _cacheTableName = 'cache_entries';
   static const _syncTableName = 'pending_sync_entries';
 
@@ -237,6 +238,42 @@ class LocalAuthDB {
         'updated_at': now,
       },
     );
+  }
+  
+  /// Upserts a live alert-push into the cache. If an entry with the same
+  /// alertId already exists, it's updated in place (Fault → later Cleared
+  /// becomes one row, not two) and bumped to the front; otherwise inserted
+  /// as new. Independent of saveAlerts/getCachedAlerts above.
+  Future<void> appendAlertPush(Map<String, dynamic> alert, {int maxEntries = 200}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyAlertPushes);
+    final list = raw != null
+        ? (jsonDecode(raw) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList()
+        : <Map<String, dynamic>>[];
+
+    final incomingAlertId = alert['alertId'];
+    final existingIndex = incomingAlertId != null
+        ? list.indexWhere((e) => e['alertId'] == incomingAlertId)
+        : -1;
+
+    if (existingIndex != -1) {
+      list[existingIndex] = alert;
+      final updated = list.removeAt(existingIndex);
+      list.insert(0, updated);
+    } else {
+      list.insert(0, alert);
+    }
+
+    if (list.length > maxEntries) list.removeRange(maxEntries, list.length);
+    await prefs.setString(_keyAlertPushes, jsonEncode(list));
+    await _updateSyncTime(prefs);
+  }
+
+  Future<List<Map<String, dynamic>>?> getCachedAlertPushes() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyAlertPushes);
+    if (raw == null) return null;
+    return (jsonDecode(raw) as List).map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
 
   /// Cache settings map locally, AND queue it for sync to Firestore.

@@ -5,11 +5,11 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-
 import 'package:bmsmobileapp/services/parsed_packet.dart';
 import 'package:bmsmobileapp/services/packet_parser.dart';
 import 'package:bmsmobileapp/services/crc_service.dart';
 import 'package:bmsmobileapp/services/protocol.dart';
+import 'package:bmsmobileapp/services/local_auth_db.dart';
 
 enum BMSConnectionState {
   disconnected, connecting, connected, discovering,
@@ -75,7 +75,7 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
   BMSParsedPacket? latestCellVoltage;
   BMSParsedPacket? latestBatterySettings;
   BMSParsedPacket? latestProtectionSettings;
-BMSParsedPacket? latestTemperatureSettings;
+  BMSParsedPacket? latestTemperatureSettings;
   BMSParsedPacket? latestFactorySettings;
 
   // FIXED: this was parsed correctly by packet_parser.dart but had nowhere
@@ -92,6 +92,15 @@ BMSParsedPacket? latestTemperatureSettings;
 
   int dashboardPulse = 0;
   int cellVoltagePulse = 0;
+  
+  BMSParsedPacket? latestAlertPush;
+  BMSParsedPacket? latestAlertDetails;
+  int alertPushPulse = 0;
+  int alertDetailsPulse = 0;
+  Completer<bool>? _alertDetailsCompleter;
+
+  /// Fires on every unsolicited 0x51 push, app-wide (wire in main.dart).
+  void Function(BMSParsedPacket alertPacket)? onAlertPush;
 
   // ── Settings-page "Set Now" / action state ────────────────────────────────
   bool isActionInFlight = false;
@@ -290,7 +299,7 @@ String? bleName;
     addDebugLog('📡 Subscribing to notifications…');
     await _notifyChar!.setNotifyValue(true);
 
-    _notifySub = _notifyChar!.onValueReceived.listen((raw) {
+    _notifySub = _notifyChar!.onValueReceived.listen((raw) async {
       if (raw.isEmpty) return;
       debugPrint("📥 RAW RX: ${_toHex(raw)}");
 
@@ -411,11 +420,39 @@ if (!result.isSuccess) {
           temperatureSettingsPulse++;
           notifyListeners();
 
-        } else if (packet.isFactorySettingsResponse) {
+               } else if (packet.isFactorySettingsResponse) {
           addDebugLog(' Factory Settings Response received');
           latestFactorySettings = packet;
           factorySettingsPulse++;
           notifyListeners();
+
+        } else if (packet.isAlertPush) {
+          addDebugLog('🔔 Alert Push: ${packet.alertPushNameLabel} '
+              '(${packet.alertPushTypeLabel}/${packet.alertPushPriorityLabel}, seq=${packet.alertPushSequenceNo})');
+          latestAlertPush = packet;
+          alertPushPulse++;
+
+          await LocalAuthDB().appendAlertPush({
+            'alertId'    : packet.alertPushAlertId,
+            'sequenceNo' : packet.alertPushSequenceNo,
+            'type'       : packet.alertPushTypeLabel,
+            'priority'   : packet.alertPushPriorityLabel,
+            'title'      : packet.alertPushNameLabel,
+            'time'       : _timeNow(),
+            'date'       : DateTime.now().toIso8601String(),
+          });
+
+          notifyListeners();
+          onAlertPush?.call(packet);
+
+        } else if (packet.isAlertsResponse) {
+          addDebugLog('📋 Alert Details Response received');
+          latestAlertDetails = packet;
+          alertDetailsPulse++;
+          notifyListeners();
+          if (_alertDetailsCompleter != null && !_alertDetailsCompleter!.isCompleted) {
+            _alertDetailsCompleter!.complete(true);
+          }
 
         } else if (packet.isLiveStatusAck) {
           addDebugLog('✅ Live Status Ack received');
@@ -820,6 +857,35 @@ if (!result.isSuccess) {
   /// Public one-shot request — call this when opening the Device Details
   /// sheet.
   Future<void> requestDeviceDetails() => _sendDeviceDetailsRequest();
+  Future<void> requestAlertDetails(int sequenceNo) async {
+    if (_writeChar == null || state != BMSConnectionState.ready) return;
+    final crc = BMSCrcService.calculateCRC8([0x06, BMSProtocol.idAlertsRequest, sequenceNo & 0xFF]);
+    final packet = [
+      BMSProtocol.startByte, 0x06, BMSProtocol.idAlertsRequest,
+      sequenceNo & 0xFF, crc, BMSProtocol.stopByte,
+    ];
+    await _sendPacket(packet, logName: 'ALERT_DETAILS_REQUEST', sentDataId: BMSProtocol.idAlertsRequest);
+  }
+
+  Future<bool> requestAlertDetailsAndWait(int sequenceNo) async {
+    final completer = Completer<bool>();
+    _alertDetailsCompleter = completer;
+    notifyListeners();
+
+    try {
+      await requestAlertDetails(sequenceNo);
+    } catch (e) {
+      addDebugLog('❌ Alert Details request failed: $e');
+      return false;
+    }
+
+    final success = await completer.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => false,
+    );
+    if (!success) addDebugLog('❌ Alert Details response not received (timeout)');
+    return success;
+  }
 
   Future<void> _sendBatterySettingsRequest() async {
     if (_writeChar == null || state != BMSConnectionState.ready) return;
@@ -1543,6 +1609,11 @@ bleName           = null;
     latestTemperatureSettings = null;
     latestFactorySettings = null;
     latestDeviceDetails = null;
+    latestAlertPush = null;
+    latestAlertDetails = null;
+    alertPushPulse = 0;
+    alertDetailsPulse = 0;
+    _alertDetailsCompleter = null;
 
     batterySettingsPulse = 0;
     protectionSettingsPulse = 0;

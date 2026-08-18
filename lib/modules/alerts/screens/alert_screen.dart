@@ -32,79 +32,11 @@ class AlertItem {
     required this.statusKey,
     required this.statusRaw,
     required this.dateGroupKey,
-    required this.dateGroupLabel,
+    required this.dateGroupLabel, 
+    int? sequenceNo,
   });
 }
 
-const List<AlertItem> _allAlerts = [
-  // ... (your alert data remains unchanged)
-  AlertItem(
-    titleKey: 'alert_over_temperature',
-    descriptionKey: 'alert_over_temperature_desc',
-    time: '10:24 AM',
-    severityKey: 'severity_high',
-    severityRaw: 'High',
-    statusKey: 'status_active',
-    statusRaw: 'Active',
-    dateGroupKey: 'date_today',
-    dateGroupLabel: 'Today - 20 May 2026',
-  ),
-  AlertItem(
-    titleKey: 'alert_cell_imbalance',
-    descriptionKey: 'alert_cell_imbalance_desc',
-    time: '10:15 AM',
-    severityKey: 'severity_medium',
-    severityRaw: 'Medium',
-    statusKey: 'status_active',
-    statusRaw: 'Active',
-    dateGroupKey: 'date_today',
-    dateGroupLabel: 'Today - 20 May 2026',
-  ),
-  AlertItem(
-    titleKey: 'alert_low_voltage',
-    descriptionKey: 'alert_low_voltage_desc',
-    time: '09:15 AM',
-    severityKey: 'severity_medium',
-    severityRaw: 'Medium',
-    statusKey: 'status_warning',
-    statusRaw: 'Warning',
-    dateGroupKey: 'date_yesterday',
-    dateGroupLabel: 'Yesterday - 19 May 2026',
-  ),
-  AlertItem(
-    titleKey: 'alert_high_voltage',
-    descriptionKey: 'alert_high_voltage_desc',
-    time: '09:13 AM',
-    severityKey: 'severity_medium',
-    severityRaw: 'Medium',
-    statusKey: 'status_warning',
-    statusRaw: 'Warning',
-    dateGroupKey: 'date_yesterday',
-    dateGroupLabel: 'Yesterday - 19 May 2026',
-  ),
-  AlertItem(
-    titleKey: 'alert_over_current_charge',
-    descriptionKey: 'alert_over_current_charge_desc',
-    time: '07:15 AM',
-    severityKey: 'severity_high',
-    severityRaw: 'High',
-    statusKey: 'status_cleared',
-    statusRaw: 'Cleared',
-    dateGroupKey: 'date_yesterday',
-    dateGroupLabel: 'Yesterday - 19 May 2026',
-  ),
-  AlertItem(
-    titleKey: 'alert_short_circuit',
-    descriptionKey: 'alert_short_circuit_desc',
-    time: '06:24 AM',
-    severityKey: 'severity_high',
-    severityRaw: 'High',
-    statusKey: 'status_cleared',
-    statusRaw: 'Cleared',
-    dateGroupKey: 'date_18_may',
-    dateGroupLabel: '18 May 2026',
-  ),
-];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -153,6 +85,49 @@ AlertItem _cachedMapToAlertItem(Map<String, dynamic> m) {
   );
 }
 
+AlertItem _pushMapToAlertItem(Map<String, dynamic> m) {
+  final title = (m['title'] ?? 'Alert').toString();
+  final time = (m['time'] ?? '').toString();
+  final type = (m['type'] ?? 'Fault').toString();
+  final priority = (m['priority'] ?? 'Low').toString();
+  final seq = m['sequenceNo'] is int
+      ? m['sequenceNo'] as int
+      : int.tryParse('${m['sequenceNo']}');
+
+  final dateStr = (m['date'] ?? '').toString();
+  final parsedDate = DateTime.tryParse(dateStr) ?? DateTime.now();
+  final today = DateTime.now();
+  final yesterday = today.subtract(const Duration(days: 1));
+  final isToday = parsedDate.year == today.year && parsedDate.month == today.month && parsedDate.day == today.day;
+  final isYesterday = parsedDate.year == yesterday.year && parsedDate.month == yesterday.month && parsedDate.day == yesterday.day;
+
+  final dd = parsedDate.day.toString().padLeft(2, '0');
+  final mmm = _monthAbbrev(parsedDate.month);
+  final yyyy = parsedDate.year.toString();
+
+  final groupKey = isToday ? 'date_today' : (isYesterday ? 'date_yesterday' : 'date_other');
+  final groupLabel = isToday
+      ? 'Today - $dd $mmm $yyyy'
+      : (isYesterday ? 'Yesterday - $dd $mmm $yyyy' : '$dd $mmm $yyyy');
+
+  return AlertItem(
+    titleKey: title,
+    descriptionKey: 'live_alert_from_device',
+    time: time,
+    severityKey: priority.toLowerCase(),
+    severityRaw: priority,
+    statusKey: type == 'Fault' ? 'status_active' : (type == 'Warning' ? 'status_warning' : 'status_cleared'),
+    statusRaw: type == 'Fault' ? 'Active' : (type == 'Warning' ? 'Warning' : 'Cleared'),
+    dateGroupKey: groupKey,
+    dateGroupLabel: groupLabel,
+    sequenceNo: seq,
+  );
+}
+
+String _monthAbbrev(int m) {
+  const names = ['', 'Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return names[m];
+}
 // ─────────────────────────────────────────────────────────────────────────────
 // Shared alert card (kept for AlertHistoryScreen)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -332,7 +307,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
   }
 
   // Real (live/cached) alerts take priority; static demo data fills in the rest.
-  List<AlertItem> get _combined => [..._liveAlerts, ..._allAlerts];
+   List<AlertItem> get _combined => _liveAlerts;
   List<AlertItem> get _faults =>
       _combined.where((a) => a.statusRaw == 'Active').toList();
   List<AlertItem> get _warnings =>
@@ -425,10 +400,6 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 2),
-          const Text(
-            'BMS_001',
-            style: TextStyle(color: Colors.white70, fontSize: 11),
-          ),
         ],
       ),
       actions: [
@@ -786,7 +757,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
         'Low': tr('severity_low'),
       };
 
-  List<AlertItem> get _combinedAlerts => [..._liveAlerts, ..._allAlerts];
+   List<AlertItem> get _combinedAlerts => _liveAlerts;
 
   List<AlertItem> get _filtered {
     var list = List<AlertItem>.from(_combinedAlerts);
@@ -880,8 +851,8 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('BMS_001',
-                style: TextStyle(
+            Text(widget.service.bleName ?? widget.service.batterySerial ?? '—',
+                style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: Colors.black87)),

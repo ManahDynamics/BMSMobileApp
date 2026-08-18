@@ -108,6 +108,13 @@ class BMSPacketParser {
       return _parseFactorySettingsPacket(bytes);
     }
 
+       // 13-byte Alert Push packet (unsolicited, dataId 0x51)
+    if (bytes.length == BMSProtocol.alertPushLength &&
+        isBmsFrame &&
+        (bytes[2] & 0xFF) == BMSProtocol.idAlertPush) {
+      return _parseAlertPushPacket(bytes);
+    }
+
     // 5-byte control packet (handshake/ACK/disconnect/requests/actions)
     if (bytes.length == 5) {
       return _parseControlPacket(bytes);
@@ -429,7 +436,36 @@ static BMSParseResult _parseFactorySettingsPacket(List<int> bytes) {
     final expected = _expectedResponseId[sentDataId];
     return expected == responseDataId;
   }
-
+  static BMSParseResult _parseAlertPushPacket(List<int> bytes) {
+    final int receivedCrc = bytes[BMSProtocol.alertPushCrcByte] & 0xFF;
+    final int computedCrc = BMSCrcService.calculateCRC8(
+      bytes.sublist(1, BMSProtocol.alertPushCrcByte),
+    );
+    if (computedCrc != receivedCrc) {
+      return BMSParseResult.failure(
+        BMSParseError.crcMismatch,
+        errorDetail: 'computed=0x${computedCrc.toRadixString(16).toUpperCase()} '
+            'received=0x${receivedCrc.toRadixString(16).toUpperCase()}',
+      );
+    }
+    return BMSParseResult.success(BMSParsedPacket(
+      startByte: bytes[0],
+      length: bytes[1],
+      dataId: bytes[2],
+      crc: receivedCrc,
+      stopByte: bytes[BMSProtocol.alertPushStopByte],
+      rawBytes: Uint8List.fromList(bytes),
+      receivedAt: DateTime.now(),
+      alertPushAlertId:     bytes[BMSProtocol.alertPushAlertIdByte] & 0xFF,
+      alertPushSequenceNo:   bytes[BMSProtocol.alertPushSequenceByte] & 0xFF,
+      alertPushTypeCode:     bytes[BMSProtocol.alertPushTypeByte] & 0xFF,
+      alertPushPriorityCode: bytes[BMSProtocol.alertPushPriorityByte] & 0xFF,
+      alertPushTotalAlerts:  bytes[BMSProtocol.alertPushTotalByte] & 0xFF,
+      alertPushWarnings:     bytes[BMSProtocol.alertPushWarningsByte] & 0xFF,
+      alertPushFaults:       bytes[BMSProtocol.alertPushFaultsByte] & 0xFF,
+      alertPushCleared:      bytes[BMSProtocol.alertPushClearedByte] & 0xFF,
+    ));
+  }
   // ─────────────────────────────────────────────────────────────────────────
   // 5-BYTE CONTROL PACKET (both directions)
   // Incoming ACK (BMS → Mobile) : CRC-8 over [length, dataId]

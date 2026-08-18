@@ -34,6 +34,42 @@ class BMSProtocol {
   static const int idDashboardResponse   = 0x54; // 120-byte response
   static const int idCellVoltageResponse = 0x55; // 88-byte response
   static const int idAlertsResponse      = 0x56; // 37-byte response
+  
+  // ── Alert Push Packet (BMS → Mobile, unsolicited, 13 bytes, dataId 0x51) ──
+  static const int idAlertPush           = 0x51;
+  static const int alertPushLength       = 13;
+  static const int alertPushAlertIdByte  = 3;
+  static const int alertPushSequenceByte = 4;
+  static const int alertPushTypeByte     = 5;
+  static const int alertPushPriorityByte = 6;
+  static const int alertPushTotalByte    = 7;
+  static const int alertPushWarningsByte = 8;
+  static const int alertPushFaultsByte   = 9;
+  static const int alertPushClearedByte  = 10;
+  static const int alertPushCrcByte      = 11;
+  static const int alertPushStopByte     = 12;
+
+  static const int alertTypeFault   = 0x01;
+  static const int alertTypeWarning = 0x02;
+  static const int alertTypeCleared = 0x03;
+
+  static const int alertPriorityLow    = 0x01;
+  static const int alertPriorityMedium = 0x02;
+  static const int alertPriorityHigh   = 0x03;
+
+  static String alertTypeName(int c) => switch (c) {
+    alertTypeFault   => 'Fault',
+    alertTypeWarning => 'Warning',
+    alertTypeCleared => 'Cleared',
+    _ => 'Unknown',
+  };
+
+  static String alertPriorityName(int c) => switch (c) {
+    alertPriorityLow    => 'Low',
+    alertPriorityMedium => 'Medium',
+    alertPriorityHigh   => 'High',
+    _ => 'Unknown',
+  };
 
   // ── Packet Structure (5-byte control packets) ─────────────────────────────
   static const int packetLength = 0x05;
@@ -147,7 +183,7 @@ static const int liveStatusStopByte  = 11;
   // FIXED: was 16
   static const int temperatureSettingsStopByte = 10;
 
-  // ================= FACTORY SETTINGS (0x5B read-back / 0xB4 write) ========
+ 
 // ================= FACTORY SETTINGS (0x5B read-back / 0xB4 write) ========
 static const int facBatterySlStart = 3,  facBatterySlEnd = 19;
 static const int facBmsSerialStart = 19, facBmsSerialEnd = 35;
@@ -333,6 +369,7 @@ static const int factorySettingsStopByte = 53;
       case idCellVoltageResponse:  return 'Cell Voltage Response';
       case idAlertsRequest:         return 'Alerts Request';
       case idAlertsResponse:        return 'Alerts Response';
+       case idAlertPush:             return 'Alert Push';
       case idDeviceDetailsRequest:  return 'Device Details Request';
       case idDeviceDetailsResponse: return 'Device Details Response';
       case idBatterySettingsRequest:  return 'Battery Settings Request';
