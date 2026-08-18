@@ -282,7 +282,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
     if (!mounted) return;
 
     setState(() {
-      _liveAlerts = (cached ?? []).map(_cachedMapToAlertItem).toList();
+      _liveAlerts = (cached ?? []).map(_pushMapToAlertItem).toList();
       _lastSync = syncTime;
       _isOffline = widget.service.latestDashboard == null;
       _isLoadingCache = false;
@@ -724,7 +724,7 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
     final cached = await _localAuthDB.getCachedAlerts();
     if (!mounted) return;
     setState(() {
-      _liveAlerts = (cached ?? []).map(_cachedMapToAlertItem).toList();
+      _liveAlerts = (cached ?? []).map(_pushMapToAlertItem).toList();
     });
   }
 

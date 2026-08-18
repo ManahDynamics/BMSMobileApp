@@ -11,7 +11,6 @@ import 'core/api/routes/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'firebase_options.dart';
 
-import 'services/bluetooth_service.dart';
 import 'services/translation_service.dart';
 import 'services/device_token_service.dart';
 import 'services/offline_sync_service.dart'; // ← NEW

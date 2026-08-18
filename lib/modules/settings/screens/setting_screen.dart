@@ -352,6 +352,7 @@ FactoryResetStage _lastFactoryResetStage = FactoryResetStage.idle;
 Timer? _restartCountdownTimer;
 Timer? _factoryResetCountdownTimer;
 Timer? _fwUpgradeCountdownTimer;
+bool _factoryResetDialogOpen = false;
 
 Future<void> _startFirmwareUpgradeFlow() async {
   final confirmed = await _showContinueConfirmation();
@@ -1686,10 +1687,10 @@ void _onFactoryResetStageChanged() {
   if (stage == _lastFactoryResetStage) return;
   _lastFactoryResetStage = stage;
 
-  switch (stage) {
+    switch (stage) {
     case FactoryResetStage.resetting:
       // 0xC5 received — show blocking "resetting" dialog + 2 min timer.
-      _showFactoryResettingDialog();
+      if (!_factoryResetDialogOpen) _showFactoryResettingDialog();
       break;
 
     case FactoryResetStage.failed:
@@ -1707,6 +1708,13 @@ void _onFactoryResetStageChanged() {
 }
 
 void _showFactoryResettingDialog() {
+  // Guard against this being triggered twice (duplicate 0xC5 / stage
+  // notification), which previously stacked two dialogs + two timers and
+  // left the spinner stuck on screen even after the reset had completed.
+  if (_factoryResetDialogOpen) return;
+  _factoryResetDialogOpen = true;
+  _factoryResetCountdownTimer?.cancel();
+
   showDialog(
     context: context,
     barrierDismissible: false,
@@ -1722,19 +1730,27 @@ void _showFactoryResettingDialog() {
             Text('Resetting…', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
             SizedBox(height: 6),
             Text(
-            'Resetting to default values (30 sec)',
-            style: TextStyle(fontSize: 12.5, color: Colors.black54),
-            textAlign: TextAlign.center,
-          ),
+              'Resetting to default values (30 sec)',
+              style: TextStyle(fontSize: 12.5, color: Colors.black54),
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
     ),
-  );
+  ).then((_) {
+    // Keeps the flag accurate no matter how the dialog route ends up closed.
+    _factoryResetDialogOpen = false;
+  });
 
-    _factoryResetCountdownTimer = Timer(const Duration(seconds: 30), () async {
-        if (!mounted) return;
-    Navigator.of(context, rootNavigator: true).maybePop(); // close resetting dialog
+  _factoryResetCountdownTimer = Timer(const Duration(seconds: 30), () async {
+    if (!mounted) return;
+
+    if (_factoryResetDialogOpen && Navigator.canPop(context)) {
+      Navigator.of(context, rootNavigator: true).pop(); // close resetting dialog
+    }
+    _factoryResetDialogOpen = false;
+
     widget.service.resetFactoryResetState();
 
     // BMS is still connected — resume the heartbeat we paused on 0xC5.
@@ -1749,7 +1765,7 @@ void _showFactoryResettingDialog() {
     setState(() => _isSending = false);
 
     await _applyMasterDataAfterReset();
-    });
+  });
 }
 
 /// Pulls the master/default parameter set from Firebase after a factory
