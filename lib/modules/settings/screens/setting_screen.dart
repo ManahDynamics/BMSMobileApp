@@ -12,7 +12,6 @@ import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
 import 'package:bmsmobileapp/services/protocol.dart';
-import 'package:bmsmobileapp/services/master_data_service.dart';
 import 'package:bmsmobileapp/modules/settings/screens/packet_log_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -26,7 +25,6 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> with WidgetsBindingObserver {
   final LocalAuthDB _localAuthDB = LocalAuthDB();
-  final MasterDataService _masterDataService = MasterDataService();
 
   bool isConnected = true;
   bool isLocked = true;
@@ -1613,58 +1611,6 @@ void _showFirmwareUpgradingDialog() {
     }
   }
 
-  /// Applies a master-data map (from [MasterDataService]) onto the current
-  /// in-memory fields, updates every tab's baseline so nothing shows as
-  /// "changed" afterwards, and persists the result to the offline cache.
-  /// Any key missing from [data] simply leaves that field untouched.
-  void _applyMasterData(Map<String, dynamic> data) {
-    setState(() {
-      batteryStringCount = (data['batteryStringCount'] as num?)?.toInt() ?? batteryStringCount;
-      ratedCapacity = (data['ratedCapacity'] as num?)?.toDouble() ?? ratedCapacity;
-      socSet = (data['socSet'] as num?)?.toInt() ?? socSet;
-      sleepWaitingTime = (data['sleepWaitingTime'] as num?)?.toInt() ?? sleepWaitingTime;
-      balancedStartDifferenceVolt =
-          (data['balancedStartDifferenceVolt'] as num?)?.toDouble() ?? balancedStartDifferenceVolt;
-      balancedStartVolt = (data['balancedStartVolt'] as num?)?.toDouble() ?? balancedStartVolt;
-      nominalCellVolt = (data['nominalCellVolt'] as num?)?.toDouble() ?? nominalCellVolt;
-      cellChemistry = (data['cellChemistry'] as String?) ?? cellChemistry;
-
-      singleCellHighVoltProtection =
-          (data['singleCellHighVoltProtection'] as num?)?.toDouble() ?? singleCellHighVoltProtection;
-      singleCellLowVoltProtection =
-          (data['singleCellLowVoltProtection'] as num?)?.toDouble() ?? singleCellLowVoltProtection;
-      sumVoltHighProtection = (data['sumVoltHighProtection'] as num?)?.toDouble() ?? sumVoltHighProtection;
-      sumVoltLowProtection = (data['sumVoltLowProtection'] as num?)?.toDouble() ?? sumVoltLowProtection;
-      chargeOverCurrentProtection =
-          (data['chargeOverCurrentProtection'] as num?)?.toDouble() ?? chargeOverCurrentProtection;
-      dischargeOverCurrentProtection =
-          (data['dischargeOverCurrentProtection'] as num?)?.toDouble() ?? dischargeOverCurrentProtection;
-
-      noOfTempChannels = (data['noOfTempChannels'] as num?)?.toInt() ?? noOfTempChannels;
-      chargeHighTempProtection = (data['chargeHighTempProtection'] as num?)?.toInt() ?? chargeHighTempProtection;
-      chargeLowTempProtection = (data['chargeLowTempProtection'] as num?)?.toInt() ?? chargeLowTempProtection;
-      dischargeHighTempProtection =
-          (data['dischargeHighTempProtection'] as num?)?.toInt() ?? dischargeHighTempProtection;
-      dischargeLowTempProtection =
-          (data['dischargeLowTempProtection'] as num?)?.toInt() ?? dischargeLowTempProtection;
-      diffTempProtection = (data['diffTempProtection'] as num?)?.toInt() ?? diffTempProtection;
-
-      batterySerialNo = (data['batterySerialNo'] as String?) ?? batterySerialNo;
-      bmsSerialNo = (data['bmsSerialNo'] as String?) ?? bmsSerialNo;
-      bleDeviceName = (data['bleDeviceName'] as String?) ?? bleDeviceName;
-      swVersionNo = (data['swVersionNo'] as String?) ?? swVersionNo;
-      hwVersionNo = (data['hwVersionNo'] as String?) ?? hwVersionNo;
-
-      // These values are now the "saved" state — clear unsaved-change
-      // highlighting on every tab.
-      _snapshotBaseline(0);
-      _snapshotBaseline(1);
-      _snapshotBaseline(2);
-      _snapshotBaseline(3);
-    });
-    _persistSettings();
-  }
-
   Future<void> _startFactoryResetFlow() async {
   setState(() => _isSending = true);
   final ok = await widget.service.beginFactoryReset(); // sends 0xB7
@@ -1750,7 +1696,6 @@ void _showFactoryResettingDialog() {
       Navigator.of(context, rootNavigator: true).pop(); // close resetting dialog
     }
     _factoryResetDialogOpen = false;
-
     widget.service.resetFactoryResetState();
 
     // BMS is still connected — resume the heartbeat we paused on 0xC5.
@@ -1760,44 +1705,23 @@ void _showFactoryResettingDialog() {
     _protectionRequestSent = false;
     _tempRequestSent = false;
     _factoryRequestSent = false;
+
+    // Re-request whichever tab's settings the user is currently on — the
+    // device now responds with its post-reset default values (0x52).
     _pollForTab(_selectedTab);
+
+    // Also refresh Device Details after a reset, no matter which tab is
+    // active — Factory Settings already triggers this via _pollForTab(3),
+    // but the other tabs don't request it as part of their normal flow.
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (!mounted) return;
+      widget.service.requestDeviceDetails();
+    });
 
     setState(() => _isSending = false);
 
-    await _applyMasterDataAfterReset();
+    await _showSuccessDialog('Factory data reset completed.');
   });
-}
-
-/// Pulls the master/default parameter set from Firebase after a factory
-/// reset completes and repopulates every tab, clearing unsaved-change
-/// highlighting. Kept as its own step so it can fail independently of the
-/// reset itself (reset already succeeded — we got the 0xC5 ACK).
-Future<void> _applyMasterDataAfterReset() async {
-  String? successMessage;
-  String? warningMessage;
-  try {
-    final master = await _masterDataService.fetchMasterSettings(
-      deviceId: bmsSerialNo.trim().isNotEmpty ? bmsSerialNo.trim() : null,
-    );
-    if (master != null && master.isNotEmpty) {
-      _applyMasterData(master);
-      successMessage = 'Factory data reset — values restored from master data.';
-    } else {
-      warningMessage = 'Factory data reset complete — master data not available yet';
-    }
-  } catch (e) {
-    warningMessage = 'Factory data reset complete, but restoring master data failed';
-  }
-
-  if (!mounted) return;
-
-  if (warningMessage != null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(warningMessage), backgroundColor: Colors.orange.shade800),
-    );
-  } else {
-    await _showSuccessDialog(successMessage ?? 'Factory data reset completed.');
-  }
 }
 
   @override
