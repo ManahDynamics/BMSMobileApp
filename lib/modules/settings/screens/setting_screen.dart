@@ -524,7 +524,7 @@ void _showRestartingDialog() {
             Text('Restarting…', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
             SizedBox(height: 6),
             Text(
-              'Please wait (3 min)',
+              'Please wait (1 min)',
               style: TextStyle(fontSize: 12.5, color: Colors.black54),
               textAlign: TextAlign.center,
             ),
@@ -534,7 +534,7 @@ void _showRestartingDialog() {
     ),
   );
 
-  _restartCountdownTimer = Timer(const Duration(minutes: 3), () async {
+  _restartCountdownTimer = Timer(const Duration(minutes: 1), () async {
     if (!mounted) return;
     Navigator.of(context, rootNavigator: true).maybePop(); // close the dialog
     await widget.service.resetConnectionAfterRestart();
@@ -1722,25 +1722,24 @@ void _showFactoryResettingDialog() {
             Text('Resetting…', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
             SizedBox(height: 6),
             Text(
-              'Resetting to default values (2 min)',
-              style: TextStyle(fontSize: 12.5, color: Colors.black54),
-              textAlign: TextAlign.center,
-            ),
+            'Resetting to default values (30 sec)',
+            style: TextStyle(fontSize: 12.5, color: Colors.black54),
+            textAlign: TextAlign.center,
+          ),
           ],
         ),
       ),
     ),
   );
 
-  _factoryResetCountdownTimer = Timer(const Duration(minutes: 2), () async {
-    if (!mounted) return;
-    Navigator.of(context, rootNavigator: true).maybePop(); // close buffering dialog
+    _factoryResetCountdownTimer = Timer(const Duration(seconds: 30), () async {
+        if (!mounted) return;
+    Navigator.of(context, rootNavigator: true).maybePop(); // close resetting dialog
     widget.service.resetFactoryResetState();
 
-    // The BMS is still connected (unlike Restart) — force every tab to
-    // re-request fresh data instead of navigating away. Resetting all
-    // four guards means whichever tab the user is on right now re-reads
-    // immediately, and any tab they switch to afterward re-reads too.
+    // BMS is still connected — resume the heartbeat we paused on 0xC5.
+    widget.service.startLiveStatusMonitor();
+
     _batteryRequestSent = false;
     _protectionRequestSent = false;
     _tempRequestSent = false;
@@ -1750,7 +1749,7 @@ void _showFactoryResettingDialog() {
     setState(() => _isSending = false);
 
     await _applyMasterDataAfterReset();
-  });
+    });
 }
 
 /// Pulls the master/default parameter set from Firebase after a factory

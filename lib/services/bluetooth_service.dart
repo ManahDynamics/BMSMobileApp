@@ -447,15 +447,17 @@ if (!result.isSuccess) {
           firmwareUpgradeStage = FirmwareUpgradeStage.upgrading;
           notifyListeners();
           } else if (packet.dataId == BMSProtocol.idRestartAck) {         
-          addDebugLog('🔁 0xC4 received — BMS restarting');
-          restartStage = RestartStage.restarting;
-          notifyListeners();
+            addDebugLog('🔁 0xC4 received — BMS restarting, stopping 0x92 heartbeat');
+            stopLiveStatusMonitor();
+            restartStage = RestartStage.restarting;
+            notifyListeners();
 
-        } else if (packet.dataId == BMSProtocol.idFactoryResetAck) {    
-          addDebugLog('♻️ 0xC5 received — BMS resetting to defaults');
-          factoryResetStage = FactoryResetStage.resetting;
-          notifyListeners();
-        } else if (packet.isAck) {
+          } else if (packet.dataId == BMSProtocol.idFactoryResetAck) {    
+            addDebugLog('♻️ 0xC5 received — BMS resetting, stopping 0x92 heartbeat');
+            stopLiveStatusMonitor();
+            factoryResetStage = FactoryResetStage.resetting;
+            notifyListeners();
+          }else if (packet.isAck) {
           if (state == BMSConnectionState.waitingAck) {
             addDebugLog('🤝 ACK packet received — validating handshake');
             _onAckReceived(packet);
@@ -1589,7 +1591,7 @@ bleName           = null;
     isConnecting = false;
     _pendingRequests.clear();
   }
-          
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
