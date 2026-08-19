@@ -2,7 +2,7 @@ name: bmsmobileapp
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.52+52
+version: 1.0.54+54
 
 environment:
   sdk: ^3.10.8
