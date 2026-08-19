@@ -90,7 +90,7 @@ class BMSPacketParser {
     // index past the end of `bytes` (RangeError) or silently produce
     // garbage. Every case below now also confirms the exact expected length
     // before dispatching, exactly like the length checks above.
-    if (bytes.length == BMSProtocol.batterySettingsResponseLength &&
+if (bytes.length == BMSProtocol.batterySettingsResponseLength &&
     ((bytes[2] & 0xFF) == BMSProtocol.idBatterySettingsResponse ||
      (bytes[2] & 0xFF) == BMSProtocol.idBatterySettingsWrite)) {
   return _parseBatterySettingsPacket(bytes);
