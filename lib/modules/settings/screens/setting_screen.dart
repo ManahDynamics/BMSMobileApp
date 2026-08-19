@@ -1531,9 +1531,15 @@ void _showFirmwareUpgradingDialog() {
       // Now button disables itself again since nothing is dirty anymore).
       if (ok && tabIndex != null) _snapshotBaseline(tabIndex);
     });
-
-   if (ok) {
+if (ok) {
       if (tabIndex != null) {
+        if (tabIndex == 3) {
+          // Factory write (0xB4) has no ack — give the BMS time to persist
+          // to flash before re-reading, or the read-back races the write
+          // and returns stale data, silently reverting the edit.
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (!mounted) return;
+        }
         _pollForTab(tabIndex);
       }
       // Step 2 — confirm success with a dedicated popup rather than only a
