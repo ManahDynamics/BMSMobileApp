@@ -53,7 +53,7 @@ class _ScreenPulseOverlayState extends State<ScreenPulseOverlay>
           child: AnimatedBuilder(
             animation: _opacity,
             builder: (_, _) => Container(
-              color: widget.color.withOpacity(_opacity.value),
+              color: widget.color.withValues(alpha: _opacity.value),
             ),
           ),
         ),

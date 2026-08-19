@@ -110,7 +110,7 @@ class _BluetoothDeviceScanPageState extends State<BluetoothDeviceScanPage> {
   StreamSubscription? _scanStateSub;
 
   String? _connectingDeviceId;
-  bool _isPairing = false;
+  final bool _isPairing = false;
   bool _dashboardOpened = false;
   // Previously used to store selected paired battery serial. Removed as unused.
 

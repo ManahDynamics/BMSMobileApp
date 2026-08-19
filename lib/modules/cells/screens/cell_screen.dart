@@ -7,7 +7,6 @@ import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/widgets/screen_pulse_overlay.dart';
-import 'package:provider/provider.dart';
 
 enum SortType { cellNo, voltage }
 

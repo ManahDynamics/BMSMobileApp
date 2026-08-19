@@ -1,7 +1,6 @@
 // lib/services/packet_parser.dart
 
 import 'package:flutter/foundation.dart';
-import 'dart:typed_data';
 
 import 'protocol.dart';
 import 'crc_service.dart';
@@ -92,21 +91,25 @@ class BMSPacketParser {
     // garbage. Every case below now also confirms the exact expected length
     // before dispatching, exactly like the length checks above.
     if (bytes.length == BMSProtocol.batterySettingsResponseLength &&
-        (bytes[2] & 0xFF) == BMSProtocol.idBatterySettingsResponse) {
-      return _parseBatterySettingsPacket(bytes);
-    }
-    if (bytes.length == BMSProtocol.protectionSettingsResponseLength &&
-        (bytes[2] & 0xFF) == BMSProtocol.idProtectionSettingsResponse) {
-      return _parseProtectionSettingsPacket(bytes);
-    }
-    if (bytes.length == BMSProtocol.temperatureSettingsResponseLength &&
-        (bytes[2] & 0xFF) == BMSProtocol.idTemperatureSettingsResponse) {
-      return _parseTemperatureSettingsPacket(bytes);
-    }
-    if (bytes.length == BMSProtocol.factorySettingsResponseLength &&
-        (bytes[2] & 0xFF) == BMSProtocol.idFactorySettingsResponse) {
-      return _parseFactorySettingsPacket(bytes);
-    }
+    ((bytes[2] & 0xFF) == BMSProtocol.idBatterySettingsResponse ||
+     (bytes[2] & 0xFF) == BMSProtocol.idBatterySettingsWrite)) {
+  return _parseBatterySettingsPacket(bytes);
+}
+if (bytes.length == BMSProtocol.protectionSettingsResponseLength &&
+    ((bytes[2] & 0xFF) == BMSProtocol.idProtectionSettingsResponse ||
+     (bytes[2] & 0xFF) == BMSProtocol.idProtectionSettingsWrite)) {
+  return _parseProtectionSettingsPacket(bytes);
+}
+if (bytes.length == BMSProtocol.temperatureSettingsResponseLength &&
+    ((bytes[2] & 0xFF) == BMSProtocol.idTemperatureSettingsResponse ||
+     (bytes[2] & 0xFF) == BMSProtocol.idTemperatureSettingsWrite)) {
+  return _parseTemperatureSettingsPacket(bytes);
+}
+if (bytes.length == BMSProtocol.factorySettingsResponseLength &&
+    ((bytes[2] & 0xFF) == BMSProtocol.idFactorySettingsResponse ||
+     (bytes[2] & 0xFF) == BMSProtocol.idFactorySettingsWrite)) {
+  return _parseFactorySettingsPacket(bytes);
+}
 
        // 13-byte Alert Push packet (unsolicited, dataId 0x51)
     if (bytes.length == BMSProtocol.alertPushLength &&

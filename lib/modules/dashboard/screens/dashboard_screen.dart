@@ -814,7 +814,7 @@ class _DeviceHeader extends StatelessWidget {
                     width: 8,
                     height: 8,
                     decoration: const BoxDecoration(
-                      color: const Color(0xFF0C8F45),
+                      color: Color(0xFF0C8F45),
                       shape: BoxShape.circle,
                     ),
                   ),
@@ -1152,8 +1152,8 @@ class _MetricCard extends StatelessWidget {
     required this.value,
     this.iconLabel,
     this.icon,
-    this.isCharging = false, this.badge,
-  });
+    this.isCharging = false,
+  }) : badge = null;
 
  @override
   Widget build(BuildContext context) {
