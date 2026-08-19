@@ -1,11 +1,9 @@
 // lib/screens/bluetooth_device_scan_screen.dart
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
-import 'package:http/http.dart' as http;
 import 'package:permission_handler/permission_handler.dart';
 
 import 'package:bmsmobileapp/core/theme/app_colors.dart';

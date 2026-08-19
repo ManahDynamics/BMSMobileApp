@@ -852,7 +852,7 @@ void _showFirmwareUpgradingDialog() {
   int _lastTempPulse = -1;
   int _lastFactoryPulse = -1;
   int _lastDeviceDetailsPulse = -1;
-  bool _deviceDetailsRequested = false;
+  final bool _deviceDetailsRequested = false;
 
   void _onServiceChanged() {
     if (!mounted) return;

@@ -55,7 +55,7 @@ class _PacketLogScreenState extends State<PacketLogScreen> {
           : ListView.separated(
               padding: const EdgeInsets.all(12),
               itemCount: packets.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (context, index) {
                 final packet = packets[index];
                 return Card(

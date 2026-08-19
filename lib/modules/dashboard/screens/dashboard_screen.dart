@@ -13,7 +13,6 @@ import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/widgets/screen_pulse_overlay.dart';
 
-import 'package:provider/provider.dart';
 
 const _green = Color(0xFF1B6B3A);
 const _blue = Color(0xFF3A6EAC);
