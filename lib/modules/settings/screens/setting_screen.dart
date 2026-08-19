@@ -14,6 +14,19 @@ import 'package:bmsmobileapp/services/local_auth_db.dart';
 import 'package:bmsmobileapp/services/protocol.dart';
 import 'package:bmsmobileapp/modules/settings/screens/packet_log_screen.dart';
 
+// ============================================================================
+// SHARED STYLE TOKENS — matches the Settings screen design (colors, radii,
+// spacing). Edit here to re-theme the whole screen.
+// ============================================================================
+const Color _kPrimaryGreen = Color(0xFF1B6B3A);
+const Color _kPrimaryBlue = Color(0xFF3E6EA5); // top bar / selected tab / buttons
+const Color _kOrange = Color(0xFFD4621A);
+const Color _kTabInactiveBg = Color(0xFFEFEFEF);
+const Color _kRowBorder = Color(0xFFE1E1E1);
+const Color _kIconBadgeBg = Color(0xFFEDEDED);
+const double _kRowRadius = 8;
+const double _kBadgeRadius = 8;
+
 class SettingsScreen extends StatefulWidget {
   final BMSBluetoothService service;
 
@@ -1142,42 +1155,89 @@ void _showFirmwareUpgradingDialog() {
   }
 
   void _showUnlockDialog() {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(tr('unlock_settings')),
-        content: TextField(
-          controller: controller,
-          obscureText: true,
-          decoration: InputDecoration(
-            labelText: tr('password'),
-            border: const OutlineInputBorder(),
+  final controller = TextEditingController();
+  String? errorText;
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tr('unlock_settings'),
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF3A3A3A)),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: controller,
+                autofocus: true,
+                obscureText: true,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                decoration: InputDecoration(
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  hintText: tr('password'),
+                  errorText: errorText,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _kRowBorder),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _kRowBorder),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: const BorderSide(color: _kPrimaryBlue, width: 1.4),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kPrimaryBlue,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () {
+                      if (controller.text.trim().isEmpty) {
+                        setDialogState(() => errorText = 'Enter the password');
+                        return;
+                      }
+                      setState(() => isLocked = false);
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(tr('settings_unlocked'))),
+                      );
+                    },
+                    child: Text(tr('unlock'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 16),
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: _kPrimaryBlue),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(tr('cancel'), style: const TextStyle(fontWeight: FontWeight.w500)),
+                  ),
+                ],
+              ),
+            ],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(tr('cancel')),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1B6B3A),
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              setState(() => isLocked = false);
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(tr('settings_unlocked'))),
-              );
-            },
-            child: Text(tr('unlock')),
-          ),
-        ],
-      ),
-    );
-  }
+        );
+      },
+    ),
+  );
+}
+
 
   void _handleLockSettings() {
     setState(() => isLocked = true);
@@ -1241,6 +1301,23 @@ void _showFirmwareUpgradingDialog() {
       ),
     );
   }
+  void _showInfoDialog(String title, String message) {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+      content: Text(message, style: const TextStyle(fontSize: 13, color: Colors.black54)),
+      actionsAlignment: MainAxisAlignment.center,
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text(tr('cancel').isEmpty ? 'OK' : 'OK'),
+        ),
+      ],
+    ),
+  );
+}
 
   // ── "Do you want to continue?" confirmation before sending a Set Now ────
   Future<bool> _showContinueConfirmation() async {
@@ -1307,186 +1384,302 @@ void _showFirmwareUpgradingDialog() {
 
   // ── Generic edit dialogs (with range validation) ────────────────────────────
   void _editDoubleParam(
-    String title,
-    double current,
-    String unit,
-    Function(double) onSave, {
-    double? min,
-    double? max,
-  }) {
-    final controller = TextEditingController(text: current.toStringAsFixed(3));
-    String? errorText;
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Text(title, textAlign: TextAlign.center),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: controller,
-                  autofocus: true,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(
-                    suffixText: unit,
-                    border: const OutlineInputBorder(),
-                    errorText: errorText,
-                  ),
-                ),
-                if (min != null && max != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Allowed range: ${min.toStringAsFixed(3)} - ${max.toStringAsFixed(3)} $unit',
-                      style: const TextStyle(fontSize: 11, color: Colors.black54),
+  String title,
+  double current,
+  String unit,
+  Function(double) onSave, {
+  double? min,
+  double? max,
+}) {
+  final controller = TextEditingController(text: current.toStringAsFixed(3));
+  String? errorText;
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF3A3A3A)),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      autofocus: true,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        errorText: errorText,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: _kRowBorder),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: _kRowBorder),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: _kPrimaryBlue, width: 1.4),
+                        ),
+                      ),
                     ),
                   ),
-              ],
-            ),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1B6B3A),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () {
-                  final val = double.tryParse(controller.text);
-                  if (val == null) {
-                    setDialogState(() => errorText = 'Enter a valid number');
-                    return;
-                  }
-                  if (min != null && max != null && (val < min || val > max)) {
-                    setDialogState(
-                      () => errorText = 'Must be between ${min.toStringAsFixed(3)} and ${max.toStringAsFixed(3)}',
-                    );
-                    return;
-                  }
-                  onSave(val);
-                  _persistSettings();
-                  Navigator.pop(context);
-                },
-                child: Text(tr('save')),
+                  if (unit.isNotEmpty) ...[
+                    const SizedBox(width: 10),
+                    Text(unit, style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+                  ],
+                ],
               ),
-              TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey))),
+              if (min != null && max != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Allowed range: ${min.toStringAsFixed(3)} - ${max.toStringAsFixed(3)} $unit',
+                    style: const TextStyle(fontSize: 11, color: Colors.black45),
+                  ),
+                ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kPrimaryBlue,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () {
+                      final val = double.tryParse(controller.text);
+                      if (val == null) {
+                        setDialogState(() => errorText = 'Enter a valid number');
+                        return;
+                      }
+                      if (min != null && max != null && (val < min || val > max)) {
+                        setDialogState(
+                          () => errorText = 'Must be between ${min.toStringAsFixed(3)} and ${max.toStringAsFixed(3)}',
+                        );
+                        return;
+                      }
+                      onSave(val);
+                      _persistSettings();
+                      Navigator.pop(context);
+                    },
+                    child: Text(tr('save'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 16),
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: _kPrimaryBlue),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(tr('cancel'), style: const TextStyle(fontWeight: FontWeight.w500)),
+                  ),
+                ],
+              ),
             ],
-          );
-        },
-      ),
-    );
-  }
+          ),
+        );
+      },
+    ),
+  );
+}
 
-  void _editIntParam(
-    String title,
-    int current,
-    String unit,
-    Function(int) onSave, {
-    int? min,
-    int? max,
-  }) {
-    final controller = TextEditingController(text: current.toString());
-    String? errorText;
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Text(title, textAlign: TextAlign.center),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: controller,
-                  autofocus: true,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    suffixText: unit,
-                    border: const OutlineInputBorder(),
-                    errorText: errorText,
-                  ),
-                ),
-                if (min != null && max != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Text(
-                      'Allowed range: $min - $max $unit',
-                      style: const TextStyle(fontSize: 11, color: Colors.black54),
+ void _editIntParam(
+  String title,
+  int current,
+  String unit,
+  Function(int) onSave, {
+  int? min,
+  int? max,
+}) {
+  final controller = TextEditingController(text: current.toString());
+  String? errorText;
+  showDialog(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF3A3A3A)),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        errorText: errorText,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: _kRowBorder),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: _kRowBorder),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: const BorderSide(color: _kPrimaryBlue, width: 1.4),
+                        ),
+                      ),
                     ),
                   ),
-              ],
-            ),
-            actionsAlignment: MainAxisAlignment.center,
-            actions: [
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF1B6B3A),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                onPressed: () {
-                  final val = int.tryParse(controller.text);
-                  if (val == null) {
-                    setDialogState(() => errorText = 'Enter a valid whole number');
-                    return;
-                  }
-                  if (min != null && max != null && (val < min || val > max)) {
-                    setDialogState(() => errorText = 'Must be between $min and $max');
-                    return;
-                  }
-                  onSave(val);
-                  _persistSettings();
-                  Navigator.pop(context);
-                },
-                child: Text(tr('save')),
+                  if (unit.isNotEmpty) ...[
+                    const SizedBox(width: 10),
+                    Text(unit, style: TextStyle(fontSize: 14, color: Colors.grey.shade500)),
+                  ],
+                ],
               ),
-              TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey))),
+              if (min != null && max != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    'Allowed range: $min - $max $unit',
+                    style: const TextStyle(fontSize: 11, color: Colors.black45),
+                  ),
+                ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _kPrimaryBlue,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () {
+                      final val = int.tryParse(controller.text);
+                      if (val == null) {
+                        setDialogState(() => errorText = 'Enter a valid whole number');
+                        return;
+                      }
+                      if (min != null && max != null && (val < min || val > max)) {
+                        setDialogState(() => errorText = 'Must be between $min and $max');
+                        return;
+                      }
+                      onSave(val);
+                      _persistSettings();
+                      Navigator.pop(context);
+                    },
+                    child: Text(tr('save'), style: const TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                  const SizedBox(width: 16),
+                  TextButton(
+                    style: TextButton.styleFrom(foregroundColor: _kPrimaryBlue),
+                    onPressed: () => Navigator.pop(context),
+                    child: Text(tr('cancel'), style: const TextStyle(fontWeight: FontWeight.w500)),
+                  ),
+                ],
+              ),
             ],
-          );
-        },
-      ),
-    );
-  }
+          ),
+        );
+      },
+    ),
+  );
+}
 
   void _editStringParam(String title, String current, Function(String) onSave) {
-    final controller = TextEditingController(text: current);
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title, textAlign: TextAlign.center),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(border: OutlineInputBorder()),
-        ),
-        actionsAlignment: MainAxisAlignment.center,
-        actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF1B6B3A),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () {
-              if (controller.text.trim().isNotEmpty) {
-                onSave(controller.text.trim());
-                _persistSettings();
-                Navigator.pop(context);
-              }
-            },
-            child: Text(tr('save')),
+  final controller = TextEditingController(text: current);
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF3A3A3A)),
           ),
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(tr('cancel'), style: const TextStyle(color: Colors.grey))),
+          const SizedBox(height: 14),
+          TextField(
+            controller: controller,
+            autofocus: true,
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: _kRowBorder),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: _kRowBorder),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(color: _kPrimaryBlue, width: 1.4),
+              ),
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _kPrimaryBlue,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                onPressed: () {
+                  if (controller.text.trim().isNotEmpty) {
+                    onSave(controller.text.trim());
+                    _persistSettings();
+                    Navigator.pop(context);
+                  }
+                },
+                child: Text(tr('save'), style: const TextStyle(fontWeight: FontWeight.w600)),
+              ),
+              const SizedBox(width: 16),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: _kPrimaryBlue),
+                onPressed: () => Navigator.pop(context),
+                child: Text(tr('cancel'), style: const TextStyle(fontWeight: FontWeight.w500)),
+              ),
+            ],
+          ),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   void _pickCellChemistry() {
     showModalBottomSheet(
@@ -1804,60 +1997,8 @@ void _showFactoryResettingDialog() {
                   children: [
                     if (_isOffline) _buildOfflineBanner(),
 
-                    // ── Unlock Settings / Device Details row ─────────────
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF2B5FA5),
-                              disabledForegroundColor: const Color(0xFF2B5FA5),
-                              side: const BorderSide(color: Color(0xFF2B5FA5)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                              visualDensity: VisualDensity.compact,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            onPressed: isLocked ? _showUnlockDialog : _handleLockSettings,
-                            icon: Icon(isLocked ? Icons.lock_rounded : Icons.lock_open_rounded, size: 15),
-                            label: Text(
-                              isLocked ? tr('unlock_settings') : 'Lock Settings',
-                              style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF2B5FA5),
-                              side: const BorderSide(color: Color(0xFF2B5FA5)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
-                              visualDensity: VisualDensity.compact,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            onPressed: _showDeviceDetails,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
-                                Icon(Icons.shield_outlined, size: 15),
-                                SizedBox(width: 6),
-                                Flexible(
-                                  child: Text(
-                                    'Device Details',
-                                    style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                Icon(Icons.keyboard_arrow_down_rounded, size: 18),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                    // ── Unlock Settings / Device Details bar ─────────────
+                    _buildUnlockDeviceDetailsBar(),
                     const SizedBox(height: 16),
 
                     // ── Tab bar ───────────────────────────────────────────
@@ -1881,6 +2022,95 @@ void _showFactoryResettingDialog() {
     );
   }
 
+// ── Unlock Settings / Device Details — blue bar with nested white pill ─────
+Widget _buildUnlockDeviceDetailsBar() {
+  return Container(
+    width: double.infinity,
+    height: 48,
+    margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+    padding: const EdgeInsets.symmetric(horizontal: 6),
+    decoration: BoxDecoration(
+      color: _kPrimaryBlue,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      children: [
+        // ── Unlock Settings — its own white-outlined pill (can shrink) ────
+        Flexible(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: isLocked ? _showUnlockDialog : _handleLockSettings,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white, width: 1.0),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isLocked ? Icons.lock_outline_rounded : Icons.lock_open_rounded,
+                    color: Colors.white,
+                    size: 15,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      isLocked ? tr('unlock_settings') : 'Lock Settings',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(width: 8),
+
+        // ── Device Details — plain, no border (can shrink) ────────────────
+        Flexible(
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: _showDeviceDetails,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.layers_outlined, color: Colors.white, size: 16),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Device Details',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 17),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
   // ── Tab bar (segmented-control style, matches design) ──────────────────────
   Widget _buildTabBar() {
     return Row(
@@ -1902,13 +2132,12 @@ void _showFactoryResettingDialog() {
           child: GestureDetector(
             onTap: () => _onTabTapped(i),
             child: Container(
-              height: 48,
-              margin: const EdgeInsets.symmetric(horizontal: 2),
+              height: 52,
+              margin: const EdgeInsets.symmetric(horizontal: 3),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: selected ? const Color(0xFF16324F) : Colors.white,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: selected ? const Color(0xFF16324F) : Colors.grey.shade300),
+                color: selected ? _kPrimaryBlue : _kTabInactiveBg,
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Stack(
                 clipBehavior: Clip.none,
@@ -1918,10 +2147,10 @@ void _showFactoryResettingDialog() {
                       _tabLabels[i],
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        fontSize: 11.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        height: 1.15,
-                        color: selected ? Colors.white : Colors.black87,
+                        height: 1.2,
+                        color: selected ? Colors.white : const Color(0xFF3A3A3A),
                       ),
                     ),
                   ),
@@ -1970,43 +2199,63 @@ void _showFactoryResettingDialog() {
   }
 
   // ── Row widget shared across Battery / Protection / Temp tabs ─────────────
+  // [icon] draws a Material icon in the badge; pass [iconLabel] instead (e.g.
+  // 'A', 'V') to draw a single-letter badge — matching rows like "SOC Set" /
+  // "Nominal Cell Volt" in the design, where the badge is a letter, not a
+  // pictogram. When [unit] is supplied, [value] is rendered bold/dark and
+  // [unit] is rendered smaller and grey right after it (e.g. "30.0" + "AH"),
+  // matching the two-tone value styling in the design; omit [unit] to render
+  // [value] as a single bold string (used by rows with no unit, like Cycles).
   Widget _buildSettingRow({
-    required IconData icon,
+    IconData? icon,
+    String? iconLabel,
     required String label,
     required String value,
+    String? unit,
     VoidCallback? onEdit,
     Widget? trailingOverride,
-    Color iconColor = Colors.black54,
+    Color iconColor = const Color(0xFF4A4A4A),
     bool changed = false,
   }) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      margin: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       decoration: BoxDecoration(
-        color: changed ? const Color(0xFFFFF3E6) : Colors.grey.shade50,
-        border: Border.all(color: changed ? const Color(0xFFD4621A) : Colors.grey.shade300, width: changed ? 1.4 : 1),
-        borderRadius: BorderRadius.circular(8),
+        color: changed ? const Color(0xFFFFF3E6) : Colors.white,
+        border: Border.all(color: changed ? _kOrange : _kRowBorder, width: changed ? 1.4 : 1),
+        borderRadius: BorderRadius.circular(_kRowRadius),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          SizedBox(
-            width: 26,
-            child: Icon(icon, size: 19, color: iconColor),
+          Container(
+            width: 36,
+            height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: _kIconBadgeBg,
+              borderRadius: BorderRadius.circular(_kBadgeRadius),
+            ),
+            child: iconLabel != null
+                ? Text(
+                    iconLabel,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF4A4A4A)),
+                  )
+                : Icon(icon, size: 18, color: iconColor),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
           Expanded(
             child: Row(
               children: [
                 Flexible(
                   child: Text(
                     label,
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.black87),
+                    style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w500, color: Color(0xFF2C2C2C)),
                   ),
                 ),
                 if (changed) ...[
                   const SizedBox(width: 6),
-                  const Icon(Icons.circle, size: 7, color: Color(0xFFD4621A)),
+                  Icon(Icons.circle, size: 7, color: _kOrange),
                 ],
               ],
             ),
@@ -2014,18 +2263,33 @@ void _showFactoryResettingDialog() {
           if (trailingOverride != null)
             trailingOverride
           else ...[
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: changed ? const Color(0xFFD4621A) :  Colors.black87,
+            RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: value,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: changed ? _kOrange : const Color(0xFF1F1F1F),
+                    ),
+                  ),
+                  if (unit != null)
+                    TextSpan(
+                      text: ' $unit',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w400,
+                        color: changed ? _kOrange.withOpacity(0.75) : Colors.grey.shade500,
+                      ),
+                    ),
+                ],
               ),
             ),
             SizedBox(
               width: 32,
               child: IconButton(
-                icon: Icon(Icons.edit_rounded, size: 15, color: onEdit != null ? Colors.black54 : Colors.grey.shade300),
+                icon: Icon(Icons.edit_rounded, size: 16, color: onEdit != null ? Colors.black54 : Colors.grey.shade300),
                 onPressed: onEdit,
                 splashRadius: 16,
                 padding: EdgeInsets.zero,
@@ -2044,17 +2308,25 @@ bool _isSending = false;
     // changes — otherwise there's nothing to send, so it stays disabled.
     final bool isDirty = tabIndex == null || _changedFieldKeys(tabIndex).isNotEmpty;
     final bool enabled = !isLocked && !_isSending && isDirty;
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
+    return Container(
+      margin: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: _kRowBorder),
+        borderRadius: BorderRadius.circular(_kRowRadius),
+      ),
       child: Row(
         children: [
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6FA88A),
-              disabledBackgroundColor: Colors.grey.shade300,
+              backgroundColor: _kPrimaryGreen,
+              disabledBackgroundColor: const Color(0xFF9DBFAC), // muted sage — matches the locked/no-changes look
               foregroundColor: Colors.white,
-              disabledForegroundColor: Colors.grey.shade500,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              disabledForegroundColor: Colors.white70,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 11),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: enabled ? () => _handleSetNow(sectionName, onSetNow, tabIndex: tabIndex) : null,
             child: _isSending
@@ -2063,13 +2335,13 @@ bool _isSending = false;
                     height: 16,
                     child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                   )
-                : const Text('Set Now'),
+                : const Text('Set Now', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600)),
           ),
           const SizedBox(width: 10),
           const Expanded(
             child: Text(
               '( Set here after parameter changes )',
-              style: TextStyle(fontSize: 11, color: Colors.black45),
+              style: TextStyle(fontSize: 11.5, color: Colors.black45),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -2086,7 +2358,8 @@ bool _isSending = false;
         _buildSettingRow(
           icon: Icons.battery_std_rounded,
           label: 'Battery String',
-          value: '$batteryStringCount S',
+          value: '$batteryStringCount',
+          unit: 'S',
           changed: _isFieldChanged(0, 'batteryStringCount'),
           onEdit: isLocked
               ? null
@@ -2100,9 +2373,10 @@ bool _isSending = false;
                   ),
         ),
         _buildSettingRow(
-          icon: Icons.battery_charging_full_rounded,
+          icon: Icons.battery_full_rounded,
           label: 'Rated Capacity',
-          value: '${ratedCapacity.toStringAsFixed(1)} AH',
+          value: ratedCapacity.toStringAsFixed(1),
+          unit: 'AH',
           changed: _isFieldChanged(0, 'ratedCapacity'),
           onEdit: isLocked
               ? null
@@ -2116,9 +2390,10 @@ bool _isSending = false;
                   ),
         ),
         _buildSettingRow(
-          icon: Icons.battery_5_bar_rounded,
+          iconLabel: 'A',
           label: 'SOC Set',
-          value: '$socSet %',
+          value: '$socSet',
+          unit: '%',
           changed: _isFieldChanged(0, 'socSet'),
           onEdit: isLocked
               ? null
@@ -2134,7 +2409,8 @@ bool _isSending = false;
         _buildSettingRow(
           icon: Icons.access_time_rounded,
           label: 'Sleep Waiting Time',
-          value: '$sleepWaitingTime ms',
+          value: '$sleepWaitingTime',
+          unit: 'ms',
           changed: _isFieldChanged(0, 'sleepWaitingTime'),
           onEdit: isLocked
               ? null
@@ -2148,9 +2424,10 @@ bool _isSending = false;
                   ),
         ),
         _buildSettingRow(
-          icon: Icons.balance_rounded,
+          icon: Icons.account_tree_rounded,
           label: 'Balanced Start Difference Volt',
-          value: '${balancedStartDifferenceVolt.toStringAsFixed(3)} V',
+          value: balancedStartDifferenceVolt.toStringAsFixed(2),
+          unit: 'V',
           changed: _isFieldChanged(0, 'balancedStartDifferenceVolt'),
           onEdit: isLocked
               ? null
@@ -2166,7 +2443,8 @@ bool _isSending = false;
         _buildSettingRow(
           icon: Icons.play_circle_outline_rounded,
           label: 'Balanced Start Volt',
-          value: '${balancedStartVolt.toStringAsFixed(3)} V',
+          value: balancedStartVolt.toStringAsFixed(2),
+          unit: 'V',
           changed: _isFieldChanged(0, 'balancedStartVolt'),
           onEdit: isLocked
               ? null
@@ -2180,9 +2458,10 @@ bool _isSending = false;
                   ),
         ),
         _buildSettingRow(
-          icon: Icons.bolt_rounded,
+          iconLabel: 'V',
           label: 'Nominal Cell Volt',
-          value: '${nominalCellVolt.toStringAsFixed(3)} V',
+          value: nominalCellVolt.toStringAsFixed(1),
+          unit: 'V',
           changed: _isFieldChanged(0, 'nominalCellVolt'),
           onEdit: isLocked
               ? null
@@ -2203,32 +2482,40 @@ bool _isSending = false;
           trailingOverride: GestureDetector(
             onTap: isLocked ? null : _pickCellChemistry,
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(6)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                border: Border.all(color: _kRowBorder),
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(cellChemistry, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                  const Icon(Icons.arrow_drop_down_rounded, size: 18),
+                  Text(
+                    cellChemistry,
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF2C2C2C)),
+                  ),
+                  Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Colors.grey.shade600),
                 ],
               ),
             ),
           ),
         ),
         _buildSettingRow(
-          icon: Icons.auto_graph_rounded,
+          iconLabel: 'A',
           label: 'Zero Drift Current Calibration',
           value: '',
           trailingOverride: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2B5FA5),
+              backgroundColor: _kPrimaryBlue,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
             onPressed: (isLocked || _isSending)
               ? null
               : () => _handleCalibration(),
-            child: const Text('Calibrate Now', style: TextStyle(fontSize: 12)),
+            child: const Text('Calibrate Now', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
           ),
         ),
         _buildSetNowFooter(
@@ -2250,250 +2537,249 @@ bool _isSending = false;
   }
 
   // ── Protection Settings tab ──────────────────────────────────────────────
-  Widget _buildProtectionSettingsTab() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSettingRow(
-          icon: Icons.warning_amber_rounded,
-          iconColor: const Color(0xFFD4621A),
-          label: 'Single Cell High Volt Protection',
-          value: '${singleCellHighVoltProtection.toStringAsFixed(3)} V',
-          changed: _isFieldChanged(1, 'singleCellHighVoltProtection'),
-          onEdit: isLocked
-              ? null
-              : () => _editDoubleParam(
-                    'Single Cell High Volt Protection',
-                    singleCellHighVoltProtection,
-                    'V',
-                    (v) => setState(() => singleCellHighVoltProtection = v),
-                    min: _kCellHighVoltMin,
-                    max: _kCellHighVoltMax,
-                  ),
+ Widget _buildProtectionSettingsTab() {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _buildSettingRow(
+        icon: Icons.warning_amber_rounded,
+        label: 'Single Cell High Volt Protection',
+        value: singleCellHighVoltProtection.toStringAsFixed(3),
+        unit: 'V',
+        changed: _isFieldChanged(1, 'singleCellHighVoltProtection'),
+        onEdit: isLocked
+            ? null
+            : () => _editDoubleParam(
+                  'Single Cell High Volt Protection',
+                  singleCellHighVoltProtection,
+                  'V',
+                  (v) => setState(() => singleCellHighVoltProtection = v),
+                  min: _kCellHighVoltMin,
+                  max: _kCellHighVoltMax,
+                ),
+      ),
+      _buildSettingRow(
+        icon: Icons.battery_alert_rounded,
+        label: 'Single Cell Low Volt Protection',
+        value: singleCellLowVoltProtection.toStringAsFixed(3),
+        unit: 'V',
+        changed: _isFieldChanged(1, 'singleCellLowVoltProtection'),
+        onEdit: isLocked
+            ? null
+            : () => _editDoubleParam(
+                  'Single Cell Low Volt Protection',
+                  singleCellLowVoltProtection,
+                  'V',
+                  (v) => setState(() => singleCellLowVoltProtection = v),
+                  min: _kCellLowVoltMin,
+                  max: _kCellLowVoltMax,
+                ),
+      ),
+      _buildSettingRow(
+        icon: Icons.show_chart_rounded,
+        label: 'Sum Volt High Protection',
+        value: sumVoltHighProtection.toStringAsFixed(1),
+        unit: 'V',
+        changed: _isFieldChanged(1, 'sumVoltHighProtection'),
+        onEdit: isLocked
+            ? null
+            : () => _editDoubleParam(
+                  'Sum Volt High Protection',
+                  sumVoltHighProtection,
+                  'V',
+                  (v) => setState(() => sumVoltHighProtection = v),
+                  min: _kSumVoltHighMin,
+                  max: _kSumVoltHighMax,
+                ),
+      ),
+      _buildSettingRow(
+        icon: Icons.stacked_line_chart_rounded,
+        label: 'Sum Volt Low Protection',
+        value: sumVoltLowProtection.toStringAsFixed(1),
+        unit: 'V',
+        changed: _isFieldChanged(1, 'sumVoltLowProtection'),
+        onEdit: isLocked
+            ? null
+            : () => _editDoubleParam(
+                  'Sum Volt Low Protection',
+                  sumVoltLowProtection,
+                  'V',
+                  (v) => setState(() => sumVoltLowProtection = v),
+                  min: _kSumVoltLowMin,
+                  max: _kSumVoltLowMax,
+                ),
+      ),
+      _buildSettingRow(
+        icon: Icons.battery_charging_full_rounded,
+        label: 'Charge Over Current Protection',
+        value: chargeOverCurrentProtection.toStringAsFixed(1),
+        unit: 'A',
+        changed: _isFieldChanged(1, 'chargeOverCurrentProtection'),
+        onEdit: isLocked
+            ? null
+            : () => _editDoubleParam(
+                  'Charge Over Current Protection',
+                  chargeOverCurrentProtection,
+                  'A',
+                  (v) => setState(() => chargeOverCurrentProtection = v),
+                  min: _kChargeOCMin,
+                  max: _kChargeOCMax,
+                ),
+      ),
+      _buildSettingRow(
+        icon: Icons.electric_bolt_outlined,
+        label: 'Discharge Over Current Protection',
+        value: dischargeOverCurrentProtection.toStringAsFixed(1),
+        unit: 'A',
+        changed: _isFieldChanged(1, 'dischargeOverCurrentProtection'),
+        onEdit: isLocked
+            ? null
+            : () => _editDoubleParam(
+                  'Discharge Over Current Protection',
+                  dischargeOverCurrentProtection,
+                  'A',
+                  (v) => setState(() => dischargeOverCurrentProtection = v),
+                  min: _kDischargeOCMin,
+                  max: _kDischargeOCMax,
+                ),
+      ),
+      _buildSetNowFooter(
+        'Protection',
+        () => widget.service.sendProtectionSettingsWrite(
+          singleCellHighVolt: singleCellHighVoltProtection,
+          singleCellLowVolt: singleCellLowVoltProtection,
+          sumVoltHigh: sumVoltHighProtection,
+          sumVoltLow: sumVoltLowProtection,
+          chargeOverCurrent: chargeOverCurrentProtection,
+          dischargeOverCurrent: dischargeOverCurrentProtection,
         ),
-        _buildSettingRow(
-          icon: Icons.battery_alert_rounded,
-          iconColor: const Color(0xFF2B5FA5),
-          label: 'Single Cell Low Volt Protection',
-          value: '${singleCellLowVoltProtection.toStringAsFixed(3)} V',
-          changed: _isFieldChanged(1, 'singleCellLowVoltProtection'),
-          onEdit: isLocked
-              ? null
-              : () => _editDoubleParam(
-                    'Single Cell Low Volt Protection',
-                    singleCellLowVoltProtection,
-                    'V',
-                    (v) => setState(() => singleCellLowVoltProtection = v),
-                    min: _kCellLowVoltMin,
-                    max: _kCellLowVoltMax,
-                  ),
-        ),
-        _buildSettingRow(
-          icon: Icons.show_chart_rounded,
-          iconColor: const Color(0xFF2B5FA5),
-          label: 'Sum Volt High Protection',
-          value: '${sumVoltHighProtection.toStringAsFixed(1)} V',
-          changed: _isFieldChanged(1, 'sumVoltHighProtection'),
-          onEdit: isLocked
-              ? null
-              : () => _editDoubleParam(
-                    'Sum Volt High Protection',
-                    sumVoltHighProtection,
-                    'V',
-                    (v) => setState(() => sumVoltHighProtection = v),
-                    min: _kSumVoltHighMin,
-                    max: _kSumVoltHighMax,
-                  ),
-        ),
-        _buildSettingRow(
-          icon: Icons.stacked_line_chart_rounded,
-          iconColor: const Color(0xFF2B5FA5),
-          label: 'Sum Volt Low Protection',
-          value: '${sumVoltLowProtection.toStringAsFixed(1)} V',
-          changed: _isFieldChanged(1, 'sumVoltLowProtection'),
-          onEdit: isLocked
-              ? null
-              : () => _editDoubleParam(
-                    'Sum Volt Low Protection',
-                    sumVoltLowProtection,
-                    'V',
-                    (v) => setState(() => sumVoltLowProtection = v),
-                    min: _kSumVoltLowMin,
-                    max: _kSumVoltLowMax,
-                  ),
-        ),
-        _buildSettingRow(
-          icon: Icons.battery_charging_full_rounded,
-          iconColor: const Color(0xFFD4621A),
-          label: 'Charge Over Current Protection',
-          value: '${chargeOverCurrentProtection.toStringAsFixed(1)} A',
-          changed: _isFieldChanged(1, 'chargeOverCurrentProtection'),
-          onEdit: isLocked
-              ? null
-              : () => _editDoubleParam(
-                    'Charge Over Current Protection',
-                    chargeOverCurrentProtection,
-                    'A',
-                    (v) => setState(() => chargeOverCurrentProtection = v),
-                    min: _kChargeOCMin,
-                    max: _kChargeOCMax,
-                  ),
-        ),
-        _buildSettingRow(
-          icon: Icons.electric_bolt_outlined,
-          iconColor: Colors.redAccent.shade700,
-          label: 'Discharge Over Current Protection',
-          value: '${dischargeOverCurrentProtection.toStringAsFixed(1)} A',
-          changed: _isFieldChanged(1, 'dischargeOverCurrentProtection'),
-          onEdit: isLocked
-              ? null
-              : () => _editDoubleParam(
-                    'Discharge Over Current Protection',
-                    dischargeOverCurrentProtection,
-                    'A',
-                    (v) => setState(() => dischargeOverCurrentProtection = v),
-                    min: _kDischargeOCMin,
-                    max: _kDischargeOCMax,
-                  ),
-        ),
-        _buildSetNowFooter(
-          'Protection',
-          () => widget.service.sendProtectionSettingsWrite(
-            singleCellHighVolt: singleCellHighVoltProtection,
-            singleCellLowVolt: singleCellLowVoltProtection,
-            sumVoltHigh: sumVoltHighProtection,
-            sumVoltLow: sumVoltLowProtection,
-            chargeOverCurrent: chargeOverCurrentProtection,
-            dischargeOverCurrent: dischargeOverCurrentProtection,
-          ),
-          tabIndex: 1,
-        ),
-      ],
-    );
-  }
+        tabIndex: 1,
+      ),
+    ],
+  );
+}
 
   // ── Temp Settings tab ─────────────────────────────────────────────────────
   Widget _buildTempSettingsTab() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSettingRow(
-          icon: Icons.developer_board_rounded,
-          iconColor: Colors.black54,
-          label: 'No of Temp Channels',
-          value: '$noOfTempChannels',
-          changed: _isFieldChanged(2, 'noOfTempChannels'),
-          onEdit: isLocked
-              ? null
-              : () => _editIntParam(
-                    'No of Temp Channels',
-                    noOfTempChannels,
-                    '',
-                    (v) => setState(() => noOfTempChannels = v),
-                    min: _kTempChannelsMin,
-                    max: _kTempChannelsMax,
-                  ),
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      _buildSettingRow(
+        icon: Icons.developer_board_rounded,
+        label: 'No of Temp Channels',
+        value: '$noOfTempChannels',
+        changed: _isFieldChanged(2, 'noOfTempChannels'),
+        onEdit: isLocked
+            ? null
+            : () => _editIntParam(
+                  'No of Temp Channels',
+                  noOfTempChannels,
+                  '',
+                  (v) => setState(() => noOfTempChannels = v),
+                  min: _kTempChannelsMin,
+                  max: _kTempChannelsMax,
+                ),
+      ),
+      _buildSettingRow(
+        icon: Icons.thermostat_rounded,
+        label: 'Charge High Temp Protection',
+        value: '$chargeHighTempProtection',
+        unit: '°C',
+        changed: _isFieldChanged(2, 'chargeHighTempProtection'),
+        onEdit: isLocked
+            ? null
+            : () => _editIntParam(
+                  'Charge High Temp Protection',
+                  chargeHighTempProtection,
+                  '°C',
+                  (v) => setState(() => chargeHighTempProtection = v),
+                  min: _kChargeHighTempMin,
+                  max: _kChargeHighTempMax,
+                ),
+      ),
+      _buildSettingRow(
+        icon: Icons.ac_unit_rounded,
+        label: 'Charge Low Temp Protection',
+        value: '$chargeLowTempProtection',
+        unit: '°C',
+        changed: _isFieldChanged(2, 'chargeLowTempProtection'),
+        onEdit: isLocked
+            ? null
+            : () => _editIntParam(
+                  'Charge Low Temp Protection',
+                  chargeLowTempProtection,
+                  '°C',
+                  (v) => setState(() => chargeLowTempProtection = v),
+                  min: _kChargeLowTempMin,
+                  max: _kChargeLowTempMax,
+                ),
+      ),
+      _buildSettingRow(
+        icon: Icons.local_fire_department_rounded,
+        label: 'Discharge High Temp Protection',
+        value: '$dischargeHighTempProtection',
+        unit: '°C',
+        changed: _isFieldChanged(2, 'dischargeHighTempProtection'),
+        onEdit: isLocked
+            ? null
+            : () => _editIntParam(
+                  'Discharge High Temp Protection',
+                  dischargeHighTempProtection,
+                  '°C',
+                  (v) => setState(() => dischargeHighTempProtection = v),
+                  min: _kDischargeHighTempMin,
+                  max: _kDischargeHighTempMax,
+                ),
+      ),
+      _buildSettingRow(
+        icon: Icons.severe_cold_rounded,
+        label: 'Discharge Low Temp Protection',
+        value: '$dischargeLowTempProtection',
+        unit: '°C',
+        changed: _isFieldChanged(2, 'dischargeLowTempProtection'),
+        onEdit: isLocked
+            ? null
+            : () => _editIntParam(
+                  'Discharge Low Temp Protection',
+                  dischargeLowTempProtection,
+                  '°C',
+                  (v) => setState(() => dischargeLowTempProtection = v),
+                  min: _kDischargeLowTempMin,
+                  max: _kDischargeLowTempMax,
+                ),
+      ),
+      _buildSettingRow(
+        icon: Icons.compare_arrows_rounded,
+        label: 'Diff Temp Protection',
+        value: '$diffTempProtection',
+        unit: '°C',
+        changed: _isFieldChanged(2, 'diffTempProtection'),
+        onEdit: isLocked
+            ? null
+            : () => _editIntParam(
+                  'Diff Temp Protection',
+                  diffTempProtection,
+                  '°C',
+                  (v) => setState(() => diffTempProtection = v),
+                  min: _kDiffTempMin,
+                  max: _kDiffTempMax,
+                ),
+      ),
+      _buildSetNowFooter(
+        'Temp',
+        () => widget.service.sendTemperatureSettingsWrite(
+          noOfTempChannels: noOfTempChannels,
+          chargeHighTemp: chargeHighTempProtection,
+          chargeLowTemp: chargeLowTempProtection,
+          dischargeHighTemp: dischargeHighTempProtection,
+          dischargeLowTemp: dischargeLowTempProtection,
+          diffTempProtection: diffTempProtection,
         ),
-        _buildSettingRow(
-          icon: Icons.thermostat_rounded,
-          iconColor: Colors.redAccent.shade700,
-          label: 'Charge High Temp Protection',
-          value: '$chargeHighTempProtection °C',
-          changed: _isFieldChanged(2, 'chargeHighTempProtection'),
-          onEdit: isLocked
-              ? null
-              : () => _editIntParam(
-                    'Charge High Temp Protection',
-                    chargeHighTempProtection,
-                    '°C',
-                    (v) => setState(() => chargeHighTempProtection = v),
-                    min: _kChargeHighTempMin,
-                    max: _kChargeHighTempMax,
-                  ),
-        ),
-        _buildSettingRow(
-          icon: Icons.ac_unit_rounded,
-          iconColor: const Color(0xFF2B5FA5),
-          label: 'Charge Low Temp Protection',
-          value: '$chargeLowTempProtection °C',
-          changed: _isFieldChanged(2, 'chargeLowTempProtection'),
-          onEdit: isLocked
-              ? null
-              : () => _editIntParam(
-                    'Charge Low Temp Protection',
-                    chargeLowTempProtection,
-                    '°C',
-                    (v) => setState(() => chargeLowTempProtection = v),
-                    min: _kChargeLowTempMin,
-                    max: _kChargeLowTempMax,
-                  ),
-        ),
-        _buildSettingRow(
-          icon: Icons.local_fire_department_rounded,
-          iconColor: Colors.redAccent.shade700,
-          label: 'Discharge High Temp Protection',
-          value: '$dischargeHighTempProtection °C',
-          changed: _isFieldChanged(2, 'dischargeHighTempProtection'),
-          onEdit: isLocked
-              ? null
-              : () => _editIntParam(
-                    'Discharge High Temp Protection',
-                    dischargeHighTempProtection,
-                    '°C',
-                    (v) => setState(() => dischargeHighTempProtection = v),
-                    min: _kDischargeHighTempMin,
-                    max: _kDischargeHighTempMax,
-                  ),
-        ),
-        _buildSettingRow(
-          icon: Icons.severe_cold_rounded,
-          iconColor: const Color(0xFF2B5FA5),
-          label: 'Discharge Low Temp Protection',
-          value: '$dischargeLowTempProtection °C',
-          changed: _isFieldChanged(2, 'dischargeLowTempProtection'),
-          onEdit: isLocked
-              ? null
-              : () => _editIntParam(
-                    'Discharge Low Temp Protection',
-                    dischargeLowTempProtection,
-                    '°C',
-                    (v) => setState(() => dischargeLowTempProtection = v),
-                    min: _kDischargeLowTempMin,
-                    max: _kDischargeLowTempMax,
-                  ),
-        ),
-        _buildSettingRow(
-          icon: Icons.compare_arrows_rounded,
-          iconColor: const Color(0xFFD4621A),
-          label: 'Diff Temp Protection',
-          value: '$diffTempProtection °C',
-          changed: _isFieldChanged(2, 'diffTempProtection'),
-          onEdit: isLocked
-              ? null
-              : () => _editIntParam(
-                    'Diff Temp Protection',
-                    diffTempProtection,
-                    '°C',
-                    (v) => setState(() => diffTempProtection = v),
-                    min: _kDiffTempMin,
-                    max: _kDiffTempMax,
-                  ),
-        ),
-        _buildSetNowFooter(
-          'Temp',
-          () => widget.service.sendTemperatureSettingsWrite(
-            noOfTempChannels: noOfTempChannels,
-            chargeHighTemp: chargeHighTempProtection,
-            chargeLowTemp: chargeLowTempProtection,
-            dischargeHighTemp: dischargeHighTempProtection,
-            dischargeLowTemp: dischargeLowTempProtection,
-            diffTempProtection: diffTempProtection,
-          ),
-          tabIndex: 2,
-        ),
-      ],
-    );
-  }
+        tabIndex: 2,
+      ),
+    ],
+  );
+}
 
   // ── Factory Settings tab ─────────────────────────────────────────────────
  Widget _buildFactoryTextField({
@@ -2504,7 +2790,7 @@ bool _isSending = false;
   bool changed = false,
 }) {
   return Padding(
-    padding: const EdgeInsets.only(bottom: 16),
+    padding: const EdgeInsets.only(bottom: 10),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2524,14 +2810,15 @@ bool _isSending = false;
             // ── Value box (text + edit only) ──────────────────────
             Expanded(
               child: Container(
+                height: 40,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 decoration: BoxDecoration(
-                  color: changed ? const Color(0xFFFFF3E6) : Colors.grey.shade50,
+                  color: changed ? const Color(0xFFFFF3E6) : Colors.white,
                   border: Border.all(
-                    color: changed ? const Color(0xFFD4621A) : Colors.grey.shade300,
+                    color: changed ? _kOrange : _kRowBorder,
                     width: changed ? 1.4 : 1,
                   ),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(_kRowRadius),
                 ),
                 child: Row(
                   children: [
@@ -2541,15 +2828,25 @@ bool _isSending = false;
                         style: TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w600,
-                          color: changed ? const Color(0xFFD4621A) : Colors.black87,
+                          color: changed ? _kOrange : Colors.black87,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.edit_rounded, size: 16, color: Colors.black54),
-                      onPressed: isLocked ? null : onEdit,
-                      splashRadius: 16,
-                      tooltip: 'Edit',
+                    // ── Edit icon — centered in the full box height ────
+                    SizedBox(
+                      width: 40,
+                      height: double.infinity,
+                      child: Center(
+                        child: IconButton(
+                          icon: const Icon(Icons.edit_rounded, size: 16, color: Colors.black54),
+                          onPressed: isLocked ? null : onEdit,
+                          splashRadius: 14,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(), // removes 48x48 min tap target
+                          alignment: Alignment.center,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -2558,17 +2855,17 @@ bool _isSending = false;
             const SizedBox(width: 8),
             // ── Scan button — separate box outside the field ──────
             Container(
-              width: 44,
-              height: 44,
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
+                color: _kIconBadgeBg,
+                border: Border.all(color: _kRowBorder),
+                borderRadius: BorderRadius.circular(_kBadgeRadius),
               ),
               child: IconButton(
-                icon: Icon(Icons.qr_code_scanner_rounded, size: 19, color: Colors.grey.shade600),
+                icon: Icon(Icons.qr_code_scanner_rounded, size: 18, color: Colors.grey.shade600),
                 onPressed: isLocked ? null : onScan,
-                splashRadius: 20,
+                splashRadius: 18,
                 tooltip: 'Scan',
                 padding: EdgeInsets.zero,
               ),
@@ -2646,9 +2943,9 @@ bool _isSending = false;
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: Colors.grey.shade200),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(_kRowRadius),
+        border: Border.all(color: _kRowBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2704,9 +3001,9 @@ bool _isSending = false;
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.grey.shade200),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(_kRowRadius),
+            border: Border.all(color: _kRowBorder),
           ),
           child: Row(
             children: [
@@ -2714,7 +3011,7 @@ bool _isSending = false;
                 width: 38,
                 height: 38,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: Colors.grey.shade200, borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(color: _kIconBadgeBg, borderRadius: BorderRadius.circular(_kBadgeRadius)),
                 child: const Icon(Icons.system_update_alt_rounded, size: 20, color: Colors.black54),
               ),
               const SizedBox(width: 12),
@@ -2731,14 +3028,15 @@ bool _isSending = false;
               ),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2B5FA5),
+                  backgroundColor: _kPrimaryBlue,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 ),
                 onPressed: (isLocked || _isSending)
                     ? null
                     : _startFirmwareUpgradeFlow,
-                child: const Text('Upgrade', style: TextStyle(fontSize: 12)),
+                child: const Text('Upgrade', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
               ),
             ],
           ),
@@ -2750,10 +3048,14 @@ bool _isSending = false;
             Expanded(
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF2B5FA5),
-                  side: const BorderSide(color: Color(0xFF2B5FA5)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  backgroundColor: _kPrimaryBlue,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: _kPrimaryBlue.withOpacity(0.4),
+                  disabledForegroundColor: Colors.white70,
+                  elevation: 0,
+                  side: BorderSide.none,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(vertical: 11),
                 ),
                 onPressed: (isLocked || _isSending)
                     ? null
@@ -2770,10 +3072,14 @@ bool _isSending = false;
             Expanded(
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF2B5FA5),
-                  side: const BorderSide(color: Color(0xFF2B5FA5)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  backgroundColor: _kPrimaryBlue,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: _kPrimaryBlue.withOpacity(0.4),
+                  disabledForegroundColor: Colors.white70,
+                  elevation: 0,
+                  side: BorderSide.none,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(vertical: 11),
                 ),
                 onPressed: (isLocked || _isSending)
     ? null
