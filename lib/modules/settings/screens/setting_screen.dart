@@ -1534,18 +1534,15 @@ void _showFirmwareUpgradingDialog() {
 if (ok) {
       if (tabIndex != null) {
         if (tabIndex == 3) {
-          // Factory write (0xB4) has no ack — give the BMS time to persist
-          // to flash before re-reading, or the read-back races the write
-          // and returns stale data, silently reverting the edit.
-          await Future.delayed(const Duration(milliseconds: 500));
+          // Factory write (0xB4) has no ack — give the BMS 3s to persist
+          // to flash, then re-request Factory Settings (0x9B) directly.
+          await Future.delayed(const Duration(seconds: 3));
           if (!mounted) return;
+          widget.service.startFactorySettingsPolling();
+        } else {
+          _pollForTab(tabIndex);
         }
-        _pollForTab(tabIndex);
-      }
-      // Step 2 — confirm success with a dedicated popup rather than only a
-      // snackbar, per the requested flow.
-      await _showSuccessDialog('$context_ parameters changed successfully.');
-    } else {
+      }} else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('$context_ settings failed — no ACK received'),
@@ -1554,7 +1551,6 @@ if (ok) {
       );
     }
   }
-
   /// Calibrate Now is intentionally kept simple: no "Do You Want To
   /// Continue?" gate and no success popup — just send it and show a plain
   /// snackbar, same as before.
