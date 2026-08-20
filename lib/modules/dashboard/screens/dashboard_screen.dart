@@ -2,7 +2,7 @@
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 import 'package:bmsmobileapp/battery_indicator.dart'
-    show BatteryIndicator, BatteryMode;
+  show BatteryIndicator, BatteryMode;
 import 'package:flutter/material.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
