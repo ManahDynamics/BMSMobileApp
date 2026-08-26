@@ -14,6 +14,7 @@ import 'firebase_options.dart';
 import 'services/translation_service.dart';
 import 'services/device_token_service.dart';
 import 'services/offline_sync_service.dart'; // ← NEW
+import 'services/alert_notification_service.dart'; // ← NEW
 
 /// Global bluetooth service - single instance used across the entire app
 
@@ -34,6 +35,9 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  /// Initialize local notifications for BMS alert pushes (backgrounded case)
+  await AlertNotificationService.instance.initialize(); // ← NEW
 
   /// Register background message handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
@@ -69,70 +73,86 @@ void main() async {
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
-AppRouter.bmsService.onBmsDisconnectedFatal = () {
+
+  AppRouter.bmsService.onBmsDisconnectedFatal = () {
     debugPrint("✅ Callback reached in main.dart");
-  final context = appNavigatorKey.currentContext;
-  debugPrint("Context = $context");
+    final context = appNavigatorKey.currentContext;
+    debugPrint("Context = $context");
 
-  if (context == null) return;
+    if (context == null) return;
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => CommonDialog(
-      icon: Icons.bluetooth_disabled_rounded,
-      iconColor: const Color(0xFFA63A3A),
-      iconBackgroundColor: const Color(0xFFFDEEEE),
-      title: "BMS disconnected",
-      message: "The BMS has disconnected. The app is going to close.",
-      buttonText: "OK",
-      buttonColor: const Color(0xFF1D6A43),
-      onPressed: () {
-        Navigator.of(context).pop();
-        SystemNavigator.pop();
-      },
-    ),
-  );
-};
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => CommonDialog(
+        icon: Icons.bluetooth_disabled_rounded,
+        iconColor: const Color(0xFFA63A3A),
+        iconBackgroundColor: const Color(0xFFFDEEEE),
+        title: "BMS disconnected",
+        message: "The BMS has disconnected. The app is going to close.",
+        buttonText: "OK",
+        buttonColor: const Color(0xFF1D6A43),
+        onPressed: () {
+          Navigator.of(context).pop();
+          SystemNavigator.pop();
+        },
+      ),
+    );
+  };
 
-AppRouter.bmsService.onAlertPush = (packet) {
-  final context = appNavigatorKey.currentContext;
-  debugPrint("🔔 Alert push received: ${packet.alertPushNameLabel}");
-  if (context == null) return;
+  AppRouter.bmsService.onAlertPush = (packet) {
+    final context = appNavigatorKey.currentContext;
+    debugPrint("🔔 Alert push received: ${packet.alertPushNameLabel}");
 
-  Color iconColor;
-  Color iconBg;
-  switch (packet.alertPushTypeLabel) {
-    case 'Fault':
-      iconColor = const Color(0xFFA63A3A);
-      iconBg = const Color(0xFFFDEEEE);
-      break;
-    case 'Warning':
-      iconColor = const Color(0xFFB8860B);
-      iconBg = const Color(0xFFFFF8E1);
-      break;
-    default:
-      iconColor = const Color(0xFF1D6A43);
-      iconBg = const Color(0xFFEAF7EF);
-  }
+    final bool isFault = packet.alertPushTypeLabel == 'Fault';
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => CommonDialog(
-      icon: Icons.warning_amber_rounded,
-      iconColor: iconColor,
-      iconBackgroundColor: iconBg,
-      title: packet.alertPushNameLabel,
-      message: "${packet.alertPushTypeLabel} • ${packet.alertPushPriorityLabel} priority",
-      buttonText: "OK",
-      buttonColor: const Color(0xFF1D6A43),
-      onPressed: () => Navigator.of(context).pop(),
-    ),
-  );
-};
+    if (context == null) {
+      // App is backgrounded or between routes — show a system notification
+      // instead of silently dropping the alert.
+      AlertNotificationService.instance.show(
+        alertId: packet.alertPushAlertId,
+        title: packet.alertPushNameLabel,
+        body: "${packet.alertPushTypeLabel} • ${packet.alertPushPriorityLabel} priority",
+        isFault: isFault,
+      );
+      return;
+    }
+
+    Color iconColor;
+    Color iconBg;
+    switch (packet.alertPushTypeLabel) {
+      case 'Fault':
+        iconColor = const Color(0xFFA63A3A);
+        iconBg = const Color(0xFFFDEEEE);
+        break;
+      case 'Warning':
+        iconColor = const Color(0xFFB8860B);
+        iconBg = const Color(0xFFFFF8E1);
+        break;
+      default:
+        iconColor = const Color(0xFF1D6A43);
+        iconBg = const Color(0xFFEAF7EF);
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => CommonDialog(
+        icon: Icons.warning_amber_rounded,
+        iconColor: iconColor,
+        iconBackgroundColor: iconBg,
+        title: packet.alertPushNameLabel,
+        message: "${packet.alertPushTypeLabel} • ${packet.alertPushPriorityLabel} priority",
+        buttonText: "OK",
+        buttonColor: const Color(0xFF1D6A43),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+    );
+  };
+
   runApp(const MyApp());
 }
+
 class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
@@ -186,7 +206,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: appNavigatorKey, 
+      navigatorKey: appNavigatorKey,
       title: 'Smart BMS',
       debugShowCheckedModeBanner: false,
 

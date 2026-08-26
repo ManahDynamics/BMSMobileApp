@@ -59,6 +59,9 @@ dependencies:
   # Splash Screen
   flutter_native_splash: ^2.4.4
 
+
+  flutter_local_notifications: ^18.0.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
