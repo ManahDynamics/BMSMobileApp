@@ -8,6 +8,7 @@ import '../../../modules/scanner/screens/BMS_scanner_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
 import 'package:bmsmobileapp/services/local_auth_db.dart';
+import 'alert_detail_screen.dart'; // ← NEW
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Data model
@@ -22,6 +23,7 @@ class AlertItem {
   final String statusRaw;
   final String dateGroupKey;
   final String dateGroupLabel;
+  final int? sequenceNo; // ← NEW: was accepted by the constructor but never stored
 
   const AlertItem({
     required this.titleKey,
@@ -32,8 +34,8 @@ class AlertItem {
     required this.statusKey,
     required this.statusRaw,
     required this.dateGroupKey,
-    required this.dateGroupLabel, 
-    int? sequenceNo,
+    required this.dateGroupLabel,
+    this.sequenceNo, // ← FIXED: was "int? sequenceNo," (unused param, dropped silently)
   });
 }
 
@@ -400,6 +402,10 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 2),
+          Text(
+            widget.service.bleName ?? widget.service.batterySerial ?? '',
+            style: const TextStyle(color: Colors.white70, fontSize: 11),
+          ),
         ],
       ),
       actions: [
@@ -564,61 +570,104 @@ class _AlertsScreenState extends State<AlertsScreen> {
     );
   }
 
+  // ── Fetches alert details for the tapped alert and navigates to the ─────
+  // ── detail screen (Image 2). NEW.                                     ──
+  Future<void> _openAlertDetail(AlertItem alert) async {
+    if (alert.sequenceNo == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No details available for this alert')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    final ok = await widget.service.requestAlertDetailsAndWait(alert.sequenceNo!);
+
+    if (!mounted) return;
+    Navigator.of(context).pop(); // close loading spinner
+
+    if (!ok || widget.service.latestAlertDetails == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to fetch alert details')),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      SlideRoute(
+        page: AlertDetailScreen(
+          service: widget.service,
+          packet: widget.service.latestAlertDetails!,
+          alertStatusColor: _statusColor(alert.statusRaw),
+        ),
+      ),
+    );
+  }
+
   // ── Flat alert row: icon · title/time · status dot · chevron ────────────
   Widget _buildAlertRow(AlertItem alert) {
     final statusColor = _statusColor(alert.statusRaw);
     final statusIcon = _statusIcon(alert.statusRaw);
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F7F7),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(color: const Color(0xFFE0E0E0)),
+    return GestureDetector( // ← NEW: wraps the existing Container
+      onTap: () => _openAlertDetail(alert), // ← NEW
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF7F7F7),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: const Color(0xFFE0E0E0)),
+              ),
+              child: Icon(statusIcon, size: 17, color: statusColor),
             ),
-            child: Icon(statusIcon, size: 17, color: statusColor),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tr(alert.titleKey),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  alert.time,
-                  style: TextStyle(fontSize: 11.5, color: Colors.grey[600]),
-                ),
-              ],
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tr(alert.titleKey),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    alert.time,
+                    style: TextStyle(fontSize: 11.5, color: Colors.grey[600]),
+                  ),
+                ],
+              ),
             ),
-          ),
-          Container(
-            width: 8,
-            height: 8,
-            margin: const EdgeInsets.only(right: 4),
-            decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
-          ),
-          Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey[400]),
-        ],
+            Container(
+              width: 8,
+              height: 8,
+              margin: const EdgeInsets.only(right: 4),
+              decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+            ),
+            Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey[400]),
+          ],
+        ),
       ),
     );
   }
