@@ -9,7 +9,6 @@ import 'package:bmsmobileapp/services/parsed_packet.dart';
 import 'package:bmsmobileapp/services/packet_parser.dart';
 import 'package:bmsmobileapp/services/crc_service.dart';
 import 'package:bmsmobileapp/services/protocol.dart';
-import 'package:bmsmobileapp/services/local_auth_db.dart';
 
 enum BMSConnectionState {
   disconnected, connecting, connected, discovering,
@@ -92,12 +91,16 @@ class BMSBluetoothService extends ChangeNotifier with WidgetsBindingObserver {
 
   int dashboardPulse = 0;
   int cellVoltagePulse = 0;
-  
+
   BMSParsedPacket? latestAlertPush;
   BMSParsedPacket? latestAlertDetails;
   int alertPushPulse = 0;
   int alertDetailsPulse = 0;
   Completer<bool>? _alertDetailsCompleter;
+
+  /// In-memory list of every alert push received this session — no DB.
+  /// Cleared on every reconnect (see [_newSession]). Most-recent-first.
+  final List<BMSParsedPacket> alertPushHistory = [];
 
   /// Fires on every unsolicited 0x51 push, app-wide (wire in main.dart).
   void Function(BMSParsedPacket alertPacket)? onAlertPush;
@@ -432,15 +435,9 @@ if (!result.isSuccess) {
           latestAlertPush = packet;
           alertPushPulse++;
 
-          await LocalAuthDB().appendAlertPush({
-            'alertId'    : packet.alertPushAlertId,
-            'sequenceNo' : packet.alertPushSequenceNo,
-            'type'       : packet.alertPushTypeLabel,
-            'priority'   : packet.alertPushPriorityLabel,
-            'title'      : packet.alertPushNameLabel,
-            'time'       : _timeNow(),
-            'date'       : DateTime.now().toIso8601String(),
-          });
+          // In-memory only — no DB write. Most-recent-first, capped at 200.
+          alertPushHistory.insert(0, packet);
+          if (alertPushHistory.length > 200) alertPushHistory.removeLast();
 
           notifyListeners();
           onAlertPush?.call(packet);
@@ -868,6 +865,10 @@ if (!result.isSuccess) {
   }
 
   Future<bool> requestAlertDetailsAndWait(int sequenceNo) async {
+    if (_writeChar == null || state != BMSConnectionState.ready) {
+      addDebugLog('❌ Alert Details request skipped — not ready (state=$state)');
+      return false;
+    }
     final completer = Completer<bool>();
     _alertDetailsCompleter = completer;
     notifyListeners();
@@ -1613,6 +1614,7 @@ bleName           = null;
     latestAlertDetails = null;
     alertPushPulse = 0;
     alertDetailsPulse = 0;
+    alertPushHistory.clear();
     _alertDetailsCompleter = null;
 
     batterySettingsPulse = 0;

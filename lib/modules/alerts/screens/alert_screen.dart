@@ -6,8 +6,8 @@ import 'package:bmsmobileapp/widgets/app_drawer.dart';
 import 'package:bmsmobileapp/utils/slide_route.dart';
 import '../../../modules/scanner/screens/BMS_scanner_screen.dart';
 import 'package:bmsmobileapp/services/bluetooth_service.dart';
+import 'package:bmsmobileapp/services/parsed_packet.dart';
 import 'package:bmsmobileapp/services/translation_service.dart';
-import 'package:bmsmobileapp/services/local_auth_db.dart';
 import 'alert_detail_screen.dart'; // ← NEW
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -61,53 +61,34 @@ IconData _statusIcon(String raw) {
   return Icons.check_circle_outline_rounded;
 }
 
-/// Converts a cached alert map (saved by DashboardScreen via
-/// `LocalAuthDB.saveAlerts`) into an [AlertItem] so it can be rendered using
-/// the same card/list widgets as the static demo alerts below.
-AlertItem _cachedMapToAlertItem(Map<String, dynamic> m) {
-  final title = (m['title'] ?? 'Alert').toString();
-  final time = (m['time'] ?? '').toString();
+/// Converts a *live* BMSParsedPacket (0x51 alert push) — held in-memory on
+/// [BMSBluetoothService.alertPushHistory] — into an [AlertItem] so it can be
+/// rendered using the same card/list widgets. No local DB involved: this is
+/// the single source of truth for what's shown on the Alerts screen.
+AlertItem _packetToAlertItem(BMSParsedPacket p) {
+  final title = p.alertPushNameLabel ?? 'Alert';
+  final now = p.receivedAt;
+  final time =
+      '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-  // Slightly higher severity for thermal / battery-critical events.
-  final lower = title.toLowerCase();
-  final isHigh = lower.contains('over temperature') ||
-      lower.contains('under temperature') ||
-      lower.contains('low battery');
+  final type = p.alertPushTypeLabel ?? 'Fault';
+  final priority = p.alertPushPriorityLabel ?? 'Low';
 
-  return AlertItem(
-    titleKey: title, // raw text — TranslationService falls back to the key
-    descriptionKey: 'live_alert_from_device',
-    time: time,
-    severityKey: isHigh ? 'severity_high' : 'severity_medium',
-    severityRaw: isHigh ? 'High' : 'Medium',
-    statusKey: 'status_active',
-    statusRaw: 'Active',
-    dateGroupKey: 'date_today',
-    dateGroupLabel: 'Today',
-  );
-}
-
-AlertItem _pushMapToAlertItem(Map<String, dynamic> m) {
-  final title = (m['title'] ?? 'Alert').toString();
-  final time = (m['time'] ?? '').toString();
-  final type = (m['type'] ?? 'Fault').toString();
-  final priority = (m['priority'] ?? 'Low').toString();
-  final seq = m['sequenceNo'] is int
-      ? m['sequenceNo'] as int
-      : int.tryParse('${m['sequenceNo']}');
-
-  final dateStr = (m['date'] ?? '').toString();
-  final parsedDate = DateTime.tryParse(dateStr) ?? DateTime.now();
   final today = DateTime.now();
+  final isToday = now.year == today.year &&
+      now.month == today.month &&
+      now.day == today.day;
   final yesterday = today.subtract(const Duration(days: 1));
-  final isToday = parsedDate.year == today.year && parsedDate.month == today.month && parsedDate.day == today.day;
-  final isYesterday = parsedDate.year == yesterday.year && parsedDate.month == yesterday.month && parsedDate.day == yesterday.day;
+  final isYesterday = now.year == yesterday.year &&
+      now.month == yesterday.month &&
+      now.day == yesterday.day;
 
-  final dd = parsedDate.day.toString().padLeft(2, '0');
-  final mmm = _monthAbbrev(parsedDate.month);
-  final yyyy = parsedDate.year.toString();
+  final dd = now.day.toString().padLeft(2, '0');
+  final mmm = _monthAbbrev(now.month);
+  final yyyy = now.year.toString();
 
-  final groupKey = isToday ? 'date_today' : (isYesterday ? 'date_yesterday' : 'date_other');
+  final groupKey =
+      isToday ? 'date_today' : (isYesterday ? 'date_yesterday' : 'date_other');
   final groupLabel = isToday
       ? 'Today - $dd $mmm $yyyy'
       : (isYesterday ? 'Yesterday - $dd $mmm $yyyy' : '$dd $mmm $yyyy');
@@ -118,11 +99,14 @@ AlertItem _pushMapToAlertItem(Map<String, dynamic> m) {
     time: time,
     severityKey: priority.toLowerCase(),
     severityRaw: priority,
-    statusKey: type == 'Fault' ? 'status_active' : (type == 'Warning' ? 'status_warning' : 'status_cleared'),
-    statusRaw: type == 'Fault' ? 'Active' : (type == 'Warning' ? 'Warning' : 'Cleared'),
+    statusKey: type == 'Fault'
+        ? 'status_active'
+        : (type == 'Warning' ? 'status_warning' : 'status_cleared'),
+    statusRaw:
+        type == 'Fault' ? 'Active' : (type == 'Warning' ? 'Warning' : 'Cleared'),
     dateGroupKey: groupKey,
     dateGroupLabel: groupLabel,
-    sequenceNo: seq,
+    sequenceNo: p.alertPushSequenceNo,
   );
 }
 
@@ -224,6 +208,11 @@ Widget buildAlertCard(AlertItem alert, {bool showStatus = false, required String
 // ALERTS SCREEN — redesigned to match mockup
 // (device id header · bell badge · overflow menu · "Last Fetched On" row ·
 //  4-card filter bar · flat icon/dot/chevron rows)
+//
+// NOTE: alerts are read LIVE from widget.service.alertPushHistory — an
+// in-memory list on BMSBluetoothService populated as 0x51 pushes arrive.
+// No local database is used. The list (and this screen) resets whenever
+// the BLE session resets (reconnect / app restart).
 // ─────────────────────────────────────────────────────────────────────────────
 class AlertsScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -237,11 +226,9 @@ class AlertsScreen extends StatefulWidget {
 enum _AlertFilter { total, warnings, faults, cleared }
 
 class _AlertsScreenState extends State<AlertsScreen> {
-  final LocalAuthDB _localAuthDB = LocalAuthDB();
-
   String tr(String key) => TranslationService.t(key);
 
-  // ── Cached / live alert state ────────────────────────────────────────────
+  // ── Live alert state ─────────────────────────────────────────────────────
   List<AlertItem> _liveAlerts = [];
   DateTime? _lastSync;
   bool _isOffline = false;
@@ -254,7 +241,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
     super.initState();
     TranslationService.instance.addListener(_onTranslationsChanged);
     widget.service.addListener(_onServiceChanged);
-    _loadCachedAlerts();
+    _loadLiveAlerts();
   }
 
   void _onTranslationsChanged() {
@@ -263,9 +250,9 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   void _onServiceChanged() {
     if (!mounted) return;
-    // Whenever fresh BLE data arrives, refresh from the latest cache too,
-    // since DashboardScreen writes new alerts into LocalAuthDB as data changes.
-    _loadCachedAlerts();
+    // Any change on the service (including a fresh 0x51 push) re-reads the
+    // in-memory alert history.
+    _loadLiveAlerts();
   }
 
   @override
@@ -275,17 +262,15 @@ class _AlertsScreenState extends State<AlertsScreen> {
     super.dispose();
   }
 
-  /// Pulls cached alerts (written by DashboardScreen) + last sync time from
-  /// LocalAuthDB, and figures out whether we're currently showing stale
-  /// (offline) data based on whether the BLE service has live dashboard data.
-  Future<void> _loadCachedAlerts() async {
-    final cached = await _localAuthDB.getCachedAlerts();
-    final syncTime = await _localAuthDB.getLastSyncTime();
+  /// Reads live alerts directly from the service's in-memory
+  /// [BMSBluetoothService.alertPushHistory] — no DB round trip, no async
+  /// gap, so the list is always exactly what the service currently holds.
+  void _loadLiveAlerts() {
     if (!mounted) return;
-
+    final history = widget.service.alertPushHistory;
     setState(() {
-      _liveAlerts = (cached ?? []).map(_pushMapToAlertItem).toList();
-      _lastSync = syncTime;
+      _liveAlerts = history.map(_packetToAlertItem).toList();
+      _lastSync = history.isNotEmpty ? history.first.receivedAt : null;
       _isOffline = widget.service.latestDashboard == null;
       _isLoadingCache = false;
     });
@@ -308,7 +293,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
     return '$dd-$mm-$yyyy';
   }
 
-  // Real (live/cached) alerts take priority; static demo data fills in the rest.
+  // Real (live) alerts take priority; static demo data fills in the rest.
    List<AlertItem> get _combined => _liveAlerts;
   List<AlertItem> get _faults =>
       _combined.where((a) => a.statusRaw == 'Active').toList();
@@ -681,7 +666,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
       drawer: AppDrawer(activeRoute: '/alerts', service: widget.service),
       appBar: _buildAppBar(context),
       body: RefreshIndicator(
-        onRefresh: _loadCachedAlerts,
+        onRefresh: () async => _loadLiveAlerts(),
         child: Column(
           children: [
             Padding(
@@ -740,7 +725,8 @@ class _FilterCardData {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ALERT HISTORY SCREEN (unchanged)
+// ALERT HISTORY SCREEN
+// Same live, in-memory source as AlertsScreen — widget.service.alertPushHistory.
 // ─────────────────────────────────────────────────────────────────────────────
 class AlertHistoryScreen extends StatefulWidget {
   final BMSBluetoothService service;
@@ -752,8 +738,6 @@ class AlertHistoryScreen extends StatefulWidget {
 }
 
 class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
-  final LocalAuthDB _localAuthDB = LocalAuthDB();
-
   String tr(String key) => TranslationService.t(key);
 
   List<AlertItem> _liveAlerts = [];
@@ -762,24 +746,26 @@ class _AlertHistoryScreenState extends State<AlertHistoryScreen> {
   void initState() {
     super.initState();
     TranslationService.instance.addListener(_onTranslationsChanged);
-    _loadCachedAlerts();
+    widget.service.addListener(_loadLiveAlerts);
+    _loadLiveAlerts();
   }
 
   void _onTranslationsChanged() {
     if (mounted) setState(() {});
   }
 
-  Future<void> _loadCachedAlerts() async {
-    final cached = await _localAuthDB.getCachedAlerts();
+  void _loadLiveAlerts() {
     if (!mounted) return;
     setState(() {
-      _liveAlerts = (cached ?? []).map(_pushMapToAlertItem).toList();
+      _liveAlerts =
+          widget.service.alertPushHistory.map(_packetToAlertItem).toList();
     });
   }
 
   @override
   void dispose() {
     TranslationService.instance.removeListener(_onTranslationsChanged);
+    widget.service.removeListener(_loadLiveAlerts);
     super.dispose();
   }
 
